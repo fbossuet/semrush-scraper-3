@@ -73,6 +73,41 @@ class NoxToolsScraper extends WebScraper {
     return `${config.baseAnalyticsUrl}?${params.toString()}`;
   }
 
+  async loginOnAnalyticsDomain() {
+    console.log('🔐 Connexion sur le domaine analytics...');
+    
+    try {
+      // Remplir les champs de connexion sur le sous-domaine
+      const usernameField = await this.page.$('input[name="amember_login"], input[name="username"]');
+      const passwordField = await this.page.$('input[name="amember_pass"], input[name="password"]');
+      const submitButton = await this.page.$('input[type="submit"], button[type="submit"]');
+      
+      if (usernameField && passwordField && submitButton) {
+        console.log('📝 Remplissage des identifiants sur analytics...');
+        
+        await usernameField.fill(config.credentials.username);
+        await passwordField.fill(config.credentials.password);
+        
+        console.log('🔄 Soumission du formulaire analytics...');
+        await submitButton.click();
+        
+        // Attendre la redirection
+        await this.page.waitForLoadState('domcontentloaded', { timeout: 15000 });
+        await this.page.waitForTimeout(2000);
+        
+        console.log('✅ Connexion analytics réussie !');
+        return true;
+      } else {
+        console.log('⚠️  Formulaire de connexion analytics non trouvé');
+        return false;
+      }
+      
+    } catch (error) {
+      console.error('❌ Erreur connexion analytics:', error.message);
+      return false;
+    }
+  }
+
   async navigateToFinalSite(customDomain = null) {
     console.log('🧭 Étape 2: Navigation vers le site d\'analytics...');
     
@@ -111,7 +146,14 @@ class NoxToolsScraper extends WebScraper {
         });
         
         console.log(`✅ Navigation réussie vers analytics !`);
-        await this.page.waitForTimeout(3000); // Attendre le chargement des données
+        await this.page.waitForTimeout(3000);
+        
+        // Vérifier si on a besoin de se reconnecter sur le sous-domaine analytics
+        const needsLogin = await this.page.$('input[name="amember_login"], input[name="username"]');
+        if (needsLogin) {
+          console.log('🔑 Connexion requise sur le sous-domaine analytics...');
+          await this.loginOnAnalyticsDomain();
+        }
         
       } catch (navError) {
         console.log(`⚠️  Timeout navigation analytics: ${navError.message}`);
@@ -131,16 +173,33 @@ class NoxToolsScraper extends WebScraper {
   }
 
   async waitForFinalSiteLoading() {
-    console.log('⏳ Étape 3: Attente du chargement complet du site final...');
+    console.log('⏳ Étape 3: Attente du chargement complet du site d\'analytics...');
     
     try {
-      // Attendre les éléments principaux du site final
+      // Vérifier si on a une protection Cloudflare/CAPTCHA
+      const cloudflareChallenge = await this.page.$('.cf-browser-verification, .challenge-form, #challenge-error-text');
+      if (cloudflareChallenge) {
+        console.log('🛡️  Protection détectée - ATTENDEZ...');
+        console.log('👤 Si vous voyez un CAPTCHA, résolvez-le manuellement');
+        console.log('⏰ Attente de 30 secondes pour résolution manuelle...');
+        
+        // Attendre plus longtemps pour la résolution manuelle
+        await this.page.waitForTimeout(30000);
+        
+        // Vérifier si la protection est passée
+        const stillProtected = await this.page.$('.cf-browser-verification, .challenge-form, #challenge-error-text');
+        if (!stillProtected) {
+          console.log('✅ Protection passée automatiquement !');
+        }
+      }
+      
+      // Attendre les éléments principaux du site analytics
       const mainSelectors = [
         config.selectors.mainContainer.selector,
         'body',
-        '[data-testid]',
-        '.app',
-        '#app'
+        '.analytics-content',
+        '.dashboard',
+        '.overview'
       ];
       
       for (const selector of mainSelectors) {
@@ -153,10 +212,11 @@ class NoxToolsScraper extends WebScraper {
         }
       }
       
-      // Attendre que les données se chargent (ajuster selon le site)
-      await this.page.waitForTimeout(3000);
+      // Attendre que les données analytics se chargent
+      console.log('📊 Attente du chargement des données analytics...');
+      await this.page.waitForTimeout(5000);
       
-      console.log('✅ Site final chargé !');
+      console.log('✅ Site analytics chargé !');
       return true;
       
     } catch (error) {

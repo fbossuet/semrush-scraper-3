@@ -1,7 +1,7 @@
 export const config = {
   // Configuration du navigateur
-  headless: false, // Mettre à true pour exécuter en arrière-plan
-  slowMo: 100, // Délai entre les actions (en ms)
+  headless: false, // Mode visible pour résoudre les CAPTCHA manuellement
+  slowMo: 300, // Délai plus long pour voir les actions
   
   // Configuration de la viewport
   viewport: {

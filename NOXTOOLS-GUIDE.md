@@ -44,7 +44,7 @@ selectors: {
 
 ## 🚀 Utilisation
 
-### Lancement simple
+### Lancement simple (automatique)
 ```bash
 npm run noxtools
 ```
@@ -53,6 +53,17 @@ npm run noxtools
 ```bash
 npm run noxtools-dev
 ```
+
+### 🎯 Mode interactif (recommandé pour débuter)
+```bash
+npm run interactive
+```
+**Ce mode te permet de :**
+- Voir le navigateur en action
+- Résoudre manuellement les CAPTCHA/protections
+- Confirmer que la page est prête avant scraping
+- Inspecter les éléments trouvés
+- Contrôler chaque étape
 
 ## 🔍 Trouve les bons sélecteurs
 
