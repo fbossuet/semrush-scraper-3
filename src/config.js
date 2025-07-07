@@ -21,8 +21,8 @@ export const config = {
   
   // Informations de connexion NoxTools
   credentials: {
-    username: 'ton_email_noxtools', // Ton email NoxTools
-    password: 'ton_mot_de_passe_noxtools', // Ton mot de passe NoxTools
+    username: 'semrush3hosting', // Ton email NoxTools
+    password: 'fbossuetg', // Ton mot de passe NoxTools
     usernameSelector: 'input[name="amember_login"]', // Sélecteur NoxTools pour email
     passwordSelector: 'input[name="amember_pass"]', // Sélecteur NoxTools pour password
     submitSelector: 'input[type="submit"]' // Sélecteur du bouton connexion NoxTools
