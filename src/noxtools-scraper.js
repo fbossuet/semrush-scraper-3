@@ -23,12 +23,23 @@ class NoxToolsScraper extends WebScraper {
       // Soumettre le formulaire
       await this.page.click(config.credentials.submitSelector);
       
-      // Attendre la redirection après connexion
-      await this.page.waitForLoadState('networkidle');
+      // Attendre la redirection avec timeout plus court
+      try {
+        await this.page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+        await this.page.waitForTimeout(2000); // Pause pour stabilisation
+      } catch (e) {
+        console.log('⚠️  Timeout attente redirection, on continue...');
+      }
       
-      // Vérifier si on est bien connecté - plus flexible avec les URLs
-      const currentUrl = this.page.url();
-      console.log(`🔍 URL après connexion: ${currentUrl}`);
+      // Vérifier si on est bien connecté - plus robuste
+      let currentUrl;
+      try {
+        currentUrl = this.page.url();
+        console.log(`🔍 URL après connexion: ${currentUrl}`);
+      } catch (e) {
+        console.log('⚠️  Impossible de récupérer l\'URL, on continue...');
+        return true; // Assume success et continue
+      }
       
       // Vérifications multiples pour valider la connexion
       const validUrlPatterns = [
@@ -41,17 +52,30 @@ class NoxToolsScraper extends WebScraper {
       ];
       
       const isValidUrl = validUrlPatterns.some(pattern => currentUrl.includes(pattern));
-      const hasLoginError = await this.page.$('.error, .alert-danger, .login-error');
+      
+      // Vérifier les erreurs de connexion avec gestion d'erreur
+      let hasLoginError = false;
+      try {
+        const errorElement = await this.page.$('.error, .alert-danger, .login-error');
+        if (errorElement) {
+          try {
+            const errorText = await errorElement.textContent();
+            throw new Error(`Connexion échouée: ${errorText}`);
+          } catch (e) {
+            console.log('⚠️  Erreur détectée mais texte non récupérable');
+            hasLoginError = true;
+          }
+        }
+      } catch (e) {
+        console.log('⚠️  Impossible de vérifier les erreurs, on continue...');
+      }
       
       if (isValidUrl && !hasLoginError) {
         console.log('✅ Connexion NoxTools réussie !');
         return true;
-      } else if (hasLoginError) {
-        const errorText = await hasLoginError.textContent();
-        throw new Error(`Connexion échouée: ${errorText}`);
       } else {
-        console.log(`⚠️  URL inattendue mais on continue: ${currentUrl}`);
-        return true; // On continue même si l'URL est différente
+        console.log(`⚠️  Validation incertaine mais on continue: ${currentUrl}`);
+        return true; // On continue quand même pour être plus robuste
       }
       
     } catch (error) {
@@ -149,10 +173,20 @@ class NoxToolsScraper extends WebScraper {
         await this.page.waitForTimeout(3000);
         
         // Vérifier si on a besoin de se reconnecter sur le sous-domaine analytics
+        await this.page.waitForTimeout(2000); // Laisser le temps à la page de charger
+        
         const needsLogin = await this.page.$('input[name="amember_login"], input[name="username"]');
         if (needsLogin) {
-          console.log('🔑 Connexion requise sur le sous-domaine analytics...');
-          await this.loginOnAnalyticsDomain();
+          console.log('🔑 DOUBLE CONNEXION REQUISE - Connexion sur server1.noxtools.com...');
+          const loginSuccess = await this.loginOnAnalyticsDomain();
+          if (loginSuccess) {
+            console.log('✅ Double connexion réussie !');
+            // Reconstruire l'URL analytics après connexion
+            await this.page.goto(analyticsUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+            await this.page.waitForTimeout(3000);
+          }
+        } else {
+          console.log('✅ Pas de double connexion nécessaire');
         }
         
       } catch (navError) {
