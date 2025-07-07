@@ -1,7 +1,7 @@
 export const config = {
   // Configuration du navigateur
-  headless: false, // Mode visible pour résoudre les CAPTCHA manuellement
-  slowMo: 300, // Délai plus long pour voir les actions
+  headless: true, // Mode invisible (nécessaire sur serveur sans X Server)
+  slowMo: 500, // Délai plus long pour éviter la détection
   
   // Configuration de la viewport
   viewport: {
@@ -49,54 +49,54 @@ export const config = {
     }
   },
   
-  // Sélecteurs pour le scraping sur la page ANALYTICS (à personnaliser selon les données)
+  // Sélecteurs pour le scraping sur la page ANALYTICS (basés sur l'inspection réelle)
   selectors: {
-    // Conteneur principal de l'analytics
+    // Conteneur principal de l'analytics (ID trouvé lors de l'inspection)
     mainContainer: {
-      selector: '.analytics-container, .overview-container, .main-content',
+      selector: '#domain-overview-app, .domain-overview-app-wrapper, .srf-layout-main-content-wrapper',
       multiple: false
     },
     
-    // Domaine analysé
+    // Domaine analysé (sélecteur confirmé qui fonctionne)
     analyzedDomain: {
-      selector: '.domain-name, .analyzed-url, h1',
+      selector: 'h1, h2, h3',
       multiple: false
     },
     
-    // Métriques de trafic
-    trafficMetrics: {
-      selector: '.traffic-metric, .overview-metric, .stat-value',
+    // Navigation et menus SEMrush
+    navigationMenus: {
+      selector: '[data-testid], .nav-item, .menu-item',
       multiple: true
     },
     
-    // Mots-clés organiques
-    organicKeywords: {
-      selector: '.keyword-row, .organic-keyword, .keyword-cell',
-      multiple: true
-    },
-    
-    // Backlinks
-    backlinks: {
-      selector: '.backlink-row, .backlink-item',
-      multiple: true
-    },
-    
-    // Scores/Ratings
-    scores: {
-      selector: '.authority-score, .domain-score, .rating',
-      multiple: true
-    },
-    
-    // Tableaux de données génériques
-    dataTable: {
-      selector: 'table tr, .data-table tr',
-      multiple: true
-    },
-    
-    // Liens vers détails
-    detailLinks: {
-      selector: 'a[href*="detail"], .view-more, .expand-link',
+    // Tous les liens de la page analytics
+    allLinks: {
+      selector: 'a[href*="server1.noxtools.com"]',
       attribute: 'href',
+      multiple: true
+    },
+    
+    // Scripts et données JavaScript (contiennent souvent des infos)
+    scriptData: {
+      selector: 'script',
+      multiple: true
+    },
+    
+    // Messages d'erreur à détecter
+    errorMessages: {
+      selector: '[class*="error"], [class*="warning"], [class*="problem"]',
+      multiple: true
+    },
+    
+    // Conteneurs de widgets/données
+    widgets: {
+      selector: '[class*="widget"], [class*="panel"], [class*="card"], [class*="container"]',
+      multiple: true
+    },
+    
+    // Tous les éléments avec du texte visible
+    textElements: {
+      selector: 'div, span, p, td, th',
       multiple: true
     }
   },

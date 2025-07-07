@@ -97,6 +97,47 @@ class NoxToolsScraper extends WebScraper {
     return `${config.baseAnalyticsUrl}?${params.toString()}`;
   }
 
+  async handleAnalyticsErrors() {
+    console.log('🔍 Vérification des erreurs analytics...');
+    
+    try {
+      // Chercher le message d'erreur spécifique de SEMrush
+      const errorMessage = await this.page.$('text=Something went wrong');
+      const reloadButton = await this.page.$('text=Try again');
+      
+      if (errorMessage) {
+        console.log('⚠️  Erreur analytics détectée: "Something went wrong"');
+        
+        if (reloadButton) {
+          console.log('🔄 Bouton "Try again" trouvé, clic...');
+          await reloadButton.click();
+          await this.page.waitForTimeout(3000);
+          console.log('✅ Page rechargée via bouton');
+        } else {
+          console.log('🔄 Rechargement manuel de la page...');
+          await this.page.reload({ waitUntil: 'domcontentloaded' });
+          await this.page.waitForTimeout(3000);
+          console.log('✅ Page rechargée manuellement');
+        }
+        
+        // Attendre que l'erreur disparaisse ou au moins 10 secondes
+        for (let i = 0; i < 10; i++) {
+          const stillError = await this.page.$('text=Something went wrong');
+          if (!stillError) {
+            console.log('✅ Erreur résolue après rechargement !');
+            break;
+          }
+          console.log(`⏳ Attente résolution erreur (${i + 1}/10)...`);
+          await this.page.waitForTimeout(1000);
+        }
+      } else {
+        console.log('✅ Aucune erreur analytics détectée');
+      }
+    } catch (error) {
+      console.log('⚠️  Erreur lors de la vérification:', error.message);
+    }
+  }
+
   async loginOnAnalyticsDomain() {
     console.log('🔐 Connexion sur le domaine analytics...');
     
@@ -213,19 +254,32 @@ class NoxToolsScraper extends WebScraper {
       // Vérifier si on a une protection Cloudflare/CAPTCHA
       const cloudflareChallenge = await this.page.$('.cf-browser-verification, .challenge-form, #challenge-error-text');
       if (cloudflareChallenge) {
-        console.log('🛡️  Protection détectée - ATTENDEZ...');
-        console.log('👤 Si vous voyez un CAPTCHA, résolvez-le manuellement');
-        console.log('⏰ Attente de 30 secondes pour résolution manuelle...');
+        console.log('🛡️  Protection Cloudflare détectée...');
+        console.log('⏰ Attente automatique de résolution (mode headless)...');
         
-        // Attendre plus longtemps pour la résolution manuelle
-        await this.page.waitForTimeout(30000);
-        
-        // Vérifier si la protection est passée
-        const stillProtected = await this.page.$('.cf-browser-verification, .challenge-form, #challenge-error-text');
-        if (!stillProtected) {
-          console.log('✅ Protection passée automatiquement !');
+        // Essayer plusieurs fois avec des attentes progressives
+        for (let attempt = 1; attempt <= 5; attempt++) {
+          console.log(`🔄 Tentative ${attempt}/5 - Attente de 15 secondes...`);
+          await this.page.waitForTimeout(15000);
+          
+          // Vérifier si la protection est passée
+          const stillProtected = await this.page.$('.cf-browser-verification, .challenge-form, #challenge-error-text');
+          if (!stillProtected) {
+            console.log('✅ Protection Cloudflare passée automatiquement !');
+            break;
+          }
+          
+          if (attempt === 5) {
+            console.log('⚠️  Protection toujours présente, mais on continue...');
+            console.log('💡 Le scraping va essayer de récupérer ce qui est disponible');
+          }
         }
+      } else {
+        console.log('✅ Aucune protection Cloudflare détectée');
       }
+      
+      // Vérifier et gérer les erreurs JavaScript de la page analytics
+      await this.handleAnalyticsErrors();
       
       // Attendre les éléments principaux du site analytics
       const mainSelectors = [
@@ -263,8 +317,12 @@ class NoxToolsScraper extends WebScraper {
     console.log('📊 Étape 4: Scraping des données du site final...');
     
     try {
-      // Prendre une capture avant scraping
-      await this.takeScreenshot(`before-scraping-${Date.now()}.png`);
+      // Prendre une capture avant scraping (avec timeout court)
+      try {
+        await this.takeScreenshot(`before-scraping-${Date.now()}.png`);
+      } catch (e) {
+        console.log('⚠️  Capture d\'écran ignorée (timeout)');
+      }
       
       // Scraper selon la config
       const scrapedData = await this.scrapeData(config.selectors);

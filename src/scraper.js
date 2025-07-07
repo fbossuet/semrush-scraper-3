@@ -80,9 +80,10 @@ class WebScraper {
         
         if (selector.multiple) {
           // Pour récupérer plusieurs éléments
-          scrapedData[key] = await this.page.$$eval(selector.selector, elements =>
-            elements.map(el => selector.attribute ? el.getAttribute(selector.attribute) : el.textContent.trim())
-          );
+          const attributeName = selector.attribute;
+          scrapedData[key] = await this.page.$$eval(selector.selector, (elements, attr) =>
+            elements.map(el => attr ? el.getAttribute(attr) : el.textContent.trim()).filter(text => text && text.trim())
+          , attributeName);
         } else {
           // Pour récupérer un seul élément
           const element = await this.page.$(selector.selector);
@@ -121,7 +122,15 @@ class WebScraper {
 
   async takeScreenshot(filename) {
     console.log(`📸 Capture d'écran: ${filename}...`);
-    await this.page.screenshot({ path: `screenshots/${filename}` });
+    try {
+      await this.page.screenshot({ 
+        path: `screenshots/${filename}`,
+        timeout: 10000 // Timeout de 10 secondes maximum
+      });
+    } catch (e) {
+      console.log(`⚠️  Échec capture ${filename}: ${e.message}`);
+      throw e; // Re-throw pour gestion par l'appelant
+    }
   }
 
   async close() {

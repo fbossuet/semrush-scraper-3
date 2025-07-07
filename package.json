@@ -11,6 +11,7 @@
     "noxtools": "node src/noxtools-scraper.js",
     "noxtools-dev": "node --inspect src/noxtools-scraper.js",
     "interactive": "node src/interactive-scraper.js",
+    "inspect": "node src/inspect-page.js",
     "analyze-domain": "node src/domain-analyzer.js single",
     "analyze-multiple": "node src/domain-analyzer.js multiple",
     "analyze-custom": "node src/domain-analyzer.js custom",
