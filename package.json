@@ -10,6 +10,9 @@
     "start": "node src/scraper.js",
     "noxtools": "node src/noxtools-scraper.js",
     "noxtools-dev": "node --inspect src/noxtools-scraper.js",
+    "analyze-domain": "node src/domain-analyzer.js single",
+    "analyze-multiple": "node src/domain-analyzer.js multiple",
+    "analyze-custom": "node src/domain-analyzer.js custom",
     "dev": "node --inspect src/scraper.js"
   },
   "keywords": ["playwright", "scraping", "automation", "web"],

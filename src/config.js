@@ -14,10 +14,17 @@ export const config = {
   
   // URLs NoxTools (passerelle)
   loginUrl: 'https://noxtools.com/secure/login?amember_redirect_url=https%3A%2F%2Fnoxtools.com%2Fsecure%2Fpage%2Fsemrush',
-  noxToolsPage: 'https://noxtools.com/secure/page/semrush', // Page après connexion NoxTools
+  noxToolsPage: 'https://noxtools.com/secure/page/semrush', // Page intermédiaire NoxTools
   
-  // URL du site final où faire le scraping (à définir après navigation)
-  targetUrl: '', // Sera défini après navigation depuis NoxTools
+  // URL du site final à scraper (analytics)
+  baseAnalyticsUrl: 'https://server1.noxtools.com/analytics/overview/',
+  
+  // Paramètres pour l'URL d'analytics
+  analyticsParams: {
+    searchType: 'domain',
+    db: 'us',
+    domain: 'https://the-foldie.com' // ← Domaine à analyser (modifiable)
+  },
   
   // Informations de connexion NoxTools
   credentials: {
@@ -42,36 +49,54 @@ export const config = {
     }
   },
   
-  // Sélecteurs pour le scraping sur le site FINAL (à personnaliser)
+  // Sélecteurs pour le scraping sur la page ANALYTICS (à personnaliser selon les données)
   selectors: {
-    // Conteneur principal du site final
+    // Conteneur principal de l'analytics
     mainContainer: {
-      selector: '.main-content, .container, .wrapper',
+      selector: '.analytics-container, .overview-container, .main-content',
       multiple: false
     },
     
-    // Titre de la page finale
-    pageTitle: {
-      selector: 'h1, .title, .page-title',
+    // Domaine analysé
+    analyzedDomain: {
+      selector: '.domain-name, .analyzed-url, h1',
       multiple: false
     },
     
-    // Données à scraper (exemples à adapter)
-    dataRows: {
-      selector: '.data-row, .result-item, tr',
+    // Métriques de trafic
+    trafficMetrics: {
+      selector: '.traffic-metric, .overview-metric, .stat-value',
       multiple: true
     },
     
-    // Liens importants
-    links: {
-      selector: 'a.result-link, .data-link',
+    // Mots-clés organiques
+    organicKeywords: {
+      selector: '.keyword-row, .organic-keyword, .keyword-cell',
+      multiple: true
+    },
+    
+    // Backlinks
+    backlinks: {
+      selector: '.backlink-row, .backlink-item',
+      multiple: true
+    },
+    
+    // Scores/Ratings
+    scores: {
+      selector: '.authority-score, .domain-score, .rating',
+      multiple: true
+    },
+    
+    // Tableaux de données génériques
+    dataTable: {
+      selector: 'table tr, .data-table tr',
+      multiple: true
+    },
+    
+    // Liens vers détails
+    detailLinks: {
+      selector: 'a[href*="detail"], .view-more, .expand-link',
       attribute: 'href',
-      multiple: true
-    },
-    
-    // Textes/valeurs spécifiques
-    values: {
-      selector: '.value, .metric, .number',
       multiple: true
     }
   },

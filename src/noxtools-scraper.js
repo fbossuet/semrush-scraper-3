@@ -60,108 +60,72 @@ class NoxToolsScraper extends WebScraper {
     }
   }
 
-  async navigateToFinalSite() {
-    console.log('🧭 Étape 2: Navigation vers le site final depuis NoxTools...');
+    buildAnalyticsUrl(domain = null) {
+    const targetDomain = domain || config.analyticsParams.domain;
+    const encodedDomain = encodeURIComponent(targetDomain);
+    
+    const params = new URLSearchParams({
+      searchType: config.analyticsParams.searchType,
+      db: config.analyticsParams.db,
+      q: encodedDomain
+    });
+    
+    return `${config.baseAnalyticsUrl}?${params.toString()}`;
+  }
+
+  async navigateToFinalSite(customDomain = null) {
+    console.log('🧭 Étape 2: Navigation vers le site d\'analytics...');
     
     try {
       console.log(`🔍 URL actuelle: ${this.page.url()}`);
       
-             // Forcer la navigation vers la page SEMrush si on n'y est pas déjà
-       if (config.noxToolsPage) {
-         if (!this.page.url().includes('secure/page/semrush')) {
-           console.log('📍 Navigation forcée vers la page NoxTools SEMrush...');
-           try {
-             await this.page.goto(config.noxToolsPage, { 
-               waitUntil: 'domcontentloaded', // Plus tolérant que 'networkidle'
-               timeout: 15000 
-             });
-             console.log(`✅ Nouvelle URL: ${this.page.url()}`);
-             
-             // Attendre quelques secondes pour le chargement
-             await this.page.waitForTimeout(3000);
-             
-           } catch (e) {
-             console.log(`⚠️  Timeout navigation, mais on continue: ${e.message}`);
-             // On continue même si la navigation timeout
-           }
-         } else {
-           console.log('✅ Déjà sur la page SEMrush !');
-         }
-       }
-      
-             // Attendre et chercher les liens/boutons d'accès au site final
-       await this.page.waitForTimeout(2000); // Laisser le temps à la page de charger
-       
-       const linkSelectors = [
-         config.noxToolsSelectors.accessLink.selector,
-         'a[href*="semrush.com"]',  // Lien direct vers SEMrush
-         'a[href*="app.semrush"]',  // App SEMrush
-         'iframe[src*="semrush"]',  // Frame embarquée
-         'button[onclick*="semrush"]', // Bouton avec JS
-         '.semrush-access',
-         '.tool-access',
-         '.launch-tool',
-         'a[target="_blank"]',  // Liens qui s'ouvrent dans nouvel onglet
-         '.btn-primary',
-         '.access-button'
-       ];
-      
-      let accessLink = null;
-      for (const selector of linkSelectors) {
-        try {
-          accessLink = await this.page.$(selector);
-          if (accessLink) {
-            console.log(`🔗 Lien d'accès trouvé avec: ${selector}`);
-            break;
+      // D'abord aller sur la page intermédiaire NoxTools si nécessaire
+      if (config.noxToolsPage) {
+        if (!this.page.url().includes('secure/page/semrush')) {
+          console.log('📍 Navigation vers la page intermédiaire NoxTools...');
+          try {
+            await this.page.goto(config.noxToolsPage, { 
+              waitUntil: 'domcontentloaded',
+              timeout: 15000 
+            });
+            console.log(`✅ Sur la page intermédiaire: ${this.page.url()}`);
+            await this.page.waitForTimeout(2000);
+          } catch (e) {
+            console.log(`⚠️  Timeout page intermédiaire: ${e.message}`);
           }
-        } catch (e) {
-          // Continue avec le sélecteur suivant
         }
       }
       
-              if (accessLink) {
-          try {
-            console.log('🔗 Tentative de clic sur le lien d\'accès...');
-            await accessLink.click();
-            
-            // Attendre avec timeout plus court
-            try {
-              await this.page.waitForLoadState('domcontentloaded', { timeout: 10000 });
-              console.log('✅ Navigation par clic réussie');
-            } catch (timeoutError) {
-              console.log('⚠️  Timeout après clic, mais on continue...');
-            }
-            
-          } catch (e) {
-            console.log('🔄 Tentative avec gestion nouvel onglet...');
-            try {
-              // Essayer avec gestion des nouveaux onglets
-              const [newPage] = await Promise.all([
-                this.page.context().waitForEvent('page', { timeout: 5000 }).catch(() => null),
-                accessLink.click()
-              ]);
-              
-              if (newPage) {
-                console.log('📱 Nouvel onglet ouvert, basculement...');
-                this.page = newPage;
-                await this.page.waitForTimeout(2000); // Attente simple
-              }
-            } catch (newTabError) {
-              console.log('⚠️  Erreur gestion nouvel onglet:', newTabError.message);
-            }
-          }
-        } else {
-          console.log('⚠️  Aucun lien d\'accès trouvé, on continue avec la page actuelle');
-        }
+      // Construire l'URL d'analytics avec le domaine cible
+      const analyticsUrl = this.buildAnalyticsUrl(customDomain);
+      const targetDomain = customDomain || config.analyticsParams.domain;
       
-      // Enregistrer l'URL du site final
+      console.log(`🎯 Navigation vers analytics pour: ${targetDomain}`);
+      console.log(`� URL complète: ${analyticsUrl}`);
+      
+      // Naviguer directement vers l'URL d'analytics
+      try {
+        await this.page.goto(analyticsUrl, {
+          waitUntil: 'domcontentloaded',
+          timeout: 20000
+        });
+        
+        console.log(`✅ Navigation réussie vers analytics !`);
+        await this.page.waitForTimeout(3000); // Attendre le chargement des données
+        
+      } catch (navError) {
+        console.log(`⚠️  Timeout navigation analytics: ${navError.message}`);
+        console.log('🔄 On continue quand même...');
+      }
+      
+      // Enregistrer l'URL finale
       this.finalSiteUrl = this.page.url();
-      console.log(`✅ Navigation réussie vers: ${this.finalSiteUrl}`);
+      console.log(`📊 URL finale: ${this.finalSiteUrl}`);
       
       return true;
       
     } catch (error) {
-      console.error('❌ Erreur navigation vers site final:', error.message);
+      console.error('❌ Erreur navigation vers analytics:', error.message);
       return false;
     }
   }
@@ -269,31 +233,86 @@ class NoxToolsScraper extends WebScraper {
   }
 }
 
-// Fonction principale
-async function runNoxToolsWorkflow() {
+// Fonction pour scraper un domaine spécifique
+async function scrapeDomain(domain) {
   const scraper = new NoxToolsScraper();
   
   try {
     await scraper.init();
-    const result = await scraper.performCompleteWorkflow();
+    console.log(`🎯 Analyse du domaine: ${domain}`);
     
-    if (result) {
-      // Optionnel: sauvegarder dans un fichier
+    // Connexion NoxTools
+    const loginSuccess = await scraper.connectToNoxTools();
+    if (!loginSuccess) {
+      throw new Error('Impossible de se connecter à NoxTools');
+    }
+    
+    // Navigation vers analytics avec le domaine spécifique
+    const navSuccess = await scraper.navigateToFinalSite(domain);
+    if (!navSuccess) {
+      throw new Error('Impossible de naviguer vers analytics');
+    }
+    
+    // Attendre chargement et scraper
+    await scraper.waitForFinalSiteLoading();
+    const data = await scraper.scrapeFinalSiteData();
+    
+    if (data) {
+      // Sauvegarder avec nom de fichier basé sur le domaine
       const fs = await import('fs/promises');
-      const filename = `noxtools-data-${Date.now()}.json`;
-      await fs.writeFile(filename, JSON.stringify(result, null, 2));
+      const cleanDomain = domain.replace(/[^a-zA-Z0-9]/g, '-');
+      const filename = `analytics-${cleanDomain}-${Date.now()}.json`;
+      await fs.writeFile(filename, JSON.stringify(data, null, 2));
       console.log(`💾 Données sauvegardées dans: ${filename}`);
+      
+      return data;
     }
     
   } catch (error) {
-    console.error('💥 Erreur générale:', error.message);
+    console.error('💥 Erreur analyse domaine:', error.message);
+    return null;
   } finally {
     await scraper.close();
   }
 }
 
+// Fonction principale (utilise le domaine de config)
+async function runNoxToolsWorkflow() {
+  return await scrapeDomain(config.analyticsParams.domain);
+}
+
+// Fonction pour analyser plusieurs domaines
+async function scrapeMultipleDomains(domains) {
+  console.log(`🚀 Analyse de ${domains.length} domaines...`);
+  const results = [];
+  
+  for (let i = 0; i < domains.length; i++) {
+    const domain = domains[i];
+    console.log(`\n📊 ${i + 1}/${domains.length} - Analyse de: ${domain}`);
+    
+    const result = await scrapeDomain(domain);
+    if (result) {
+      results.push({ domain, data: result });
+    }
+    
+    // Pause entre les domaines pour éviter la surcharge
+    if (i < domains.length - 1) {
+      console.log('⏳ Pause de 3 secondes...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
+  }
+  
+  // Sauvegarder le rapport consolidé
+  const fs = await import('fs/promises');
+  const reportFilename = `multi-domain-report-${Date.now()}.json`;
+  await fs.writeFile(reportFilename, JSON.stringify(results, null, 2));
+  console.log(`📋 Rapport consolidé: ${reportFilename}`);
+  
+  return results;
+}
+
 // Export pour utilisation
-export { NoxToolsScraper, runNoxToolsWorkflow };
+export { NoxToolsScraper, runNoxToolsWorkflow, scrapeDomain, scrapeMultipleDomains };
 
 // Exécution directe
 if (import.meta.url === `file://${process.argv[1]}`) {
