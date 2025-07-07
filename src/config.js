@@ -12,50 +12,67 @@ export const config = {
   // User Agent (pour éviter la détection de bot)
   userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   
-  // URLs du site web
-  loginUrl: 'https://example.com/login', // Remplace par l'URL de connexion
-  targetUrl: 'https://example.com/dashboard', // Remplace par l'URL de l'interface cible
+  // URLs NoxTools (passerelle)
+  loginUrl: 'https://noxtools.com/secure/login?amember_redirect_url=https%3A%2F%2Fnoxtools.com%2Fsecure%2Fpage%2Fsemrush',
+  noxToolsPage: 'https://noxtools.com/secure/page/semrush', // Page après connexion NoxTools
   
-  // Informations de connexion
+  // URL du site final où faire le scraping (à définir après navigation)
+  targetUrl: '', // Sera défini après navigation depuis NoxTools
+  
+  // Informations de connexion NoxTools
   credentials: {
-    username: 'ton_nom_utilisateur', // Remplace par tes identifiants
-    password: 'ton_mot_de_passe', // Remplace par ton mot de passe
-    usernameSelector: '#username', // Sélecteur du champ nom d'utilisateur
-    passwordSelector: '#password', // Sélecteur du champ mot de passe
-    submitSelector: 'button[type="submit"]' // Sélecteur du bouton de connexion
+    username: 'ton_email_noxtools', // Ton email NoxTools
+    password: 'ton_mot_de_passe_noxtools', // Ton mot de passe NoxTools
+    usernameSelector: 'input[name="amember_login"]', // Sélecteur NoxTools pour email
+    passwordSelector: 'input[name="amember_pass"]', // Sélecteur NoxTools pour password
+    submitSelector: 'input[type="submit"]' // Sélecteur du bouton connexion NoxTools
   },
   
-  // Sélecteurs pour le scraping
+  // Sélecteurs NoxTools pour navigation
+  noxToolsSelectors: {
+    // Lien ou bouton pour accéder au site final depuis NoxTools
+    accessLink: {
+      selector: 'a[href*="semrush"]', // À adapter selon l'interface NoxTools
+      multiple: false
+    },
+    // Autres éléments de navigation si nécessaire
+    menuItem: {
+      selector: '.menu-item',
+      multiple: false
+    }
+  },
+  
+  // Sélecteurs pour le scraping sur le site FINAL (à personnaliser)
   selectors: {
-    // Exemple de conteneur principal
+    // Conteneur principal du site final
     mainContainer: {
-      selector: '.main-content',
+      selector: '.main-content, .container, .wrapper',
       multiple: false
     },
     
-    // Exemple de titre de page
+    // Titre de la page finale
     pageTitle: {
-      selector: 'h1',
+      selector: 'h1, .title, .page-title',
       multiple: false
     },
     
-    // Exemple de liste d'éléments
-    items: {
-      selector: '.item',
+    // Données à scraper (exemples à adapter)
+    dataRows: {
+      selector: '.data-row, .result-item, tr',
       multiple: true
     },
     
-    // Exemple de données spécifiques avec attributs
+    // Liens importants
     links: {
-      selector: 'a.important-link',
+      selector: 'a.result-link, .data-link',
       attribute: 'href',
       multiple: true
     },
     
-    // Exemple de texte simple
-    description: {
-      selector: '.description',
-      multiple: false
+    // Textes/valeurs spécifiques
+    values: {
+      selector: '.value, .metric, .number',
+      multiple: true
     }
   },
   

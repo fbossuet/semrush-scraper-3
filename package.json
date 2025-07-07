@@ -8,6 +8,8 @@
     "install-playwright": "npx playwright install",
     "test": "npx playwright test",
     "start": "node src/scraper.js",
+    "noxtools": "node src/noxtools-scraper.js",
+    "noxtools-dev": "node --inspect src/noxtools-scraper.js",
     "dev": "node --inspect src/scraper.js"
   },
   "keywords": ["playwright", "scraping", "automation", "web"],

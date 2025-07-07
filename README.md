@@ -68,17 +68,23 @@ export const config = {
 
 ## 🎯 Utilisation
 
-### Lancement simple
+### Scraper générique
 
 ```bash
-npm start
+npm start              # Lancement simple
+npm run dev           # Mode développement avec debug
 ```
 
-### Mode développement avec debug
+### 🔧 Workflow NoxTools (spécialisé)
+
+Pour utiliser NoxTools comme passerelle d'accès :
 
 ```bash
-npm run dev
+npm run noxtools       # Workflow NoxTools complet
+npm run noxtools-dev   # Mode développement NoxTools
 ```
+
+**📋 Guide complet NoxTools**: Voir [NOXTOOLS-GUIDE.md](NOXTOOLS-GUIDE.md)
 
 ### Exemples d'utilisation
 
@@ -150,12 +156,15 @@ while (await scraper.page.$('.next-page:not(.disabled)')) {
 ```
 semrush-scraper-3/
 ├── src/
-│   ├── scraper.js     # Classe principale du scraper
-│   ├── config.js      # Configuration (URLs, sélecteurs, etc.)
-│   └── example.js     # Exemples d'utilisation
-├── screenshots/       # Captures d'écran automatiques
-├── package.json       # Dépendances et scripts
-└── README.md         # Documentation
+│   ├── scraper.js         # Classe principale du scraper
+│   ├── config.js          # Configuration (URLs, sélecteurs, etc.)
+│   ├── noxtools-scraper.js # Scraper spécialisé NoxTools
+│   └── example.js         # Exemples d'utilisation
+├── screenshots/           # Captures d'écran automatiques
+├── package.json          # Dépendances et scripts
+├── README.md            # Documentation générale
+├── NOXTOOLS-GUIDE.md    # Guide spécifique NoxTools
+└── .gitignore           # Fichiers à ignorer
 ```
 
 ## 🔧 Options de configuration
@@ -247,10 +256,12 @@ DEBUG=pw:api npm start
 ## 🔄 Scripts disponibles
 
 ```bash
-npm start              # Lancer le scraper
-npm run dev           # Mode développement
+npm start                    # Lancer le scraper générique
+npm run dev                 # Mode développement générique
+npm run noxtools            # Workflow NoxTools complet  
+npm run noxtools-dev        # Mode développement NoxTools
 npm run install-playwright  # Installer les navigateurs
-npm test              # Tests (à implémenter)
+npm test                    # Tests (à implémenter)
 ```
 
 ## 🆘 Problèmes courants
