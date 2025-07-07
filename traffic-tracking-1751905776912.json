@@ -1,0 +1,22 @@
+{
+  "timestamp": "2025-07-07T16:29:36.912Z",
+  "source": "Traffic Manual Tracker",
+  "trafficData": {
+    "cakesbody.com": {
+      "visits": "846.6K",
+      "source": "Traffic Overview - Manual Visual Check",
+      "timestamp": "2025-07-07T16:29:36.911Z",
+      "additionalData": {
+        "metric": "visits",
+        "tool": "SEMrush Traffic Analytics",
+        "interface": "Traffic Overview page",
+        "method": "Manual observation"
+      },
+      "notes": "Traffic visits value for cakesbody.com"
+    }
+  },
+  "summary": [
+    "cakesbody.com: 846.6K (Traffic Overview - Manual Visual Check)"
+  ],
+  "totalCompetitors": 1
+}

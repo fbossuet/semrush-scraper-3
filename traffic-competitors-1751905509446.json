@@ -1,0 +1,14 @@
+{
+  "timestamp": "2025-07-07T16:25:09.446Z",
+  "source": "Traffic Overview - Competitors",
+  "competitorData": [
+    {
+      "domain": "cakesbody.com",
+      "visits": "Erreur ajout",
+      "error": "Impossible d'ajouter le concurrent"
+    }
+  ],
+  "summary": [
+    "cakesbody.com: Erreur ajout"
+  ]
+}
