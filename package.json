@@ -1,0 +1,23 @@
+{
+  "name": "semrush-scraper-3",
+  "version": "1.0.0",
+  "description": "Scraper web automatisé avec Playwright",
+  "main": "src/scraper.js",
+  "type": "module",
+  "scripts": {
+    "install-playwright": "npx playwright install",
+    "test": "npx playwright test",
+    "start": "node src/scraper.js",
+    "dev": "node --inspect src/scraper.js"
+  },
+  "keywords": ["playwright", "scraping", "automation", "web"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@playwright/test": "^1.40.0",
+    "playwright": "^1.40.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.40.0"
+  }
+}

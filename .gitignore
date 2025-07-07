@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Screenshots et captures
+screenshots/*.png
+screenshots/*.jpg
+screenshots/*.jpeg
+
+# Données sensibles
+src/config-production.js
+credentials.json
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# Données extraites
+data-*.json
+scraped-*.json
+output-*.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Browser profiles et cache
+browser-data/
+user-data/
+
+# Coverage
+coverage/
+
+# Build
+dist/
+build/
