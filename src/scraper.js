@@ -18,7 +18,12 @@ class WebScraper {
     
     // Configuration de la page
     await this.page.setViewportSize(config.viewport);
-    await this.page.setUserAgent(config.userAgent);
+    
+    if (config.userAgent) {
+      await this.page.setExtraHTTPHeaders({
+        'User-Agent': config.userAgent
+      });
+    }
   }
 
   async login(url, credentials) {

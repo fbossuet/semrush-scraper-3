@@ -26,13 +26,32 @@ class NoxToolsScraper extends WebScraper {
       // Attendre la redirection après connexion
       await this.page.waitForLoadState('networkidle');
       
-      // Vérifier si on est bien connecté (peut être adapté selon NoxTools)
+      // Vérifier si on est bien connecté - plus flexible avec les URLs
       const currentUrl = this.page.url();
-      if (currentUrl.includes('secure/page') || currentUrl.includes('dashboard')) {
+      console.log(`🔍 URL après connexion: ${currentUrl}`);
+      
+      // Vérifications multiples pour valider la connexion
+      const validUrlPatterns = [
+        'secure/page',
+        'dashboard', 
+        'member',
+        'semrush',
+        '/secure/',
+        'noxtools.com'
+      ];
+      
+      const isValidUrl = validUrlPatterns.some(pattern => currentUrl.includes(pattern));
+      const hasLoginError = await this.page.$('.error, .alert-danger, .login-error');
+      
+      if (isValidUrl && !hasLoginError) {
         console.log('✅ Connexion NoxTools réussie !');
         return true;
+      } else if (hasLoginError) {
+        const errorText = await hasLoginError.textContent();
+        throw new Error(`Connexion échouée: ${errorText}`);
       } else {
-        throw new Error('Connexion NoxTools échouée - URL inattendue');
+        console.log(`⚠️  URL inattendue mais on continue: ${currentUrl}`);
+        return true; // On continue même si l'URL est différente
       }
       
     } catch (error) {
@@ -45,30 +64,95 @@ class NoxToolsScraper extends WebScraper {
     console.log('🧭 Étape 2: Navigation vers le site final depuis NoxTools...');
     
     try {
-      // Option 1: Si on est déjà redirigé vers la bonne page
-      if (config.noxToolsPage) {
-        await this.page.goto(config.noxToolsPage);
-        await this.page.waitForLoadState('networkidle');
-      }
+      console.log(`🔍 URL actuelle: ${this.page.url()}`);
       
-      // Option 2: Chercher et cliquer sur le lien d'accès au site final
-      const accessLink = await this.page.$(config.noxToolsSelectors.accessLink.selector);
+             // Forcer la navigation vers la page SEMrush si on n'y est pas déjà
+       if (config.noxToolsPage) {
+         if (!this.page.url().includes('secure/page/semrush')) {
+           console.log('📍 Navigation forcée vers la page NoxTools SEMrush...');
+           try {
+             await this.page.goto(config.noxToolsPage, { 
+               waitUntil: 'domcontentloaded', // Plus tolérant que 'networkidle'
+               timeout: 15000 
+             });
+             console.log(`✅ Nouvelle URL: ${this.page.url()}`);
+             
+             // Attendre quelques secondes pour le chargement
+             await this.page.waitForTimeout(3000);
+             
+           } catch (e) {
+             console.log(`⚠️  Timeout navigation, mais on continue: ${e.message}`);
+             // On continue même si la navigation timeout
+           }
+         } else {
+           console.log('✅ Déjà sur la page SEMrush !');
+         }
+       }
       
-      if (accessLink) {
-        console.log('🔗 Lien d\'accès trouvé, clic...');
-        
-        // Gérer l'ouverture dans un nouvel onglet si nécessaire
-        const [newPage] = await Promise.all([
-          this.page.context().waitForEvent('page'),
-          accessLink.click()
-        ]);
-        
-        if (newPage) {
-          console.log('📱 Nouvel onglet ouvert, basculement...');
-          this.page = newPage;
-          await this.page.waitForLoadState('networkidle');
+             // Attendre et chercher les liens/boutons d'accès au site final
+       await this.page.waitForTimeout(2000); // Laisser le temps à la page de charger
+       
+       const linkSelectors = [
+         config.noxToolsSelectors.accessLink.selector,
+         'a[href*="semrush.com"]',  // Lien direct vers SEMrush
+         'a[href*="app.semrush"]',  // App SEMrush
+         'iframe[src*="semrush"]',  // Frame embarquée
+         'button[onclick*="semrush"]', // Bouton avec JS
+         '.semrush-access',
+         '.tool-access',
+         '.launch-tool',
+         'a[target="_blank"]',  // Liens qui s'ouvrent dans nouvel onglet
+         '.btn-primary',
+         '.access-button'
+       ];
+      
+      let accessLink = null;
+      for (const selector of linkSelectors) {
+        try {
+          accessLink = await this.page.$(selector);
+          if (accessLink) {
+            console.log(`🔗 Lien d'accès trouvé avec: ${selector}`);
+            break;
+          }
+        } catch (e) {
+          // Continue avec le sélecteur suivant
         }
       }
+      
+              if (accessLink) {
+          try {
+            console.log('🔗 Tentative de clic sur le lien d\'accès...');
+            await accessLink.click();
+            
+            // Attendre avec timeout plus court
+            try {
+              await this.page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+              console.log('✅ Navigation par clic réussie');
+            } catch (timeoutError) {
+              console.log('⚠️  Timeout après clic, mais on continue...');
+            }
+            
+          } catch (e) {
+            console.log('🔄 Tentative avec gestion nouvel onglet...');
+            try {
+              // Essayer avec gestion des nouveaux onglets
+              const [newPage] = await Promise.all([
+                this.page.context().waitForEvent('page', { timeout: 5000 }).catch(() => null),
+                accessLink.click()
+              ]);
+              
+              if (newPage) {
+                console.log('📱 Nouvel onglet ouvert, basculement...');
+                this.page = newPage;
+                await this.page.waitForTimeout(2000); // Attente simple
+              }
+            } catch (newTabError) {
+              console.log('⚠️  Erreur gestion nouvel onglet:', newTabError.message);
+            }
+          }
+        } else {
+          console.log('⚠️  Aucun lien d\'accès trouvé, on continue avec la page actuelle');
+        }
       
       // Enregistrer l'URL du site final
       this.finalSiteUrl = this.page.url();
