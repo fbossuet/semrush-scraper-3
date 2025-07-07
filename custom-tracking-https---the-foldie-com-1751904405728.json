@@ -1,0 +1,37 @@
+{
+  "timestamp": "2025-07-07T16:06:45.728Z",
+  "domain": "https://the-foldie.com",
+  "metrics": {
+    "organicTraffic": {
+      "value": "60.1k",
+      "source": "SEMrush Dashboard",
+      "timestamp": "2025-07-07T16:06:45.727Z",
+      "notes": "Valeur observée visuellement sur SEMrush"
+    },
+    "domain": {
+      "value": "https://the-foldie.com",
+      "source": "User Input",
+      "timestamp": "2025-07-07T16:06:45.727Z",
+      "notes": "Domaine analysé"
+    },
+    "analysisDate": {
+      "value": "2025-07-07",
+      "source": "System",
+      "timestamp": "2025-07-07T16:06:45.727Z",
+      "notes": "Date de l'analyse"
+    },
+    "tool": {
+      "value": "SEMrush via NoxTools",
+      "source": "System",
+      "timestamp": "2025-07-07T16:06:45.727Z",
+      "notes": "Outil utilisé"
+    }
+  },
+  "totalMetrics": 4,
+  "summary": [
+    "organicTraffic: 60.1k (SEMrush Dashboard)",
+    "domain: https://the-foldie.com (User Input)",
+    "analysisDate: 2025-07-07 (System)",
+    "tool: SEMrush via NoxTools (System)"
+  ]
+}
