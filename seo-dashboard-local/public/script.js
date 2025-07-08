@@ -315,29 +315,7 @@ class SEODashboard {
             }
         }
         
-        // Traiter tous les fichiers pour rawData (même si smartMetrics trouvées)
-        for (const file of sortedFiles) {
-            try {
-                const dataResponse = await fetch(`/api/data/${file.name}`);
-                const data = await dataResponse.json();
-                
-                // S'assurer que tous les fichiers sont dans rawData
-                const existingFile = analysis.rawData.find(item => item.filename === file.name);
-                if (!existingFile) {
-                    analysis.rawData.push({
-                        filename: file.name,
-                        data: data
-                    });
-                }
-            } catch (error) {
-                console.error(`Erreur lecture fichier ${file.name}:`, error);
-            }
-        }
-
-            } catch (error) {
-                console.error(`Erreur lecture fichier ${file.name}:`, error);
-            }
-        }
+        // Les fichiers sont déjà traités dans rawData dans les boucles précédentes
 
         // Afficher un résumé pour debug
         console.log('🎯 RÉSUMÉ ANALYSE:');
