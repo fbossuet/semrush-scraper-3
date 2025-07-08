@@ -73,12 +73,10 @@ class SEODashboard {
             return;
         }
 
-        // Récupérer les options sélectionnées
+        // Récupérer les options sélectionnées (2 métriques essentielles)
         const options = {
             organicTraffic: document.getElementById('organicTraffic').checked,
-            competitors: document.getElementById('competitors').checked,
-            domainOverview: document.getElementById('domainOverview').checked,
-            smartAnalysis: document.getElementById('smartAnalysis').checked
+            competitors: document.getElementById('competitors').checked
         };
 
         // Afficher la progression
@@ -98,11 +96,9 @@ class SEODashboard {
         const steps = [];
         let currentStep = 0;
 
-        // Définir les étapes selon les options
+        // Définir les étapes selon les options (métriques essentielles)
         if (options.organicTraffic) steps.push('organic-traffic');
         if (options.competitors) steps.push('smart-traffic');
-        if (options.domainOverview) steps.push('domain-overview');
-        if (options.smartAnalysis) steps.push('smart-analysis');
 
         this.updateProgress(0, '🔑 Démarrage de l\'analyse...');
 
@@ -142,9 +138,7 @@ class SEODashboard {
     getStepMessage(step) {
         const messages = {
             'organic-traffic': '📈 Analyse trafic organique',
-            'smart-traffic': '🚗 Analyse traffic competitors',
-            'domain-overview': '🎯 Vue d\'ensemble domaine',
-            'smart-analysis': '🧠 Analyse intelligente'
+            'smart-traffic': '🚗 Extraction visits (tableau summary)'
         };
         return messages[step] || step;
     }
