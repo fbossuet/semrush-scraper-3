@@ -13,8 +13,9 @@ class SmartTrafficScraper extends NoxToolsScraper {
     console.log('🏗️ Configuration du domaine principal...');
     
     try {
-      // D'abord aller sur domain overview pour configurer un domaine
-      const domain = encodeURIComponent(config.targetDomain || 'https://the-foldie.com');
+      // 🔧 CORRECTIF : Récupérer le domaine depuis l'argument ou config
+      const targetDomain = process.argv[2] || config.analyticsParams?.domain || 'https://the-foldie.com';
+      const domain = encodeURIComponent(targetDomain);
       const domainUrl = `https://server1.noxtools.com/analytics/overview/?db=us&q=${domain}&searchType=domain`;
       
       console.log(`🎯 Configuration avec domaine: ${domain}`);
@@ -51,7 +52,7 @@ class SmartTrafficScraper extends NoxToolsScraper {
         'https://server1.noxtools.com/analytics/traffic/traffic-overview/',
         'https://server1.noxtools.com/analytics/traffic/',
         'https://server1.noxtools.com/traffic-analytics/',
-        `https://server1.noxtools.com/analytics/traffic/traffic-overview/?db=us&q=${encodeURIComponent(config.targetDomain || 'https://the-foldie.com')}`
+        `https://server1.noxtools.com/analytics/traffic/traffic-overview/?db=us&q=${encodeURIComponent(process.argv[2] || config.analyticsParams?.domain || 'https://the-foldie.com')}`
       ];
       
       for (const url of trafficUrls) {

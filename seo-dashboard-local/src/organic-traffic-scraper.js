@@ -125,9 +125,12 @@ class DynamicMetricsScraper extends NoxToolsScraper {
     console.log('🌱 Navigation vers Organic Overview...');
     
     try {
-      // Construire l'URL pour organic overview
-      const domain = encodeURIComponent(config.targetDomain || 'https://the-foldie.com');
+      // 🔧 CORRECTIF : Récupérer le domaine depuis l'argument ou config
+      const targetDomain = process.argv[2] || config.analyticsParams?.domain || 'https://the-foldie.com';
+      const domain = encodeURIComponent(targetDomain);
       const organicUrl = `https://server1.noxtools.com/analytics/organic/overview/?db=us&q=${domain}&searchType=domain`;
+      
+      console.log(`🎯 Domaine analysé: ${targetDomain}`);
       
       console.log(`🎯 URL Organic: ${organicUrl}`);
       
@@ -169,12 +172,13 @@ class DynamicMetricsScraper extends NoxToolsScraper {
       
       // Étape 4: Sauvegarde
       const timestamp = Date.now();
-      const domain = (config.targetDomain || 'https://the-foldie.com').replace(/[^a-zA-Z0-9]/g, '-');
+      const targetDomain = process.argv[2] || config.analyticsParams?.domain || 'https://the-foldie.com';
+      const domain = targetDomain.replace(/[^a-zA-Z0-9]/g, '-');
       const filename = `organic-traffic-${domain}-${timestamp}.json`;
       
               const output = {
           timestamp: new Date().toISOString(),
-          domain: config.targetDomain || 'https://the-foldie.com',
+          domain: targetDomain,
           source: 'Organic Overview Page',
         metrics,
         extractionMethod: 'Dynamic Content Capture'
