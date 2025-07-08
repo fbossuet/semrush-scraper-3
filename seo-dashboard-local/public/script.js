@@ -210,11 +210,27 @@ class SEODashboard {
                     data: data
                 });
 
+                console.log(`🔍 Analyse fichier: ${file.name}`);
+
                 // Extraire les métriques selon le type de fichier
                 if (file.name.includes('organic-traffic')) {
                     analysis.organicTraffic = this.extractOrganicMetrics(data);
+                    console.log('📈 Trafic organique trouvé:', analysis.organicTraffic);
                 } else if (file.name.includes('smart-traffic') || file.name.includes('traffic-tracking')) {
                     analysis.competitors = this.extractCompetitorMetrics(data);
+                    console.log('🚗 Concurrents trouvés:', analysis.competitors);
+                } else if (file.name.includes('smart-analysis')) {
+                    // Analyser le fichier d'analyse intelligente
+                    if (data.scrapers) {
+                        if (data.scrapers.organicTraffic) {
+                            analysis.organicTraffic = this.extractOrganicMetrics(data);
+                            console.log('📈 Trafic organique (smart analysis):', analysis.organicTraffic);
+                        }
+                        if (data.scrapers.smartTraffic) {
+                            analysis.competitors = this.extractCompetitorMetrics(data);
+                            console.log('🚗 Concurrents (smart analysis):', analysis.competitors);
+                        }
+                    }
                 } else if (file.name.includes('analytics-')) {
                     this.extractGeneralMetrics(data, analysis.metrics);
                 }
@@ -222,6 +238,14 @@ class SEODashboard {
             } catch (error) {
                 console.error(`Erreur lecture fichier ${file.name}:`, error);
             }
+        }
+
+        // Afficher un résumé pour debug
+        console.log('🎯 RÉSUMÉ ANALYSE:');
+        console.log('- Trafic organique:', analysis.organicTraffic?.value, '(source:', analysis.organicTraffic?.source, ')');
+        console.log('- Visits concurrents:', analysis.competitors?.competitors?.length || 0, 'entrées trouvées');
+        if (analysis.competitors?.competitors?.length > 0) {
+            console.log('  → Principal:', analysis.competitors.competitors[0]);
         }
 
         return analysis;
@@ -242,12 +266,36 @@ class SEODashboard {
         } else if (data.extractedMetrics?.organicTraffic) {
             metrics.value = data.extractedMetrics.organicTraffic;
             metrics.source = 'Extraction automatique';
+        } else if (data.scrapers?.organicTraffic?.output) {
+            // Parser la sortie du scraper organic traffic
+            const output = data.scrapers.organicTraffic.output;
+            const organicMatch = output.match(/trafic.{0,20}organique[:\s]*([0-9.,]+[KMB]?)/i) ||
+                               output.match(/organic.{0,20}traffic[:\s]*([0-9.,]+[KMB]?)/i) ||
+                               output.match(/([0-9.,]+[KMB]?).{0,20}visits?.{0,20}month/i);
+            if (organicMatch) {
+                metrics.value = organicMatch[1];
+                metrics.source = 'Organic Traffic Scraper';
+            }
+        } else if (data.scrapers?.smartTraffic?.output) {
+            // Parser la sortie du smart traffic pour organic
+            const output = data.scrapers.smartTraffic.output;
+            const numbers = this.extractNumbersFromText(output);
+            
+            // Chercher des patterns spécifiques au trafic organique
+            if (numbers.length > 0) {
+                // Prendre le premier nombre significatif (>1K) comme trafic potentiel
+                const significantNumbers = numbers.filter(n => this.parseMetricValue(n) > 1000);
+                if (significantNumbers.length > 0) {
+                    metrics.value = significantNumbers[0];
+                    metrics.source = 'Smart Traffic Analysis';
+                }
+            }
         }
 
-        // Valeur par défaut connue
+        // Valeur par défaut si toujours rien trouvé
         if (metrics.value === 'Non trouvé' || !metrics.value) {
             metrics.value = '60.1k';
-            metrics.source = 'Valeur de référence';
+            metrics.source = 'Valeur de référence (the-foldie.com)';
         }
 
         return metrics;
@@ -280,6 +328,59 @@ class SEODashboard {
                     numbers: competitor.allNumbers
                 });
             });
+        } else if (data.scrapers?.smartTraffic?.output) {
+            // Parser la sortie du smart traffic pour extraire visits concurrents
+            const output = data.scrapers.smartTraffic.output;
+            const numbers = this.extractNumbersFromText(output);
+            
+            // Chercher le domaine analysé
+            const domainMatch = output.match(/domaine[:\s]*([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i) ||
+                               output.match(/https?:\/\/([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i) ||
+                               output.match(/the-foldie\.com/i);
+            
+            let domain = 'Domaine analysé';
+            if (domainMatch) {
+                domain = domainMatch[1] || domainMatch[0];
+            }
+
+            // Analyser les nombres pour trouver le trafic principal
+            if (numbers.length > 0) {
+                // Prendre les 3 plus gros nombres comme métriques principales
+                const sortedNumbers = numbers
+                    .map(n => ({ value: n, numeric: this.parseMetricValue(n) }))
+                    .sort((a, b) => b.numeric - a.numeric)
+                    .slice(0, 3);
+
+                // Ajouter le domaine principal avec le plus gros nombre
+                if (sortedNumbers.length > 0) {
+                    metrics.competitors.push({
+                        domain: domain,
+                        visits: sortedNumbers[0].value,
+                        source: 'Smart Traffic Analysis'
+                    });
+                    metrics.totalVisits = sortedNumbers[0].numeric;
+                }
+
+                // Ajouter d'autres métriques comme concurrents potentiels
+                sortedNumbers.slice(1).forEach((num, index) => {
+                    metrics.competitors.push({
+                        domain: `Métrique ${index + 2}`,
+                        visits: num.value,
+                        source: 'Traffic Data'
+                    });
+                    metrics.totalVisits += num.numeric;
+                });
+            }
+        }
+
+        // Si pas de données, ajouter des données par défaut pour the-foldie.com
+        if (metrics.competitors.length === 0) {
+            metrics.competitors.push({
+                domain: 'the-foldie.com',
+                visits: '846.6k',
+                source: 'Données de référence'
+            });
+            metrics.totalVisits = 846600;
         }
 
         return metrics;
@@ -313,6 +414,24 @@ class SEODashboard {
         return num * multiplier;
     }
 
+    // Extraire tous les nombres d'un texte
+    extractNumbersFromText(text) {
+        if (!text) return [];
+        
+        // Chercher des nombres avec unités K/M/B et sans unités
+        const numberPattern = /\b\d+(?:\.\d+)?[KMBkmb]?\b/g;
+        const matches = text.match(numberPattern) || [];
+        
+        // Filtrer et nettoyer les nombres
+        return matches
+            .filter(match => {
+                const num = parseFloat(match.replace(/[^\d.]/g, ''));
+                return num > 0; // Exclure les zéros
+            })
+            .map(match => match.toUpperCase()) // Uniformiser K/M/B en majuscules
+            .filter((value, index, self) => self.indexOf(value) === index); // Supprimer doublons
+    }
+
     // Afficher les résultats
     displayResults(analysis) {
         this.currentAnalysis = analysis;
@@ -328,6 +447,40 @@ class SEODashboard {
         
         // Animation d'entrée
         document.getElementById('resultsSection').classList.add('fade-in');
+
+        // Notification des métriques trouvées
+        this.showMetricsNotification(analysis);
+    }
+
+    // Afficher notification des métriques trouvées
+    showMetricsNotification(analysis) {
+        let message = '🎯 Métriques extraites:\n';
+        
+        if (analysis.organicTraffic) {
+            message += `📈 Trafic Organique: ${analysis.organicTraffic.value} (${analysis.organicTraffic.source})\n`;
+        }
+        
+        if (analysis.competitors && analysis.competitors.competitors.length > 0) {
+            const main = analysis.competitors.competitors[0];
+            message += `🚗 Visits Concurrents: ${main.visits} (${main.source})\n`;
+            
+            if (analysis.competitors.competitors.length > 1) {
+                message += `+ ${analysis.competitors.competitors.length - 1} autres métriques trouvées`;
+            }
+        }
+
+        // Afficher dans la console pour debug
+        console.log(message);
+        
+        // Notification visuelle si des vraies données ont été trouvées
+        const hasRealData = (analysis.organicTraffic?.source !== 'Valeur de référence (the-foldie.com)') ||
+                           (analysis.competitors?.competitors?.[0]?.source !== 'Données de référence');
+        
+        if (hasRealData) {
+            this.showNotification('✅ Données réelles extraites avec succès !', 'success');
+        } else {
+            this.showNotification('⚠️ Utilisation de données de référence - Vérifiez les scrapers', 'warning');
+        }
     }
 
     // Mettre à jour les stats rapides
@@ -336,6 +489,13 @@ class SEODashboard {
         if (analysis.organicTraffic) {
             document.getElementById('organicValue').textContent = analysis.organicTraffic.value;
             document.getElementById('organicSource').textContent = analysis.organicTraffic.source;
+            
+            // Mettre en évidence si c'est une vraie donnée
+            const organicCard = document.querySelector('.stat-card.organic');
+            if (analysis.organicTraffic.source !== 'Valeur de référence (the-foldie.com)') {
+                organicCard.style.borderLeftColor = '#48bb78';
+                organicCard.style.backgroundColor = 'rgba(72, 187, 120, 0.05)';
+            }
         }
 
         // Visits concurrents
@@ -343,15 +503,35 @@ class SEODashboard {
             const mainCompetitor = analysis.competitors.competitors[0];
             document.getElementById('visitsValue').textContent = mainCompetitor.visits;
             document.getElementById('visitsSource').textContent = mainCompetitor.source || 'Traffic Analysis';
+            
+            // Mettre en évidence si c'est une vraie donnée
+            const visitsCard = document.querySelector('.stat-card.visits');
+            if (mainCompetitor.source !== 'Données de référence') {
+                visitsCard.style.borderLeftColor = '#667eea';
+                visitsCard.style.backgroundColor = 'rgba(102, 126, 234, 0.05)';
+            }
         }
 
-        // Mots-clés (exemple)
-        document.getElementById('keywordsValue').textContent = '450+';
-        document.getElementById('keywordsSource').textContent = 'Estimation';
-
-        // Backlinks (exemple)
-        document.getElementById('backlinksValue').textContent = '1.2k';
-        document.getElementById('backlinksSource').textContent = 'Estimation';
+        // Masquer les métriques non essentielles ou les marquer comme secondaires
+        document.getElementById('keywordsValue').textContent = 'N/A';
+        document.getElementById('keywordsSource').textContent = 'Non prioritaire';
+        
+        document.getElementById('backlinksValue').textContent = 'N/A';
+        document.getElementById('backlinksSource').textContent = 'Non prioritaire';
+        
+        // Réduire l'opacité des cartes non prioritaires
+        const keywordsCard = document.querySelector('.stat-card.keywords');
+        const backlinksCard = document.querySelector('.stat-card.backlinks');
+        
+        if (keywordsCard) {
+            keywordsCard.style.opacity = '0.6';
+            keywordsCard.style.order = '3';
+        }
+        
+        if (backlinksCard) {
+            backlinksCard.style.opacity = '0.6';
+            backlinksCard.style.order = '4';
+        }
     }
 
     // Créer les graphiques
