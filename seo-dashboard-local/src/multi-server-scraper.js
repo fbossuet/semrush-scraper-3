@@ -360,10 +360,18 @@ class MultiServerScraper extends NoxToolsScraper {
       // 3. Extraire les données
       const extractedData = await this.extractDataFromWorkingServer(domain);
       
-      // 4. Sauvegarder
-      const filename = `multi-server-${domain.replace(/\W/g, '-')}-${Date.now()}.json`;
-      fs.writeFileSync(filename, JSON.stringify(extractedData, null, 2));
-      console.log(`\n💾 Données sauvegardées: ${filename}`);
+      // 4. Sauvegarder dans le bon dossier
+      const resultsDir = process.env.RESULTS_DIR || '../results';
+      const sanitizedDomain = domain
+        .replace(/[^a-z0-9\-_.]/gi, '-')
+        .replace(/^https?-+/i, '')
+        .replace(/-+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .toLowerCase();
+      const filename = `multi-server-${sanitizedDomain}-${Date.now()}.json`;
+      const fullPath = `${resultsDir}/${filename}`;
+      fs.writeFileSync(fullPath, JSON.stringify(extractedData, null, 2));
+      console.log(`\n💾 Données sauvegardées: ${fullPath}`);
       
       return extractedData;
       
