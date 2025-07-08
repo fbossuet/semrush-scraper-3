@@ -73,32 +73,74 @@ class SEODashboard {
             return;
         }
 
-        // Récupérer les options sélectionnées (2 métriques essentielles)
-        const options = {
+        // Récupérer les propriétés sélectionnées
+        const properties = {
             organicTraffic: document.getElementById('organicTraffic').checked,
+            visitsTableau: document.getElementById('visitsTableau').checked,
+            keywords: document.getElementById('keywords').checked,
+            backlinks: document.getElementById('backlinks').checked,
+            domainRank: document.getElementById('domainRank').checked,
             competitors: document.getElementById('competitors').checked
         };
+
+        // 🧠 LOGIQUE INTELLIGENTE : Déterminer les scrapers optimaux
+        const requiredScrapers = this.determineOptimalScrapers(properties);
 
         // Afficher la progression
         this.showProgressSection();
         
-        // Démarrer l'analyse
+        // Démarrer l'analyse avec les scrapers optimaux
         try {
-            await this.runAnalysis(domain, options);
+            await this.runAnalysis(domain, requiredScrapers, properties);
         } catch (error) {
             this.showNotification('Erreur lors de l\'analyse: ' + error.message, 'error');
             this.hideProgressSection();
         }
     }
 
-    // Lancer l'analyse via API
-    async runAnalysis(domain, options) {
-        const steps = [];
-        let currentStep = 0;
+    // 🧠 Déterminer les scrapers optimaux selon les propriétés demandées
+    determineOptimalScrapers(properties) {
+        const scrapers = new Set();
+        
+        // Mappings intelligents propriétés → scrapers
+        if (properties.organicTraffic) {
+            scrapers.add('organic-traffic');
+        }
+        
+        if (properties.visitsTableau) {
+            scrapers.add('smart-traffic'); // Pour le tableau summary
+        }
+        
+        if (properties.keywords || properties.domainRank) {
+            scrapers.add('domain-overview'); // NoxTools pour métriques avancées
+        }
+        
+        if (properties.backlinks) {
+            scrapers.add('domain-overview'); // Inclut les backlinks
+        }
+        
+        if (properties.competitors) {
+            scrapers.add('smart-traffic'); // Pour concurrents directs
+            scrapers.add('domain-overview'); // Pour analyse complète concurrents
+        }
 
-        // Définir les étapes selon les options (métriques essentielles)
-        if (options.organicTraffic) steps.push('organic-traffic');
-        if (options.competitors) steps.push('smart-traffic');
+        // Si aucune propriété sélectionnée, minimum vital
+        if (scrapers.size === 0) {
+            scrapers.add('organic-traffic');
+            scrapers.add('smart-traffic');
+        }
+
+        const scrapersArray = Array.from(scrapers);
+        console.log('🧠 Scrapers optimaux déterminés:', scrapersArray);
+        console.log('📊 Pour les propriétés:', Object.keys(properties).filter(k => properties[k]));
+        
+        return scrapersArray;
+    }
+
+    // Lancer l'analyse via API
+    async runAnalysis(domain, requiredScrapers, properties) {
+        const steps = requiredScrapers;
+        let currentStep = 0;
 
         this.updateProgress(0, '🔑 Démarrage de l\'analyse...');
 

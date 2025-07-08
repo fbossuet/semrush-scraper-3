@@ -120,6 +120,13 @@ body {
     margin-bottom: 15px;
 }
 
+.checkbox-grid-properties {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
 .analysis-note {
     background: rgba(102, 126, 234, 0.1);
     border: 1px solid rgba(102, 126, 234, 0.3);
