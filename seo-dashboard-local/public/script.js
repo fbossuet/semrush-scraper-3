@@ -219,7 +219,13 @@ class SEODashboard {
             files: files
         };
 
-        for (const file of files) {
+        // Trier les fichiers par date (plus récent en premier) pour privilégier les nouvelles données
+        const sortedFiles = files.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        // PRIORITÉ 1: Chercher un fichier avec smartMetrics (Intelligence AI)
+        let smartMetricsFound = false;
+        
+        for (const file of sortedFiles) {
             try {
                 const dataResponse = await fetch(`/api/data/${file.name}`);
                 const data = await dataResponse.json();
@@ -231,28 +237,102 @@ class SEODashboard {
 
                 console.log(`🔍 Analyse fichier: ${file.name}`);
 
-                // Extraire les métriques selon le type de fichier
-                if (file.name.includes('organic-traffic')) {
-                    analysis.organicTraffic = this.extractOrganicMetrics(data);
-                    console.log('📈 Trafic organique trouvé:', analysis.organicTraffic);
-                } else if (file.name.includes('smart-traffic') || file.name.includes('traffic-tracking')) {
-                    analysis.competitors = this.extractCompetitorMetrics(data);
-                    console.log('🚗 Concurrents trouvés:', analysis.competitors);
-                } else if (file.name.includes('smart-analysis')) {
-                    // Analyser le fichier d'analyse intelligente
-                    if (data.scrapers) {
-                        if (data.scrapers.organicTraffic) {
-                            analysis.organicTraffic = this.extractOrganicMetrics(data);
-                            console.log('📈 Trafic organique (smart analysis):', analysis.organicTraffic);
+                // PRIORITÉ ABSOLUE: Si ce fichier a des smartMetrics, utiliser l'IA !
+                if (data.smartMetrics && !smartMetricsFound) {
+                    console.log('🧠 ✨ SMART METRICS DÉTECTÉES - UTILISATION DE L\'IA !', data.smartMetrics);
+                    
+                    analysis.organicTraffic = {
+                        value: data.smartMetrics.organicTrafficGuess,
+                        source: `Intelligence AI (${data.smartMetrics.confidence}% confiance)`,
+                        details: {
+                            confidence: data.smartMetrics.confidence,
+                            candidates: data.smartMetrics.allCandidates.organic,
+                            fromSmartMetrics: true
                         }
-                        if (data.scrapers.smartTraffic) {
-                            analysis.competitors = this.extractCompetitorMetrics(data);
-                            console.log('🚗 Concurrents (smart analysis):', analysis.competitors);
-                        }
-                    }
-                } else if (file.name.includes('analytics-')) {
-                    this.extractGeneralMetrics(data, analysis.metrics);
+                    };
+                    
+                    analysis.competitors = {
+                        competitors: [{
+                            domain: data.domain || 'cakesbody.com',
+                            visits: data.smartMetrics.visitsGuess,
+                            source: `Intelligence AI (${data.smartMetrics.confidence}% confiance)`,
+                            candidates: data.smartMetrics.allCandidates.visits,
+                            fromSmartMetrics: true
+                        }],
+                        totalVisits: this.parseMetricValue(data.smartMetrics.visitsGuess)
+                    };
+                    
+                    analysis.domain = data.domain || 'cakesbody.com';
+                    smartMetricsFound = true;
+                    
+                    console.log('📈 ✨ Trafic organique (IA):', analysis.organicTraffic);
+                    console.log('🚗 ✨ Visits (IA):', analysis.competitors);
+                    
+                    // On a trouvé les smartMetrics, on peut arrêter de chercher d'autres méthodes !
+                    break;
                 }
+
+            } catch (error) {
+                console.error(`Erreur lecture fichier ${file.name}:`, error);
+            }
+        }
+        
+        // PRIORITÉ 2: Si pas de smartMetrics trouvées, utiliser les méthodes classiques
+        if (!smartMetricsFound) {
+            console.log('⚠️ Aucune SmartMetrics trouvée - Utilisation des méthodes classiques...');
+            
+            for (const file of sortedFiles) {
+                try {
+                    const dataResponse = await fetch(`/api/data/${file.name}`);
+                    const data = await dataResponse.json();
+
+                    // Extraire les métriques selon le type de fichier
+                    if (file.name.includes('organic-traffic') && !analysis.organicTraffic) {
+                        analysis.organicTraffic = this.extractOrganicMetrics(data);
+                        console.log('📈 Trafic organique trouvé:', analysis.organicTraffic);
+                    } else if ((file.name.includes('smart-traffic') || file.name.includes('traffic-tracking')) && !analysis.competitors) {
+                        analysis.competitors = this.extractCompetitorMetrics(data);
+                        console.log('🚗 Concurrents trouvés:', analysis.competitors);
+                    } else if (file.name.includes('smart-analysis')) {
+                        // Analyser le fichier d'analyse intelligente
+                        if (data.scrapers) {
+                            if (data.scrapers.organicTraffic && !analysis.organicTraffic) {
+                                analysis.organicTraffic = this.extractOrganicMetrics(data);
+                                console.log('📈 Trafic organique (smart analysis):', analysis.organicTraffic);
+                            }
+                            if (data.scrapers.smartTraffic && !analysis.competitors) {
+                                analysis.competitors = this.extractCompetitorMetrics(data);
+                                console.log('🚗 Concurrents (smart analysis):', analysis.competitors);
+                            }
+                        }
+                    } else if (file.name.includes('analytics-')) {
+                        this.extractGeneralMetrics(data, analysis.metrics);
+                    }
+
+                } catch (error) {
+                    console.error(`Erreur lecture fichier ${file.name}:`, error);
+                }
+            }
+        }
+        
+        // Traiter tous les fichiers pour rawData (même si smartMetrics trouvées)
+        for (const file of sortedFiles) {
+            try {
+                const dataResponse = await fetch(`/api/data/${file.name}`);
+                const data = await dataResponse.json();
+                
+                // S'assurer que tous les fichiers sont dans rawData
+                const existingFile = analysis.rawData.find(item => item.filename === file.name);
+                if (!existingFile) {
+                    analysis.rawData.push({
+                        filename: file.name,
+                        data: data
+                    });
+                }
+            } catch (error) {
+                console.error(`Erreur lecture fichier ${file.name}:`, error);
+            }
+        }
 
             } catch (error) {
                 console.error(`Erreur lecture fichier ${file.name}:`, error);
