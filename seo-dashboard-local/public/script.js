@@ -237,27 +237,53 @@ class SEODashboard {
 
                 console.log(`🔍 Analyse fichier: ${file.name}`);
 
-                // PRIORITÉ ABSOLUE: Si ce fichier a des smartMetrics, utiliser l'IA !
-                if (data.smartMetrics && !smartMetricsFound) {
-                    console.log('🧠 ✨ SMART METRICS DÉTECTÉES - UTILISATION DE L\'IA !', data.smartMetrics);
+                // PRIORITÉ ABSOLUE: Si ce fichier a des métriques précises DOM, les utiliser !
+                if (data.preciseSeoMetrics && !smartMetricsFound) {
+                    console.log('🏆 ✨ MÉTRIQUES PRÉCISES DÉTECTÉES - UTILISATION DOM !', data.preciseSeoMetrics);
+                    
+                    if (data.preciseSeoMetrics.organicTraffic) {
+                        analysis.organicTraffic = {
+                            value: data.preciseSeoMetrics.organicTraffic,
+                            source: `Extraction DOM Précise (${data.preciseSeoMetrics.extractionMethod})`,
+                            details: { fromPreciseMetrics: true, method: data.preciseSeoMetrics.extractionMethod }
+                        };
+                        console.log('📈 ✅ Trafic organique PRÉCIS:', analysis.organicTraffic);
+                    }
+                    
+                    if (data.preciseSeoMetrics.visits) {
+                        analysis.competitors = {
+                            competitors: [{
+                                domain: data.domain || 'cakesbody.com',
+                                visits: data.preciseSeoMetrics.visits,
+                                source: `Extraction DOM Précise (${data.preciseSeoMetrics.extractionMethod})`
+                            }],
+                            totalVisits: this.parseMetricValue(data.preciseSeoMetrics.visits)
+                        };
+                        console.log('🚗 ✅ Visits PRÉCIS:', analysis.competitors);
+                    }
+                    
+                    analysis.domain = data.domain || 'cakesbody.com';
+                    smartMetricsFound = true;
+                    
+                    // On a trouvé les métriques précises, arrêter !
+                    break;
+                }
+                
+                // PRIORITÉ 2: Si smartMetrics disponibles et pas de métriques précises
+                if (data.smartMetrics && !smartMetricsFound && !data.preciseSeoMetrics?.organicTraffic) {
+                    console.log('🧠 Fallback vers SmartMetrics IA...', data.smartMetrics);
                     
                     analysis.organicTraffic = {
                         value: data.smartMetrics.organicTrafficGuess,
-                        source: `Intelligence AI (${data.smartMetrics.confidence}% confiance)`,
-                        details: {
-                            confidence: data.smartMetrics.confidence,
-                            candidates: data.smartMetrics.allCandidates.organic,
-                            fromSmartMetrics: true
-                        }
+                        source: `Estimation IA (${data.smartMetrics.confidence}% confiance)`,
+                        details: { fromSmartMetrics: true, confidence: data.smartMetrics.confidence }
                     };
                     
                     analysis.competitors = {
                         competitors: [{
                             domain: data.domain || 'cakesbody.com',
                             visits: data.smartMetrics.visitsGuess,
-                            source: `Intelligence AI (${data.smartMetrics.confidence}% confiance)`,
-                            candidates: data.smartMetrics.allCandidates.visits,
-                            fromSmartMetrics: true
+                            source: `Estimation IA (${data.smartMetrics.confidence}% confiance)`
                         }],
                         totalVisits: this.parseMetricValue(data.smartMetrics.visitsGuess)
                     };
@@ -265,10 +291,9 @@ class SEODashboard {
                     analysis.domain = data.domain || 'cakesbody.com';
                     smartMetricsFound = true;
                     
-                    console.log('📈 ✨ Trafic organique (IA):', analysis.organicTraffic);
-                    console.log('🚗 ✨ Visits (IA):', analysis.competitors);
+                    console.log('📈 🧠 Trafic organique (IA):', analysis.organicTraffic);
+                    console.log('🚗 🧠 Visits (IA):', analysis.competitors);
                     
-                    // On a trouvé les smartMetrics, on peut arrêter de chercher d'autres méthodes !
                     break;
                 }
 

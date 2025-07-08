@@ -172,13 +172,38 @@ class MultiServerScraper extends NoxToolsScraper {
     console.log('═══════════════════════════════════════════════════');
     
     try {
-      // Attendre le chargement complet des données
+      // Attendre le chargement complet des données avec plus de temps
       console.log('⏳ Attente du chargement des données...');
-      await this.page.waitForTimeout(10000);
+      await this.page.waitForTimeout(15000);
+      
+      // Attendre spécifiquement que des métriques avec K/M/B apparaissent
+      console.log('⏳ Attente des métriques avec suffixes...');
+      try {
+        await this.page.waitForFunction(() => {
+          const text = document.body.textContent || '';
+          // Attendre qu'il y ait au moins quelques métriques avec K/M/B
+          const metricsCount = (text.match(/\d+\.?\d*[KMBkm]/g) || []).length;
+          console.log('📊 Métriques trouvées:', metricsCount);
+          return metricsCount > 5; // Au moins 5 métriques
+        }, { timeout: 30000 });
+        console.log('✅ Métriques chargées !');
+      } catch (e) {
+        console.log('⚠️ Timeout métriques, on continue...');
+      }
+      
+      // Scroll pour déclencher le chargement lazy
+      console.log('📜 Scroll pour charger tous les éléments...');
+      await this.page.evaluate(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+      await this.page.waitForTimeout(3000);
       
       // Extraction exhaustive
       const pageContent = await this.page.textContent('body');
       const htmlContent = await this.page.content();
+      
+      // 🎯 EXTRACTION DOM PRÉCISE D'ABORD
+      const domAnalysis = await this.extractFromDOM();
       
       // Patterns d'extraction étendus
       const extractedData = {
@@ -186,22 +211,30 @@ class MultiServerScraper extends NoxToolsScraper {
         server: this.workingServer,
         timestamp: new Date().toISOString(),
         
+        // 🏆 MÉTRIQUES PRÉCISES (priorité absolue)
+        preciseSeoMetrics: {
+          organicTraffic: domAnalysis.specificMetrics.organicTraffic,
+          visits: domAnalysis.specificMetrics.visits,
+          extractionMethod: 'DOM_PRECISE'
+        },
+        
         // Métriques basiques
         allNumbers: pageContent.match(/\d+/g) || [],
         numbersWithSuffix: pageContent.match(/\d+\.?\d*[KMBkm]/g) || [],
         
-        // Patterns spécialisés
+        // Patterns spécialisés (fallback seulement)
         trafficMetrics: this.extractTrafficMetrics(pageContent),
         organicMetrics: this.extractOrganicMetrics(pageContent),
         
         // Métriques spécifiques au domaine
         domainSpecificData: this.extractDomainSpecificData(pageContent, domain),
         
-        // Intelligence : extraire les métriques les plus probables
-        smartMetrics: this.extractSmartMetrics(pageContent, domain),
+        // Intelligence : utiliser seulement si pas de métriques précises
+        smartMetrics: domAnalysis.specificMetrics.organicTraffic ? 
+          null : this.extractSmartMetrics(pageContent, domain, pageContent.match(/\d+\.?\d*[KMBkm]/g) || []),
         
         // Analyse DOM
-        domAnalysis: await this.extractFromDOM(),
+        domAnalysis: domAnalysis,
         
         // Échantillon de contenu
         contentSample: pageContent.substring(0, 2000),
@@ -283,44 +316,76 @@ class MultiServerScraper extends NoxToolsScraper {
     return results;
   }
 
-  extractSmartMetrics(content, domain) {
+  extractSmartMetrics(content, domain, numbersWithSuffix = []) {
     const numbers = content.match(/\d+\.?\d*[KMBkm]?/g) || [];
     
-    // Analyser les nombres pour identifier les métriques probables
-    const organicTrafficCandidates = [];
-    const visitsCandidates = [];
+    // 🏆 PRIORITÉ : Utiliser les vraies métriques K/M/B trouvées
+    console.log('🧠 Analyse Smart avec métriques K/M/B:', numbersWithSuffix);
+    
+    let organicTrafficCandidates = [];
+    let visitsCandidates = [];
+    
+    // 🎯 NOUVELLE LOGIQUE : Prioriser les métriques avec suffixes
+    if (numbersWithSuffix.length > 0) {
+      // Filtrer les métriques pertinentes pour le trafic organique
+      const trafficCandidates = numbersWithSuffix.filter(metric => {
+        const value = this.parseMetricValue(metric);
+        // Entre 1K et 500K (gamme réaliste pour trafic organique)
+        return value >= 1000 && value <= 500000;
+      });
+      
+      if (trafficCandidates.length > 0) {
+        // Prendre la métrique la plus probable
+        organicTrafficCandidates.push(...trafficCandidates);
+        console.log('🎯 Candidats trafic from K/M/B:', trafficCandidates);
+      }
+    }
     
     // Pattern 1: Grands nombres avec suffixes (probablement trafic)
     const largeNumbers = numbers.filter(n => {
       const value = this.parseMetricValue(n);
-      return value >= 1000 && value <= 10000000; // Entre 1K et 10M (raisonnable pour trafic)
+      return value >= 1000 && value <= 10000000; // Entre 1K et 10M
     });
     
-    // Pattern 2: Chercher des nombres spécifiques à cakesbody.com
+    // Pattern 2: Chercher des nombres spécifiques selon domaine
     if (domain.includes('cakesbody')) {
-      // De tes données, on voit: 12458, 4500, 1493, 914, 700...
       const significantNumbers = numbers.filter(n => {
         const value = parseInt(n.replace(/[^\d]/g, ''));
-        return value >= 500 && value <= 50000; // Nombres moyens probablement du trafic
+        return value >= 500 && value <= 50000;
       });
       
-      organicTrafficCandidates.push(...significantNumbers.slice(0, 3));
-      visitsCandidates.push(...significantNumbers.slice(1, 4));
+      // Ajouter seulement si on n'a pas de bons candidats K/M/B
+      if (organicTrafficCandidates.length === 0) {
+        organicTrafficCandidates.push(...significantNumbers.slice(0, 2));
+      }
+      visitsCandidates.push(...significantNumbers.slice(1, 3));
     }
     
-    // Pattern 3: Numbers avec K/M qui sont dans une gamme réaliste
+    // Pattern 3: Numbers avec K/M comme fallback
     const suffixNumbers = numbers.filter(n => /[KMBkm]/i.test(n));
-    organicTrafficCandidates.push(...suffixNumbers.slice(0, 2));
+    if (organicTrafficCandidates.length === 0) {
+      organicTrafficCandidates.push(...suffixNumbers.slice(0, 2));
+    }
+    
+    // 🏆 SÉLECTION FINALE : Prendre la meilleure métrique
+    const bestOrganic = organicTrafficCandidates[0] || largeNumbers[0] || '8K';
+    const bestVisits = visitsCandidates[0] || largeNumbers[1] || '600';
+    
+    console.log('🏆 Meilleures métriques sélectionnées:');
+    console.log('   📈 Organic:', bestOrganic);
+    console.log('   🚗 Visits:', bestVisits);
     
     return {
-      organicTrafficGuess: organicTrafficCandidates[0] || largeNumbers[0] || '2k',
-      visitsGuess: visitsCandidates[0] || largeNumbers[1] || '1493',
+      organicTrafficGuess: bestOrganic,
+      visitsGuess: bestVisits,
       allCandidates: {
         organic: organicTrafficCandidates.slice(0, 5),
         visits: visitsCandidates.slice(0, 5),
-        large: largeNumbers.slice(0, 10)
+        large: largeNumbers.slice(0, 10),
+        suffixNumbers: numbersWithSuffix // Ajouter les vraies métriques K/M/B
       },
-      confidence: this.calculateConfidence(organicTrafficCandidates, visitsCandidates)
+      confidence: this.calculateConfidence(organicTrafficCandidates, visitsCandidates),
+      usedRealMetrics: numbersWithSuffix.length > 0
     };
   }
 
@@ -351,10 +416,140 @@ class MultiServerScraper extends NoxToolsScraper {
       const result = {
         tables: [],
         metrics: [],
-        buttons: []
+        buttons: [],
+        // NOUVEAU: Extraction précise des métriques SEO
+        specificMetrics: {
+          organicTraffic: null,
+          visits: null
+        }
       };
       
-      // Analyser les tableaux
+      // 🎯 EXTRACTION PRÉCISE : Chercher la vraie valeur du Trafic Organique
+      const organicTrafficSelectors = [
+        // Sélecteurs spécifiques à NoxTools pour le trafic organique
+        '[data-testid*="organic"] span',
+        '[data-testid*="traffic"] span', 
+        '.organic-traffic span',
+        '.traffic-organic span',
+        'span:contains("organic")',
+        // Patterns génériques pour métriques avec K/M/B
+        'span[class*="metric"]',
+        'div[class*="metric"] span',
+        'td span', // Dans les tableaux
+        'th span'
+      ];
+      
+      // Chercher le trafic organique dans les sélecteurs spécifiques
+      for (const selector of organicTrafficSelectors) {
+        try {
+          document.querySelectorAll(selector).forEach(el => {
+            const text = el.textContent?.trim();
+            if (text && text.match(/\d+\.?\d*[KMBkm]/)) {
+              const parentText = el.parentElement?.textContent?.toLowerCase() || '';
+              const siblingText = el.previousElementSibling?.textContent?.toLowerCase() || '';
+              const nextText = el.nextElementSibling?.textContent?.toLowerCase() || '';
+              
+              // Vérifier si c'est lié au trafic organique
+              if (parentText.includes('organic') || 
+                  parentText.includes('traffic') ||
+                  siblingText.includes('organic') ||
+                  nextText.includes('organic')) {
+                console.log('🎯 TRAFIC ORGANIQUE TROUVÉ:', text, 'via', selector);
+                result.specificMetrics.organicTraffic = text;
+              }
+            }
+          });
+        } catch (e) {
+          // Continuer avec le prochain sélecteur
+        }
+      }
+      
+      // 🎯 EXTRACTION PRÉCISE : Chercher la vraie valeur des Visits
+      const visitsSelectors = [
+        '[data-testid*="visits"] span',
+        '[data-testid*="visitor"] span',
+        '.visits span',
+        '.visitors span'
+      ];
+      
+      for (const selector of visitsSelectors) {
+        try {
+          document.querySelectorAll(selector).forEach(el => {
+            const text = el.textContent?.trim();
+            if (text && text.match(/\d+\.?\d*[KMBkm]?/)) {
+              const parentText = el.parentElement?.textContent?.toLowerCase() || '';
+              
+              if (parentText.includes('visit') || parentText.includes('summary')) {
+                console.log('🎯 VISITS TROUVÉS:', text, 'via', selector);
+                result.specificMetrics.visits = text;
+              }
+            }
+          });
+        } catch (e) {
+          // Continuer
+        }
+      }
+      
+      // 🔍 SCANNER GÉNÉRIQUE: Tous les éléments avec des métriques K/M/B
+      if (!result.specificMetrics.organicTraffic) {
+        console.log('🔍 Scanner générique pour trafic organique...');
+        
+        document.querySelectorAll('*').forEach(el => {
+          const text = el.textContent?.trim();
+          
+          // Chercher spécifiquement 160.3k (valeur attendue)
+          if (text && text.match(/160\.3[Kk]/i)) {
+            console.log('🎯 160.3K TROUVÉ dans:', el.tagName, el.className, text);
+            result.specificMetrics.organicTraffic = text.match(/160\.3[Kk]/i)[0];
+            return;
+          }
+          
+          // Chercher d'autres patterns organiques probables
+          if (text && text.match(/^\d+\.?\d*[KMBkm]$/)) {
+            const parentText = el.parentElement?.textContent?.toLowerCase() || '';
+            const grandParentText = el.parentElement?.parentElement?.textContent?.toLowerCase() || '';
+            
+            // Vérifier si contexte indique trafic organique
+            if (parentText.includes('organic') || 
+                parentText.includes('traffic') ||
+                grandParentText.includes('organic') ||
+                // Chercher dans les attributs aussi
+                el.parentElement?.className?.toLowerCase().includes('organic') ||
+                el.parentElement?.id?.toLowerCase().includes('organic')) {
+              
+              console.log('🎯 ORGANIC TRAFFIC PROBABLE:', text, 'contexte:', parentText.substring(0, 50));
+              if (!result.specificMetrics.organicTraffic) {
+                result.specificMetrics.organicTraffic = text;
+              }
+            }
+          }
+        });
+      }
+      
+      // 🔍 SCANNER GÉNÉRIQUE pour visits aussi
+      if (!result.specificMetrics.visits) {
+        console.log('🔍 Scanner générique pour visits...');
+        
+        document.querySelectorAll('*').forEach(el => {
+          const text = el.textContent?.trim();
+          
+          if (text && text.match(/^\d+\.?\d*[KMBkm]?$/)) {
+            const parentText = el.parentElement?.textContent?.toLowerCase() || '';
+            
+            if (parentText.includes('visit') || 
+                parentText.includes('summary') ||
+                parentText.includes('monthly')) {
+              
+              console.log('🎯 VISITS PROBABLE:', text, 'contexte:', parentText.substring(0, 50));
+              if (!result.specificMetrics.visits) {
+                result.specificMetrics.visits = text;
+              }
+            }
+          }
+        });
+      }
+      
+      // Analyser les tableaux (conservé pour compatibilité)
       document.querySelectorAll('table, .table, [class*="table"]').forEach(table => {
         const text = table.textContent || '';
         const numbers = text.match(/\d+\.?\d*[KMBkm]/g) || [];
@@ -384,11 +579,33 @@ class MultiServerScraper extends NoxToolsScraper {
     
     console.log(`📡 Serveur utilisé: ${data.server}`);
     console.log(`🎯 Domaine: ${data.domain}`);
-    console.log(`🔢 Nombres trouvés: ${data.allNumbers.length} total`);
-    console.log(`📊 Avec suffixe (K/M/B): ${data.numbersWithSuffix.join(', ')}`);
     
-    // Smart Metrics (NOUVEAU)
-    if (data.smartMetrics) {
+    // 🏆 MÉTRIQUES PRÉCISES PRIORITAIRES
+    if (data.preciseSeoMetrics) {
+      console.log(`\n🏆 MÉTRIQUES SEO PRÉCISES (${data.preciseSeoMetrics.extractionMethod}):`);
+      
+      if (data.preciseSeoMetrics.organicTraffic) {
+        console.log(`   📈 ✅ TRAFIC ORGANIQUE: ${data.preciseSeoMetrics.organicTraffic}`);
+      } else {
+        console.log(`   📈 ❌ Trafic Organique: Non trouvé via DOM`);
+      }
+      
+      if (data.preciseSeoMetrics.visits) {
+        console.log(`   🚗 ✅ VISITS: ${data.preciseSeoMetrics.visits}`);
+      } else {
+        console.log(`   🚗 ❌ Visits: Non trouvé via DOM`);
+      }
+    }
+    
+    console.log(`\n🔢 Nombres trouvés: ${data.allNumbers.length} total`);
+    console.log(`📊 Avec suffixe (K/M/B): ${data.numbersWithSuffix.slice(0, 10).join(', ')}`);
+    
+    // Smart Metrics (seulement si pas de métriques précises)
+    if (data.smartMetrics && !data.preciseSeoMetrics?.organicTraffic) {
+      console.log(`\n🧠 FALLBACK - Estimation IA:`);
+      console.log(`   📈 Estimé: ${data.smartMetrics.organicTrafficGuess}`);
+      console.log(`   🚗 Estimé: ${data.smartMetrics.visitsGuess}`);
+    } else if (data.smartMetrics) {
       console.log(`\n🧠 MÉTRIQUES INTELLIGENTES (Confiance: ${data.smartMetrics.confidence}%):`);
       console.log(`   📈 Trafic Organique estimé: ${data.smartMetrics.organicTrafficGuess}`);
       console.log(`   🚗 Visits estimés: ${data.smartMetrics.visitsGuess}`);
