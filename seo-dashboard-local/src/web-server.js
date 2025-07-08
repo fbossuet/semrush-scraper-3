@@ -40,7 +40,7 @@ app.get('/', (req, res) => {
 
 // API endpoints
 
-// Lancer le scraper organic traffic
+// Lancer le scraper organic traffic (avec fallback multi-serveur)
 app.post('/api/organic-traffic', async (req, res) => {
     try {
         const { domain } = req.body;
@@ -52,15 +52,33 @@ app.post('/api/organic-traffic', async (req, res) => {
             });
         }
 
-        console.log('🔄 Lancement scraper organic traffic pour:', domain);
+        console.log('🔄 Lancement scraper organic traffic (multi-serveur) pour:', domain);
         
-        const result = await runScraper('organic-traffic-scraper.js', domain);
-        
-        res.json({
-            success: true,
-            message: 'Scraper organic traffic terminé',
-            result: result
-        });
+        // Essayer d'abord le multi-server scraper
+        try {
+            const result = await runScraper('multi-server-scraper.js', domain);
+            
+            res.json({
+                success: true,
+                message: 'Scraper multi-serveur organic traffic terminé',
+                result: result,
+                method: 'multi-server'
+            });
+            
+        } catch (multiServerError) {
+            console.log('⚠️ Multi-serveur échoué, fallback vers scraper standard...');
+            
+            // Fallback vers l'ancien scraper
+            const result = await runScraper('organic-traffic-scraper.js', domain);
+            
+            res.json({
+                success: true,
+                message: 'Scraper organic traffic standard terminé',
+                result: result,
+                method: 'fallback',
+                multiServerError: multiServerError.message
+            });
+        }
 
     } catch (error) {
         console.error('❌ Erreur scraper organic traffic:', error);
@@ -71,7 +89,7 @@ app.post('/api/organic-traffic', async (req, res) => {
     }
 });
 
-// Lancer le scraper smart traffic
+// Lancer le scraper smart traffic (avec fallback multi-serveur)
 app.post('/api/smart-traffic', async (req, res) => {
     try {
         const { domain } = req.body;
@@ -83,15 +101,33 @@ app.post('/api/smart-traffic', async (req, res) => {
             });
         }
 
-        console.log('🔄 Lancement scraper smart traffic pour:', domain);
+        console.log('🔄 Lancement scraper smart traffic (multi-serveur) pour:', domain);
         
-        const result = await runScraper('smart-traffic-scraper.js', domain);
-        
-        res.json({
-            success: true,
-            message: 'Scraper smart traffic terminé',
-            result: result
-        });
+        // Essayer d'abord le multi-server scraper
+        try {
+            const result = await runScraper('multi-server-scraper.js', domain);
+            
+            res.json({
+                success: true,
+                message: 'Scraper multi-serveur smart traffic terminé',
+                result: result,
+                method: 'multi-server'
+            });
+            
+        } catch (multiServerError) {
+            console.log('⚠️ Multi-serveur échoué, fallback vers scraper standard...');
+            
+            // Fallback vers l'ancien scraper
+            const result = await runScraper('smart-traffic-scraper.js', domain);
+            
+            res.json({
+                success: true,
+                message: 'Scraper smart traffic standard terminé',
+                result: result,
+                method: 'fallback',
+                multiServerError: multiServerError.message
+            });
+        }
 
     } catch (error) {
         console.error('❌ Erreur scraper smart traffic:', error);
@@ -316,17 +352,52 @@ app.get('/api/view/:filename', async (req, res) => {
     }
 });
 
+// Endpoint spécialisé pour debug cakesbody.com
+app.post('/api/debug-cakesbody', async (req, res) => {
+    try {
+        const { domain } = req.body;
+        const targetDomain = domain || 'cakesbody.com';
+        
+        console.log('🔍 Lancement debug spécialisé pour:', targetDomain);
+        
+        const result = await runScraper('cakesbody-debug-scraper.js', targetDomain);
+        
+        res.json({
+            success: true,
+            message: 'Debug cakesbody terminé',
+            result: result,
+            domain: targetDomain
+        });
+
+    } catch (error) {
+        console.error('❌ Erreur debug cakesbody:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // Status de l'API
 app.get('/api/status', (req, res) => {
     res.json({
         status: 'OK',
         timestamp: new Date().toISOString(),
         scrapers: {
-            organicTraffic: 'Disponible',
-            smartTraffic: 'Disponible',
+            organicTraffic: 'Disponible (Multi-serveur)',
+            smartTraffic: 'Disponible (Multi-serveur)',
             domainOverview: 'Disponible',
-            smartAnalysis: 'Disponible'
+            smartAnalysis: 'Disponible',
+            multiServer: 'Disponible (Servers 1-5)',
+            cakesbodyDebug: 'Disponible'
         },
+        servers: [
+            'server1.noxtools.com',
+            'server2.noxtools.com',
+            'server3.noxtools.com',
+            'server4.noxtools.com',
+            'server5.noxtools.com'
+        ],
         resultsDir: RESULTS_DIR
     });
 });
@@ -450,12 +521,14 @@ async function startServer() {
             console.log(`🔧 API Status: http://localhost:${PORT}/api/status`);
             console.log('');
             console.log('📋 Endpoints disponibles:');
-            console.log('   POST /api/organic-traffic');
-            console.log('   POST /api/smart-traffic');
+            console.log('   POST /api/organic-traffic   (Multi-serveur 1-5)');
+            console.log('   POST /api/smart-traffic     (Multi-serveur 1-5)');
             console.log('   POST /api/domain-overview');
             console.log('   POST /api/smart-analysis');
+            console.log('   POST /api/debug-cakesbody   (Debug spécialisé)');
             console.log('   GET  /api/files/:domain');
             console.log('   GET  /api/data/:filename');
+            console.log('   GET  /api/status            (+ info serveurs)');
             console.log('');
             console.log('🚀 Interface web: http://localhost:3000');
             console.log('');
