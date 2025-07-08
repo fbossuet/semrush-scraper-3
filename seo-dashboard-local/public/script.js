@@ -73,17 +73,13 @@ class SEODashboard {
             return;
         }
 
-        // Récupérer les propriétés sélectionnées
+        // Récupérer les 2 métriques essentielles
         const properties = {
             organicTraffic: document.getElementById('organicTraffic').checked,
-            visitsTableau: document.getElementById('visitsTableau').checked,
-            keywords: document.getElementById('keywords').checked,
-            backlinks: document.getElementById('backlinks').checked,
-            domainRank: document.getElementById('domainRank').checked,
-            competitors: document.getElementById('competitors').checked
+            visitsTableau: document.getElementById('visitsTableau').checked
         };
 
-        // 🧠 LOGIQUE INTELLIGENTE : Déterminer les scrapers optimaux
+        // 🧠 LOGIQUE INTELLIGENTE : Déterminer les scrapers optimaux (2 métriques)
         const requiredScrapers = this.determineOptimalScrapers(properties);
 
         // Afficher la progression
@@ -98,41 +94,28 @@ class SEODashboard {
         }
     }
 
-    // 🧠 Déterminer les scrapers optimaux selon les propriétés demandées
+    // 🧠 Déterminer les scrapers optimaux selon les 2 métriques essentielles
     determineOptimalScrapers(properties) {
         const scrapers = new Set();
         
-        // Mappings intelligents propriétés → scrapers
+        // Mappings simples pour tes 2 métriques
         if (properties.organicTraffic) {
             scrapers.add('organic-traffic');
         }
         
         if (properties.visitsTableau) {
-            scrapers.add('smart-traffic'); // Pour le tableau summary
-        }
-        
-        if (properties.keywords || properties.domainRank) {
-            scrapers.add('domain-overview'); // NoxTools pour métriques avancées
-        }
-        
-        if (properties.backlinks) {
-            scrapers.add('domain-overview'); // Inclut les backlinks
-        }
-        
-        if (properties.competitors) {
-            scrapers.add('smart-traffic'); // Pour concurrents directs
-            scrapers.add('domain-overview'); // Pour analyse complète concurrents
+            scrapers.add('smart-traffic'); // Pour le tableau summary avec la valeur 143
         }
 
-        // Si aucune propriété sélectionnée, minimum vital
+        // Si aucune métrique sélectionnée, prendre les 2 par défaut
         if (scrapers.size === 0) {
             scrapers.add('organic-traffic');
             scrapers.add('smart-traffic');
         }
 
         const scrapersArray = Array.from(scrapers);
-        console.log('🧠 Scrapers optimaux déterminés:', scrapersArray);
-        console.log('📊 Pour les propriétés:', Object.keys(properties).filter(k => properties[k]));
+        console.log('🧠 Scrapers optimaux pour 2 métriques:', scrapersArray);
+        console.log('📊 Métriques sélectionnées:', Object.keys(properties).filter(k => properties[k]));
         
         return scrapersArray;
     }
