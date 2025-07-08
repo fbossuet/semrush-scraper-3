@@ -1,0 +1,19 @@
+{
+  "domain": "https://the-foldie.com",
+  "timestamp": "2025-07-08T10:02:44.878Z",
+  "scrapers": {
+    "organicTraffic": null,
+    "smartTraffic": {
+      "success": true,
+      "output": "🧠 ANALYSE TRAFFIC INTELLIGENTE\n═══════════════════════════════════════════════════\n🚀 Initialisation du navigateur...\n🔑 Étape 1: Connexion à NoxTools...\n📝 Remplissage du formulaire de connexion NoxTools...\n🔍 URL après connexion: https://noxtools.com/secure/page/semrush\n✅ Connexion NoxTools réussie !\n🏗️ Configuration du domaine principal...\n🎯 Configuration avec domaine: https%3A%2F%2Fthe-foldie.com\n⚠️ Problème accès domaine, rechargement...\n✅ Domaine principal configuré !\n🚗 Navigation vers Traffic Analytics...\n🎯 Tentative: https://server1.noxtools.com/analytics/traffic/traffic-overview/\n🎯 Tentative: https://server1.noxtools.com/analytics/traffic/\n🎯 Tentative: https://server1.noxtools.com/traffic-analytics/\n🎯 Tentative: https://server1.noxtools.com/analytics/traffic/traffic-overview/?db=us&q=https%3A%2F%2Fthe-foldie.com\n⚠️ Toutes les URLs ont échoué, continuation avec la dernière...\n🔍 Recherche de l'interface d'ajout de concurrent...\n\n🔘 BOUTONS POTENTIELS:\n\n📝 INPUTS POTENTIELS:\n\n🎯 ÉLÉMENTS CLIQUABLES:\n\n🎯 TRAITEMENT: https://the-foldie.com\n--------------------------------------------------\n➕ Tentative d'ajout alternatif: https://the-foldie.com\n🔍 Méthode 1: Recherche input domain...\n🔍 Méthode 2: URL directe...\n✅ Tentative via URL directe\n📊 Recherche des données traffic pour: https://the-foldie.com\n✅ Données trouvées pour https://the-foldie.com:\n   📊 Données structurées: 0 éléments\n   🔢 Tous les nombres: 25M, 5K, 7M, 7k, 1B, 4k, 6B, 3k, 2B, 1M, 3B, 34k, 9k, 0B, 7B, 074B, 2k, 6k, 6K, 5M, 6M, 1k, 2K, 3K, 40k, 23B, 2M, 9K\n   🚗 Éléments traffic: \n\n💾 Données sauvegardées: smart-traffic-1751968964814.json\n\n🎯 RÉSULTATS ANALYSE INTELLIGENTE:\n═══════════════════════════════════════════════════\n\n🔸 CONCURRENT 1: https://the-foldie.com\n   🔢 Nombres sur la page: 25M, 5K, 7M, 7k, 1B, 4k, 6B, 3k, 2B, 1M, 3B, 34k, 9k, 0B, 7B, 074B, 2k, 6k, 6K, 5M, 6M, 1k, 2K, 3K, 40k, 23B, 2M, 9K\n🔚 Fermeture du navigateur...\n",
+      "scraper": "smart-traffic-scraper.js",
+      "domain": "https://the-foldie.com",
+      "timestamp": "2025-07-08T10:02:44.878Z"
+    },
+    "smartScraper": null
+  },
+  "errors": [
+    {},
+    {}
+  ]
+}
