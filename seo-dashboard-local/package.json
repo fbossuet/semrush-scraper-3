@@ -1,0 +1,32 @@
+{
+  "name": "seo-dashboard-local",
+  "version": "1.0.0",
+  "description": "🎯 Dashboard SEO Analytics - Interface locale pour analyser vos concurrents",
+  "main": "start-dashboard.js",
+  "type": "module",
+  "scripts": {
+    "start": "node start-dashboard.js",
+    "dashboard": "node start-dashboard.js",
+    "server": "node src/web-server.js",
+    "dev": "NODE_ENV=development node start-dashboard.js",
+    "install-deps": "npm install express cors",
+    "setup": "npm install && echo '✅ Setup terminé ! Lance: npm start'"
+  },
+  "keywords": [
+    "seo",
+    "analytics",
+    "dashboard",
+    "scraping",
+    "competitors",
+    "playwright"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.1.0",
+    "cors": "^2.8.5"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

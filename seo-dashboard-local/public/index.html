@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 SEO Analytics Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1><i class="fas fa-chart-line"></i> SEO Analytics Dashboard</h1>
+            <p>Analysez vos concurrents avec NoxTools & SEMrush</p>
+        </header>
+
+        <!-- Main Form -->
+        <section class="analysis-form">
+            <div class="form-card">
+                <h2><i class="fas fa-search"></i> Analyser un Domaine</h2>
+                
+                <form id="domainForm">
+                    <div class="input-group">
+                        <label for="domain">🌐 Domaine à analyser :</label>
+                        <input 
+                            type="text" 
+                            id="domain" 
+                            placeholder="ex: https://example.com ou example.com"
+                            value="https://the-foldie.com"
+                            required
+                        >
+                    </div>
+
+                    <div class="analysis-options">
+                        <h3>🔧 Types d'analyse :</h3>
+                        <div class="checkbox-grid">
+                            <label class="checkbox-item">
+                                <input type="checkbox" id="organicTraffic" checked>
+                                <span>📈 Trafic Organique</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" id="competitors" checked>
+                                <span>🚗 Traffic Competitors</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" id="domainOverview" checked>
+                                <span>🎯 Domain Overview</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" id="smartAnalysis" checked>
+                                <span>🧠 Analyse Intelligente</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="analyze-btn" id="analyzeBtn">
+                        <i class="fas fa-rocket"></i>
+                        Lancer l'Analyse
+                    </button>
+                </form>
+            </div>
+        </section>
+
+        <!-- Progress Section -->
+        <section class="progress-section" id="progressSection" style="display: none;">
+            <div class="progress-card">
+                <h3><i class="fas fa-cogs"></i> Analyse en cours...</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-steps" id="progressSteps">
+                    <div class="step">🔑 Connexion...</div>
+                </div>
+                <button class="cancel-btn" id="cancelBtn">
+                    <i class="fas fa-stop"></i> Annuler
+                </button>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section class="results-section" id="resultsSection" style="display: none;">
+            <h2><i class="fas fa-chart-bar"></i> Résultats d'Analyse</h2>
+            
+            <!-- Quick Stats -->
+            <div class="stats-grid">
+                <div class="stat-card organic">
+                    <div class="stat-icon">📈</div>
+                    <div class="stat-content">
+                        <h3>Trafic Organique</h3>
+                        <p class="stat-value" id="organicValue">-</p>
+                        <p class="stat-source" id="organicSource">-</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card visits">
+                    <div class="stat-icon">🚗</div>
+                    <div class="stat-content">
+                        <h3>Visits Concurrents</h3>
+                        <p class="stat-value" id="visitsValue">-</p>
+                        <p class="stat-source" id="visitsSource">-</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card keywords">
+                    <div class="stat-icon">🔑</div>
+                    <div class="stat-content">
+                        <h3>Mots-clés</h3>
+                        <p class="stat-value" id="keywordsValue">-</p>
+                        <p class="stat-source" id="keywordsSource">-</p>
+                    </div>
+                </div>
+                
+                <div class="stat-card backlinks">
+                    <div class="stat-icon">🔗</div>
+                    <div class="stat-content">
+                        <h3>Backlinks</h3>
+                        <p class="stat-value" id="backlinksValue">-</p>
+                        <p class="stat-source" id="backlinksSource">-</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="charts-section">
+                <div class="chart-card">
+                    <h3>📊 Métriques Principales</h3>
+                    <canvas id="metricsChart"></canvas>
+                </div>
+                
+                <div class="chart-card">
+                    <h3>🔍 Nombres Trouvés</h3>
+                    <canvas id="numbersChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Detailed Data -->
+            <div class="detailed-data">
+                <h3><i class="fas fa-table"></i> Données Détaillées</h3>
+                
+                <div class="data-tabs">
+                    <button class="tab-btn active" data-tab="organic">📈 Organique</button>
+                    <button class="tab-btn" data-tab="competitors">🚗 Concurrents</button>
+                    <button class="tab-btn" data-tab="raw">📄 Données Brutes</button>
+                    <button class="tab-btn" data-tab="files">📁 Fichiers</button>
+                </div>
+
+                <div class="tab-content active" id="tab-organic">
+                    <div class="data-table" id="organicTable">
+                        <!-- Données organiques -->
+                    </div>
+                </div>
+
+                <div class="tab-content" id="tab-competitors">
+                    <div class="data-table" id="competitorsTable">
+                        <!-- Données concurrents -->
+                    </div>
+                </div>
+
+                <div class="tab-content" id="tab-raw">
+                    <pre class="json-viewer" id="rawData">
+                        <!-- Données JSON brutes -->
+                    </pre>
+                </div>
+
+                <div class="tab-content" id="tab-files">
+                    <div class="files-list" id="filesList">
+                        <!-- Liste des fichiers générés -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="actions-section">
+                <button class="action-btn export" id="exportBtn">
+                    <i class="fas fa-download"></i> Exporter JSON
+                </button>
+                <button class="action-btn compare" id="compareBtn">
+                    <i class="fas fa-balance-scale"></i> Comparer
+                </button>
+                <button class="action-btn new" id="newAnalysisBtn">
+                    <i class="fas fa-plus"></i> Nouvelle Analyse
+                </button>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>🚀 Powered by Playwright + NoxTools + SEMrush | Made with ❤️</p>
+        </footer>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="loading-spinner">
+            <i class="fas fa-cog fa-spin"></i>
+            <p>Analyse en cours...</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

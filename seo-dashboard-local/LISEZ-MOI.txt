@@ -1,0 +1,46 @@
+🎯 DASHBOARD SEO ANALYTICS - DEMARRAGE RAPIDE
+=====================================================
+
+💡 POUR DEMARRER EN 30 SECONDES :
+
+  Windows :
+  ---------
+  1. Double-clic sur "DEMARRAGE-RAPIDE.bat"
+  2. Attendre l'installation
+  3. Ouvrir : http://localhost:3000
+
+  Mac/Linux :
+  -----------
+  1. Ouvrir un terminal
+  2. cd dans ce dossier
+  3. ./start.sh
+  4. Ouvrir : http://localhost:3000
+
+  Manuel (tous systèmes) :
+  ------------------------
+  1. Ouvrir un terminal dans ce dossier
+  2. npm install
+  3. npm start
+  4. Ouvrir : http://localhost:3000
+
+🎯 UTILISATION :
+================
+- Saisir un domaine : https://the-foldie.com
+- Cocher les analyses souhaitées
+- Cliquer "Lancer l'Analyse"
+- Regarder les résultats !
+
+📁 FICHIERS IMPORTANTS :
+=========================
+- public/          = Interface web
+- src/             = Serveurs et scrapers  
+- results/         = Résultats sauvegardés
+- package.json     = Configuration
+
+🆘 AIDE :
+=========
+- Besoin de Node.js : https://nodejs.org/
+- Port occupé ? PORT=3001 npm start
+- Problème ? Voir INSTALLATION-LOCALE.md
+
+🚀 C'est parti !
