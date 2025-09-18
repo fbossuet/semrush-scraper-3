@@ -531,15 +531,6 @@ export class TrendTrackExtractor extends BaseExtractor {
   async scrapeMultiplePages(maxPages = 30, includeMarketData = false) {
     console.log(`📋 Scraping de ${maxPages} pages...`);
     
-    // 🔑 Login automatique avant de scraper
-    console.log('🔑 Authentification automatique...');
-    const loginSuccess = await this.login('seif.alyakoob@gmail.com', 'Toulouse31!');
-    if (!loginSuccess) {
-      console.error('❌ Échec de l\'authentification');
-      return [];
-    }
-    console.log('✅ Authentification réussie');
-    
     const allShopsData = [];
     
     // Naviguer vers la première page pour s'assurer qu'on est au bon endroit
