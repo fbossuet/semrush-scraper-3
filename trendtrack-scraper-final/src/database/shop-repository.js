@@ -68,28 +68,57 @@ export class ShopRepository {
       
       const db = this._getConnection();
       
-      // 1. Insérer dans la table shops
+      // 1. Insérer dans la table shops avec mapping dynamique
+      const shopColumns = [
+        'shop_name', 'shop_url', 'scraping_status', 'scraping_last_update', 'updated_at',
+        'creation_date', 'monthly_visits', 'monthly_revenue', 'live_ads', 'page_number',
+        'scraped_at', 'project_source', 'external_id', 'metadata', 'year_founded',
+        'total_products', 'pixel_google', 'pixel_facebook', 'aov',
+        'market_us', 'market_uk', 'market_de', 'market_ca', 'market_au', 'market_fr',
+        'category'
+      ];
+      
+      // Mapping dynamique des données
+      const shopValues = {
+        'shop_name': shopData.shopName || '',
+        'shop_url': urlToSave,
+        'scraping_status': shopData.scrapingStatus || null,
+        'scraping_last_update': shopData.scrapingLastUpdate || null,
+        'updated_at': new Date().toISOString(),
+        'creation_date': shopData.creationDate || '',
+        'monthly_visits': shopData.monthlyVisits || null,
+        'monthly_revenue': shopData.monthlyRevenue || '',
+        'live_ads': shopData.liveAds || '',
+        'page_number': shopData.page || 1,
+        'scraped_at': shopData.scrapedAt || null,
+        'project_source': shopData.projectSource || 'trendtrack',
+        'external_id': shopData.externalId || null,
+        'metadata': shopData.metadata ? JSON.stringify(shopData.metadata) : null,
+        'year_founded': shopData.yearFounded || null,
+        'total_products': shopData.totalProducts || null,
+        'pixel_google': shopData.pixelGoogle || null,
+        'pixel_facebook': shopData.pixelFacebook || null,
+        'aov': shopData.aov || null,
+        'market_us': shopData.marketUs || null,
+        'market_uk': shopData.marketUk || null,
+        'market_de': shopData.marketDe || null,
+        'market_ca': shopData.marketCa || null,
+        'market_au': shopData.marketAu || null,
+        'market_fr': shopData.marketFr || null,
+        'category': shopData.category || ''
+      };
+      
+      // Construire la requête dynamiquement
+      const columnsClause = shopColumns.join(', ');
+      const placeholders = shopColumns.map(() => '?').join(', ');
+      const values = shopColumns.map(col => shopValues[col]);
+      
       const upsertStmt = db.prepare(`
-        INSERT OR REPLACE INTO shops
-          (shop_name, shop_url, creation_date, category, monthly_visits, monthly_revenue, live_ads, page_number, updated_at, project_source, external_id, metadata, scraping_status, scraping_last_update)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime.now(timezone.utc).isoformat(), ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO shops (${columnsClause})
+        VALUES (${placeholders})
       `);
       
-      const result = upsertStmt.run([
-        shopData.shopName || '',
-        urlToSave,
-        shopData.creationDate || '',
-        shopData.category || '',
-        shopData.monthlyVisits || '',
-        shopData.monthlyRevenue || '',
-        parseInt(shopData.liveAds) || 0,
-        shopData.page || 1,
-        shopData.projectSource || 'trendtrack',
-        shopData.externalId || null,
-        shopData.metadata ? JSON.stringify(shopData.metadata) : null,
-        shopData.scrapingStatus || null,
-        shopData.scrapingLastUpdate || null
-      ]);
+      const result = upsertStmt.run(values);
       
       const shopId = result.lastInsertRowid;
       
@@ -97,21 +126,40 @@ export class ShopRepository {
       if (shopData.conversionRate || shopData.organicTraffic || shopData.brandedTraffic || 
           shopData.bounceRate || shopData.averageVisitDuration) {
         
+        // Mapping dynamique pour la table analytics
+        const analyticsColumns = [
+          'shop_id', 'organic_traffic', 'bounce_rate', 'avg_visit_duration', 'branded_traffic',
+          'conversion_rate', 'scraping_status', 'updated_at', 'visits', 'traffic',
+          'paid_search_traffic', 'percent_branded_traffic', 'cpc'
+        ];
+        
+        const analyticsValues = {
+          'shop_id': shopId,
+          'organic_traffic': shopData.organicTraffic || null,
+          'bounce_rate': shopData.bounceRate || null,
+          'avg_visit_duration': shopData.averageVisitDuration || null,
+          'branded_traffic': shopData.brandedTraffic || null,
+          'conversion_rate': shopData.conversionRate || null,
+          'scraping_status': shopData.scrapingStatus || 'completed',
+          'updated_at': new Date().toISOString(),
+          'visits': shopData.visits || null,
+          'traffic': shopData.traffic || null,
+          'paid_search_traffic': shopData.paidSearchTraffic || null,
+          'percent_branded_traffic': shopData.percentBrandedTraffic || null,
+          'cpc': shopData.cpc || null
+        };
+        
+        // Construire la requête dynamiquement
+        const analyticsColumnsClause = analyticsColumns.join(', ');
+        const analyticsPlaceholders = analyticsColumns.map(() => '?').join(', ');
+        const analyticsValuesArray = analyticsColumns.map(col => analyticsValues[col]);
+        
         const analyticsStmt = db.prepare(`
-          INSERT OR REPLACE INTO analytics 
-          (shop_id, organic_traffic, bounce_rate, avg_visit_duration, branded_traffic, conversion_rate, scraping_status, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, datetime.now(timezone.utc).isoformat())
+          INSERT OR REPLACE INTO analytics (${analyticsColumnsClause})
+          VALUES (${analyticsPlaceholders})
         `);
         
-        analyticsStmt.run([
-          shopId,
-          shopData.organicTraffic || null,
-          shopData.bounceRate || null,
-          shopData.averageVisitDuration || null,
-          shopData.brandedTraffic || null,
-          shopData.conversionRate || null,
-          shopData.scrapingStatus || 'completed'
-        ]);
+        analyticsStmt.run(analyticsValuesArray);
       }
       
       this._clearCache();

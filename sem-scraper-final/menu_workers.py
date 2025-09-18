@@ -273,7 +273,7 @@ class WorkersMenu:
             log_file = f"logs/trendtrack-scraper-{timestamp}.log"
             
             # Construire la commande pour le scraper TrendTrack
-            cmd = "python3 smart_scraper_intelligent.py"
+            cmd = "node update-database.js"
             
             # Lancer dans un screen
             screen_cmd = [
@@ -998,3 +998,14 @@ def main():
     setup_logging()
     
     try:
+        menu = WorkersMenu()
+        asyncio.run(menu.run_menu())
+    except KeyboardInterrupt:
+        print("\n\n👋 Arrêt demandé par l'utilisateur")
+    except Exception as e:
+        print(f"\n❌ Erreur inattendue: {e}")
+    finally:
+        print("\n👋 Au revoir!")
+
+if __name__ == "__main__":
+    main()

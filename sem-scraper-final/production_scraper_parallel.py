@@ -1240,7 +1240,7 @@ class ParallelProductionScraper:
                 
         except Exception as e:
             logger.error(f"❌ Worker {self.worker_id}: Erreur purchase conversion DOM: {e}")
-                return ""
+            return ""
             
     async def scrape_market_traffic(self, domain: str) -> dict:
         """
@@ -1325,7 +1325,7 @@ class ParallelProductionScraper:
             logger.info(f"✅ Worker {self.worker_id}: AOV récupéré: {aov}")
             return aov
                     
-                except Exception as e:
+        except Exception as e:
             logger.error(f"❌ Worker {self.worker_id}: Erreur AOV: {e}")
             return ""
     
