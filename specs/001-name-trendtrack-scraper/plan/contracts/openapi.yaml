@@ -1,0 +1,682 @@
+openapi: 3.0.3
+info:
+  title: Scraper SEM Parallèle API
+  description: API for managing website scraping and metrics collection
+  version: 1.0.0
+  contact:
+    name: Scraper SEM Parallèle Team
+    email: support@trendtrack.com
+
+servers:
+  - url: http://localhost:8000
+    description: Development server
+  - url: http://37.59.102.7:8001
+    description: Production VPS server
+
+paths:
+  /websites:
+    get:
+      summary: List websites
+      description: Get list of websites with optional filtering by status
+      parameters:
+        - name: status
+          in: query
+          description: Filter by scraping status
+          required: false
+          schema:
+            type: string
+            enum: [completed, partial, failed, na, pending]
+        - name: limit
+          in: query
+          description: Maximum number of websites to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: offset
+          in: query
+          description: Number of websites to skip
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of websites
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  websites:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Website'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Add new website
+      description: Add a new website for scraping
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - shop_url
+              properties:
+                shop_name:
+                  type: string
+                  description: Human-readable name of the website
+                shop_url:
+                  type: string
+                  format: uri
+                  description: Full URL of the website
+                project_source:
+                  type: string
+                  default: "trendtrack"
+                metadata:
+                  type: object
+                  description: Additional metadata
+      responses:
+        '201':
+          description: Website created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Website'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Website already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /websites/{website_id}:
+    get:
+      summary: Get website details
+      description: Get detailed information about a specific website
+      parameters:
+        - name: website_id
+          in: path
+          required: true
+          description: Website ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Website details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Website'
+        '404':
+          description: Website not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      summary: Update website
+      description: Update website information
+      parameters:
+        - name: website_id
+          in: path
+          required: true
+          description: Website ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shop_name:
+                  type: string
+                shop_url:
+                  type: string
+                  format: uri
+                scraping_status:
+                  type: string
+                  enum: [completed, partial, failed, na, pending]
+                metadata:
+                  type: object
+      responses:
+        '200':
+          description: Website updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Website'
+        '404':
+          description: Website not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Delete website
+      description: Delete a website and its associated metrics
+      parameters:
+        - name: website_id
+          in: path
+          required: true
+          description: Website ID
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Website deleted successfully
+        '404':
+          description: Website not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /websites/{website_id}/metrics:
+    get:
+      summary: Get website metrics
+      description: Get collected metrics for a specific website
+      parameters:
+        - name: website_id
+          in: path
+          required: true
+          description: Website ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Website metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Metrics'
+        '404':
+          description: Website or metrics not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      summary: Update website metrics
+      description: Update or create metrics for a specific website
+      parameters:
+        - name: website_id
+          in: path
+          required: true
+          description: Website ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MetricsInput'
+      responses:
+        '200':
+          description: Metrics updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Metrics'
+        '404':
+          description: Website not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /scraping/sessions:
+    get:
+      summary: List scraping sessions
+      description: Get list of scraping sessions
+      parameters:
+        - name: status
+          in: query
+          description: Filter by session status
+          required: false
+          schema:
+            type: string
+            enum: [running, completed, failed, cancelled]
+        - name: limit
+          in: query
+          description: Maximum number of sessions to return
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: List of scraping sessions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScrapingSession'
+                  total:
+                    type: integer
+
+    post:
+      summary: Start new scraping session
+      description: Start a new scraping session with specified parameters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - target_status
+                - worker_count
+                - websites_per_worker
+              properties:
+                session_name:
+                  type: string
+                  description: Human-readable session name
+                target_status:
+                  type: string
+                  enum: [partial, failed, pending, all]
+                  description: Target website status to process
+                worker_count:
+                  type: integer
+                  minimum: 1
+                  maximum: 10
+                  description: Number of parallel workers
+                websites_per_worker:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+                  description: Websites to assign per worker
+      responses:
+        '201':
+          description: Scraping session started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapingSession'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /scraping/sessions/{session_id}:
+    get:
+      summary: Get scraping session details
+      description: Get detailed information about a specific scraping session
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          description: Session ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Scraping session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapingSession'
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Cancel scraping session
+      description: Cancel a running scraping session
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          description: Session ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Session cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScrapingSession'
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /scraping/sessions/{session_id}/status:
+    get:
+      summary: Get session status
+      description: Get real-time status of a scraping session
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          description: Session ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Session status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id:
+                    type: integer
+                  status:
+                    type: string
+                    enum: [running, completed, failed, cancelled]
+                  progress:
+                    type: object
+                    properties:
+                      total_websites:
+                        type: integer
+                      processed_websites:
+                        type: integer
+                      successful_websites:
+                        type: integer
+                      failed_websites:
+                        type: integer
+                      percentage:
+                        type: number
+                        format: float
+                  workers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Worker'
+                  estimated_completion:
+                    type: string
+                    format: date-time
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /health:
+    get:
+      summary: Health check
+      description: Check API health status
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, unhealthy]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+
+components:
+  schemas:
+    Website:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique identifier
+        shop_name:
+          type: string
+          description: Human-readable name
+        shop_url:
+          type: string
+          format: uri
+          description: Full URL
+        scraping_status:
+          type: string
+          enum: [completed, partial, failed, na, pending]
+          description: Current processing status
+        scraping_last_update:
+          type: string
+          format: date-time
+          description: Last scraping attempt timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+        creation_date:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        monthly_visits:
+          type: string
+          description: Monthly visits data
+        monthly_revenue:
+          type: string
+          description: Monthly revenue data
+        live_ads:
+          type: string
+          description: Live ads information
+        page_number:
+          type: string
+          description: Page number in source
+        scraped_at:
+          type: string
+          format: date-time
+          description: Last successful scraping timestamp
+        project_source:
+          type: string
+          description: Source of website data
+        external_id:
+          type: string
+          description: External system identifier
+        metadata:
+          type: object
+          description: Additional metadata
+        year_founded:
+          type: string
+          description: Year founded
+
+    Metrics:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique identifier
+        shop_id:
+          type: integer
+          description: Website ID
+        organic_traffic:
+          type: string
+          description: Organic search traffic count
+        paid_search_traffic:
+          type: string
+          description: Paid search traffic count
+        visits:
+          type: string
+          description: Total visits
+        bounce_rate:
+          type: string
+          description: Bounce rate as decimal
+        avg_visit_duration:
+          type: string
+          description: Average visit duration in seconds
+        branded_traffic:
+          type: string
+          description: Branded traffic count
+        conversion_rate:
+          type: string
+          description: Conversion rate as decimal
+        percent_branded_traffic:
+          type: string
+          description: Calculated percentage as decimal
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+
+    MetricsInput:
+      type: object
+      properties:
+        organic_traffic:
+          type: string
+        paid_search_traffic:
+          type: string
+        visits:
+          type: string
+        bounce_rate:
+          type: string
+        avg_visit_duration:
+          type: string
+        branded_traffic:
+          type: string
+        conversion_rate:
+          type: string
+        percent_branded_traffic:
+          type: string
+
+    ScrapingSession:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique identifier
+        session_name:
+          type: string
+          description: Human-readable session name
+        status:
+          type: string
+          enum: [running, completed, failed, cancelled]
+          description: Session status
+        target_status:
+          type: string
+          enum: [partial, failed, pending, all]
+          description: Target website status filter
+        worker_count:
+          type: integer
+          description: Number of parallel workers
+        websites_per_worker:
+          type: integer
+          description: Websites assigned per worker
+        total_websites:
+          type: integer
+          description: Total websites to process
+        processed_websites:
+          type: integer
+          description: Websites processed so far
+        successful_websites:
+          type: integer
+          description: Successfully processed websites
+        failed_websites:
+          type: integer
+          description: Failed websites
+        started_at:
+          type: string
+          format: date-time
+          description: Session start timestamp
+        completed_at:
+          type: string
+          format: date-time
+          description: Session completion timestamp
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+
+    Worker:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique identifier
+        session_id:
+          type: integer
+          description: Scraping session ID
+        worker_id:
+          type: integer
+          description: Worker identifier within session
+        status:
+          type: string
+          enum: [idle, running, completed, failed]
+          description: Worker status
+        assigned_websites:
+          type: array
+          items:
+            type: integer
+          description: Assigned website IDs
+        processed_websites:
+          type: array
+          items:
+            type: integer
+          description: Processed website IDs
+        current_website_id:
+          type: integer
+          description: Currently processing website ID
+        started_at:
+          type: string
+          format: date-time
+          description: Worker start timestamp
+        completed_at:
+          type: string
+          format: date-time
+          description: Worker completion timestamp
+        error_message:
+          type: string
+          description: Error message if worker failed
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        code:
+          type: string
+          description: Error code
+        details:
+          type: object
+          description: Additional error details

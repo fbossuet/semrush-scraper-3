@@ -1,0 +1,73 @@
+--- /Users/infusion/shopshopshops/specs/001-name-trendtrack-scraper/plan/prod_schema.sql	2025-09-17 12:27:27
++++ /Users/infusion/shopshopshops/specs/001-name-trendtrack-scraper/plan/test_schema.sql	2025-09-17 12:27:27
+@@ -63,37 +63,47 @@
+ CREATE INDEX idx_selector_performance_timestamp 
+                 ON selector_performance(timestamp)
+             ;
+-CREATE TABLE analytics (id INTEGER PRIMARY KEY AUTOINCREMENT, shop_id INTEGER NOT NULL, organic_traffic TEXT, bounce_rate TEXT, avg_visit_duration TEXT, branded_traffic TEXT, conversion_rate TEXT, scraping_status TEXT DEFAULT 'completed', updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, visits TEXT, traffic TEXT, percent_branded_traffic REAL, paid_search_traffic TEXT, FOREIGN KEY (shop_id) REFERENCES shops (id));
+-CREATE INDEX idx_analytics_shop_id ON analytics(shop_id);
+-CREATE INDEX idx_analytics_scraping_status ON analytics(scraping_status);
+-CREATE UNIQUE INDEX idx_analytics_shop_id_unique 
+-                ON analytics(shop_id)
+-            ;
+ CREATE TABLE IF NOT EXISTS "shops" (
+     id INTEGER PRIMARY KEY AUTOINCREMENT,
+     shop_name TEXT,
+     shop_url TEXT UNIQUE NOT NULL,
+     scraping_status TEXT,
+-    scraping_last_update TEXT,
+-    updated_at TEXT,
+-    creation_date TEXT,
+-    monthly_visits TEXT,
++    monthly_visits INTEGER,  -- TEXT → INTEGER
+     monthly_revenue TEXT,
+     live_ads TEXT,
+     page_number TEXT,
+     scraped_at TEXT,
+     project_source TEXT,
+     external_id TEXT,
+-    metadata TEXT
+-, year_founded TEXT);
+-CREATE INDEX idx_shops_scraping_status ON shops(scraping_status);
+-CREATE INDEX idx_shops_scraping_last_update ON shops(scraping_last_update);
+-CREATE INDEX idx_shops_shop_url ON shops(shop_url);
+-CREATE INDEX idx_shops_url ON shops(shop_url);
+-CREATE INDEX idx_shops_live_ads ON shops(live_ads);
+-CREATE INDEX idx_shops_scraped_at ON shops(scraped_at);
+-CREATE INDEX idx_shops_project_source ON shops(project_source);
+-CREATE INDEX idx_shops_external_id ON shops(external_id);
+-CREATE INDEX idx_shops_live_ads_scraped_at ON shops(live_ads DESC, scraped_at DESC);
+-CREATE INDEX idx_shops_project_live_ads ON shops(project_source, live_ads DESC);
+-CREATE INDEX idx_shops_updated_at ON shops(updated_at DESC);
++    metadata TEXT,
++    creation_date DATE,
++    scraping_last_update DATE,
++    year_founded DATE,
++    total_products INTEGER,
++    pixel_google INTEGER,
++    pixel_facebook INTEGER,
++    aov NUMERIC,  -- NUMERIC → decimal (gardé NUMERIC)
++    market_us NUMERIC,  -- NUMERIC → decimal
++    market_uk NUMERIC,
++    market_de NUMERIC,
++    market_ca NUMERIC,
++    market_au NUMERIC,
++    market_fr NUMERIC
++);
++CREATE TABLE IF NOT EXISTS "analytics" (
++    id INTEGER PRIMARY KEY AUTOINCREMENT,
++    shop_id INTEGER NOT NULL,
++    organic_traffic INTEGER,  -- TEXT → INTEGER
++    bounce_rate NUMERIC,  -- TEXT → decimal (NUMERIC)
++    avg_visit_duration TEXT,  -- Format MM:SS
++    branded_traffic INTEGER,  -- TEXT → INTEGER
++    conversion_rate TEXT,
++    scraping_status TEXT DEFAULT 'completed',
++    visits INTEGER,  -- TEXT → INTEGER
++    traffic INTEGER,  -- TEXT → INTEGER
++    paid_search_traffic INTEGER,  -- TEXT → INTEGER
++    percent_branded_traffic NUMERIC,  -- NUMERIC → decimal
++    cpc NUMERIC,  -- NUMERIC → decimal
++    updated_at DATE,
++    FOREIGN KEY (shop_id) REFERENCES "shops" (id)
++);

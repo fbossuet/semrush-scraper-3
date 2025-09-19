@@ -7,6 +7,10 @@
 - **Validation Utilisateur**: L'utilisateur valide chaque modification via test sur le VPS
 - **Logs Immutables**: JAMAIS modifier les messages de logs existants
 - **Approche Adaptative**: Validation des métriques par comptage dynamique
+- **Pas de Scripts de Test**: JAMAIS créer de scripts de test - l'utilisateur teste directement sur le VPS
+- **Fix Reports Dynamiques**: Les fix reports doivent être mis à jour si l'utilisateur fait des modifs durant les tests
+- **Nettoyage Post-Validation**: Supprimer les fichiers de test/rapports après validation utilisateur
+- **Scripts de Modification Temporaires**: Supprimer tous les scripts de modification VPS après validation utilisateur
 
 ## 📁 RÉPERTOIRE DE TRAVAIL
 - TOUJOURS travailler dans /home/ubuntu/projects/shopshopshops/test/

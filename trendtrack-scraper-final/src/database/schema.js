@@ -10,22 +10,30 @@ export const SCHEMA = `
     shop_url TEXT UNIQUE NOT NULL,
     creation_date TEXT,
     category TEXT,
-    monthly_visits TEXT,
+    monthly_visits INTEGER,
     monthly_revenue TEXT,
-    live_ads INTEGER DEFAULT 0,
-    page_number INTEGER,
-    scraped_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
-    updated_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
+    live_ads TEXT,
+    live_ads_7d INTEGER DEFAULT 0,
+    live_ads_30d INTEGER DEFAULT 0,
+    page_number TEXT,
+    scraped_at TEXT,
+    updated_at TEXT,
     project_source TEXT DEFAULT 'trendtrack',
     external_id TEXT,
     metadata TEXT,
-    conversion_rate TEXT,
+    year_founded TEXT,
+    total_products INTEGER,
+    pixel_google TEXT,
+    pixel_facebook TEXT,
+    aov NUMERIC,
+    market_us NUMERIC,
+    market_uk NUMERIC,
+    market_de NUMERIC,
+    market_ca NUMERIC,
+    market_au NUMERIC,
+    market_fr NUMERIC,
     scraping_status TEXT,
-    scraping_last_update TIMESTAMP,
-    organic_traffic TEXT,
-    branded_traffic TEXT,
-    bounce_rate TEXT,
-    average_visit_duration TEXT
+    scraping_last_update TEXT
   );
 
   -- Table des sessions de scraping
@@ -54,6 +62,8 @@ export const SCHEMA = `
   -- Index pour améliorer les performances
   CREATE INDEX IF NOT EXISTS idx_shops_url ON shops(shop_url);
   CREATE INDEX IF NOT EXISTS idx_shops_live_ads ON shops(live_ads);
+  CREATE INDEX IF NOT EXISTS idx_shops_live_ads_7d ON shops(live_ads_7d);
+  CREATE INDEX IF NOT EXISTS idx_shops_live_ads_30d ON shops(live_ads_30d);
   CREATE INDEX IF NOT EXISTS idx_shops_category ON shops(category);
   CREATE INDEX IF NOT EXISTS idx_shops_scraped_at ON shops(scraped_at);
   CREATE INDEX IF NOT EXISTS idx_shops_project_source ON shops(project_source);
@@ -78,8 +88,8 @@ export const QUERIES = {
   // Insérer ou mettre à jour une boutique
   UPSERT_SHOP: `
     INSERT OR REPLACE INTO shops 
-    (shop_name, shop_url, creation_date, category, monthly_visits, monthly_revenue, live_ads, page_number, updated_at, project_source, external_id, metadata, scraping_status, scraping_last_update)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime.now(timezone.utc).isoformat(), ?, ?, ?, ?, ?)
+    (shop_name, shop_url, creation_date, category, monthly_visits, monthly_revenue, live_ads, live_ads_7d, live_ads_30d, page_number, updated_at, project_source, external_id, metadata, year_founded, total_products, pixel_google, pixel_facebook, aov, market_us, market_uk, market_de, market_ca, market_au, market_fr, scraping_status, scraping_last_update)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   // Récupérer toutes les boutiques

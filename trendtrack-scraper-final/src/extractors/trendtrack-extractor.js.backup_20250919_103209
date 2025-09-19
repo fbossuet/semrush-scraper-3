@@ -268,120 +268,6 @@ export class TrendTrackExtractor extends BaseExtractor {
   }
 
   /**
-   * Extrait UNIQUEMENT les données du tableau (sans navigation)
-   * @param {ElementHandle} row - Ligne du tableau
-   * @returns {Promise<Object>} - Données de la boutique du tableau uniquement
-   */
-  async extractShopDataFromTable(row) {
-    try {
-      const cells = await row.locator('td').all();
-      if (cells.length < 6) {
-        console.log('⚠️ Ligne avec seulement', cells.length, 'cellules, ignorée');
-        return null;
-      }
-
-      // Extraction des données de base du tableau en utilisant les méthodes existantes
-      const shopData = {};
-      
-      // Nom de la boutique
-      try {
-        const nameElement = await cells[0].locator('p.text-sm.font-semibold').first();
-        if (await nameElement.count() > 0) {
-          shopData.shop_name = (await nameElement.textContent())?.trim();
-        }
-      } catch (error) {
-        console.log('⚠️ Nom de boutique non trouvé');
-      }
-
-      // URL de la boutique
-      try {
-        const urlElement = await cells[0].locator('a[href*="http"]').first();
-        if (await urlElement.count() > 0) {
-          shopData.shop_url = await urlElement.getAttribute('href');
-        }
-      } catch (error) {
-        console.log('⚠️ URL de boutique non trouvée');
-      }
-
-      // Catégorie
-      try {
-        const categoryElement = await cells[1].locator('div').first();
-        if (await categoryElement.count() > 0) {
-          shopData.category = (await categoryElement.textContent())?.trim();
-        }
-      } catch (error) {
-        console.log('⚠️ Catégorie non trouvée');
-      }
-
-      // Visites mensuelles
-      try {
-        const visitsElement = await cells[2].locator('p.font-bold').first();
-        if (await visitsElement.count() > 0) {
-          shopData.monthly_visits = this.parseNumber(await visitsElement.textContent());
-        }
-      } catch (error) {
-        console.log('⚠️ Visites mensuelles non trouvées');
-      }
-
-      // Revenus mensuels
-      try {
-        const revenueElement = await cells[3].locator('p.font-bold').first();
-        if (await revenueElement.count() > 0) {
-          shopData.monthly_revenue = this.parseNumber(await revenueElement.textContent());
-        }
-      } catch (error) {
-        console.log('⚠️ Revenus mensuels non trouvés');
-      }
-
-      // Nombre de produits
-      try {
-        const productsElement = await cells[4].locator('p.font-bold').first();
-        if (await productsElement.count() > 0) {
-          shopData.total_products = this.parseNumber(await productsElement.textContent());
-        }
-      } catch (error) {
-        console.log('⚠️ Nombre de produits non trouvé');
-      }
-
-      // Live ads 7d
-      try {
-        const liveAds7dElement = await cells[5].locator('p').first();
-        if (await liveAds7dElement.count() > 0) {
-          shopData.live_ads_7d = this.parseNumber(await liveAds7dElement.textContent());
-        }
-      } catch (error) {
-        console.log('⚠️ Live ads 7d non trouvés');
-      }
-
-      // Live ads 30d
-      try {
-        const liveAds30dElement = await cells[6].locator('p').first();
-        if (await liveAds30dElement.count() > 0) {
-          shopData.live_ads_30d = this.parseNumber(await liveAds30dElement.textContent());
-        }
-      } catch (error) {
-        console.log('⚠️ Live ads 30d non trouvés');
-      }
-
-      // Ajouter les métadonnées
-      shopData.scraping_status = 'table_extracted';
-      shopData.last_updated = new Date().toISOString();
-
-      // Vérifier qu'on a au moins le nom et l'URL
-      if (!shopData.shop_name || !shopData.shop_url) {
-        console.log('⚠️ Données insuffisantes pour la boutique');
-        return null;
-      }
-
-      console.log(`✅ Boutique extraite: ${shopData.shop_name} (${shopData.shop_url})`);
-      return shopData;
-    } catch (error) {
-      console.error('❌ Erreur extraction données tableau:', error.message);
-      return null;
-    }
-  }
-
-  /**
    * Extrait les données d'une ligne de boutique
    * @param {Object} row - Élément de ligne
    * @param {boolean} includeMarketData - Inclure les données de trafic par pays
@@ -517,48 +403,6 @@ export class TrendTrackExtractor extends BaseExtractor {
   }
 
   /**
-   * Extrait UNIQUEMENT les données du tableau (sans navigation vers les détails)
-   * @returns {Promise<Array>} - Liste des boutiques avec données du tableau uniquement
-   */
-  async extractTableDataOnly() {
-    console.log('📋 Extraction des données du tableau uniquement (sans navigation)...');
-    
-    try {
-      // Attendre que le tableau soit chargé
-      await this.page.waitForSelector('tbody tr', { timeout: 60000 });
-      
-      // Récupérer toutes les lignes du tableau
-      const rows = await this.page.locator('tbody tr').all();
-      console.log(`📊 ${rows.length} lignes trouvées`);
-      
-      const shopsData = [];
-      
-      for (let i = 0; i < rows.length; i++) {
-        console.log(`🔍 Extraction ligne ${i + 1}/${rows.length}...`);
-        
-        const shopData = await this.extractShopDataFromTable(rows[i]);
-        if (shopData) {
-          shopsData.push({
-            ...shopData,
-            rowIndex: i + 1,
-            timestamp: new Date().toISOString()
-          });
-        }
-        
-        // Pause minimale entre les extractions
-        await this.sleep(50);
-      }
-      
-      console.log(`✅ ${shopsData.length} boutiques extraites du tableau`);
-      return shopsData;
-      
-    } catch (error) {
-      console.error('❌ Erreur extraction tableau:', error.message);
-      return [];
-    }
-  }
-
-  /**
    * Extrait toutes les données du tableau
    * @param {boolean} includeMarketData - Inclure les données de trafic par pays
    * @returns {Promise<Array>} - Liste des boutiques
@@ -618,328 +462,6 @@ export class TrendTrackExtractor extends BaseExtractor {
     } catch (error) {
       console.error('❌ Erreur extraction tableau:', error.message);
       return [];
-    }
-  }
-
-  /**
-   * Navigue vers la page de détail d'une boutique
-   * @param {string} shopUrl - URL de la boutique
-   * @returns {Promise<boolean>} - Succès de la navigation
-   */
-  async navigateToShopDetail(shopUrl) {
-    console.log(`🔍 Navigation vers la page de détail: ${shopUrl}`);
-    
-    try {
-      // Navigation directe vers l'URL de la boutique
-      await this.page.goto(shopUrl, { 
-        waitUntil: 'networkidle',
-        timeout: 30000 
-      });
-      
-      // Attendre que la page se charge
-      await this.page.waitForTimeout(2000);
-      
-      // Vérifier qu'on est bien sur la page de la boutique
-      const currentUrl = this.page.url();
-      if (currentUrl.includes(shopUrl.replace('https://', '').replace('http://', ''))) {
-        console.log('✅ Navigation vers page de détail réussie');
-        return true;
-      } else {
-        console.log('❌ Navigation échouée - URL incorrecte');
-        return false;
-      }
-      
-    } catch (error) {
-      console.error(`❌ Erreur navigation détail: ${error.message}`);
-      return false;
-    }
-  }
-
-  /**
-   * Extrait les détails d'une boutique depuis sa page
-   * @returns {Promise<Object>} - Données de détail de la boutique
-   */
-  async extractShopDetails() {
-    console.log('🔍 Extraction des détails de la boutique...');
-    
-    try {
-      const detailData = {
-        // Métriques de performance
-        bounce_rate: await this.extractMetric('Bounce Rate'),
-        avg_visit_duration: await this.extractMetric('Avg. Visit Duration'),
-        conversion_rate: await this.extractMetric('Conversion Rate'),
-        
-        // Trafic par pays
-        market_us: await this.extractCountryTraffic('US'),
-        market_uk: await this.extractCountryTraffic('UK'),
-        market_de: await this.extractCountryTraffic('DE'),
-        market_ca: await this.extractCountryTraffic('CA'),
-        market_au: await this.extractCountryTraffic('AU'),
-        market_fr: await this.extractCountryTraffic('FR'),
-        
-        // Pixels
-        pixel_google: await this.extractPixel('Google'),
-        pixel_facebook: await this.extractPixel('Facebook'),
-        
-        // Année de fondation
-        year_founded: await this.extractYearFounded(),
-        
-        // AOV (Average Order Value)
-        aov: await this.extractAOV(),
-        
-        // Trafic payant
-        paid_search_traffic: await this.extractPaidSearchTraffic(),
-        cpc: await this.extractCPC(),
-        
-        // Trafic organique
-        organic_traffic: await this.extractOrganicTraffic(),
-        
-        // Trafic marqué
-        branded_traffic: await this.extractBrandedTraffic(),
-        percent_branded_traffic: await this.extractPercentBrandedTraffic(),
-        
-        scraping_status: 'details_extracted',
-        last_updated: new Date().toISOString()
-      };
-      
-      console.log('✅ Détails de la boutique extraits');
-      return detailData;
-      
-    } catch (error) {
-      console.error(`❌ Erreur extraction détails: ${error.message}`);
-      return null;
-    }
-  }
-
-  /**
-   * Retourne à la page liste (sans perdre la session)
-   * @returns {Promise<boolean>} - Succès du retour
-   */
-  async returnToListPage() {
-    console.log('⬅️ Retour à la page liste...');
-    
-    try {
-      // Retour à la page des boutiques tendances
-      await this.page.goto('https://trendtrack.io/trending-shops', { 
-        waitUntil: 'networkidle',
-        timeout: 30000 
-      });
-      
-      // Attendre que la page se charge
-      await this.page.waitForTimeout(2000);
-      
-      // Vérifier qu'on est bien sur la page liste
-      const currentUrl = this.page.url();
-      if (currentUrl.includes('trending-shops')) {
-        console.log('✅ Retour à la page liste réussi');
-        return true;
-      } else {
-        console.log('❌ Retour échoué - URL incorrecte');
-        return false;
-      }
-      
-    } catch (error) {
-      console.error(`❌ Erreur retour liste: ${error.message}`);
-      return false;
-    }
-  }
-
-  /**
-   * Extrait une métrique spécifique de la page
-   * @param {string} metricName - Nom de la métrique
-   * @returns {Promise<string>} - Valeur de la métrique
-   */
-  async extractMetric(metricName) {
-    try {
-      // Implémentation basique - à adapter selon la structure de la page
-      const selector = `text=${metricName}`;
-      const element = await this.page.locator(selector).first();
-      if (await element.count() > 0) {
-        const value = await element.textContent();
-        return value?.trim() || null;
-      }
-      return null;
-    } catch (error) {
-      console.log(`⚠️ Métrique ${metricName} non trouvée`);
-      return null;
-    }
-  }
-
-  /**
-   * Extrait le trafic d'un pays spécifique
-   * @param {string} country - Code du pays
-   * @returns {Promise<number>} - Trafic du pays
-   */
-  async extractCountryTraffic(country) {
-    try {
-      // Implémentation basique - à adapter selon la structure de la page
-      const selector = `text=${country}`;
-      const element = await this.page.locator(selector).first();
-      if (await element.count() > 0) {
-        const value = await element.textContent();
-        return this.parseNumber(value);
-      }
-      return 0;
-    } catch (error) {
-      console.log(`⚠️ Trafic ${country} non trouvé`);
-      return 0;
-    }
-  }
-
-  /**
-   * Extrait la présence d'un pixel
-   * @param {string} pixelType - Type de pixel (Google, Facebook)
-   * @returns {Promise<boolean>} - Présence du pixel
-   */
-  async extractPixel(pixelType) {
-    try {
-      // Implémentation basique - à adapter selon la structure de la page
-      const selector = `text=${pixelType}`;
-      const element = await this.page.locator(selector).first();
-      return await element.count() > 0;
-    } catch (error) {
-      console.log(`⚠️ Pixel ${pixelType} non trouvé`);
-      return false;
-    }
-  }
-
-  /**
-   * Extrait l'année de fondation
-   * @returns {Promise<number>} - Année de fondation
-   */
-  async extractYearFounded() {
-    try {
-      // Implémentation basique - à adapter selon la structure de la page
-      const selector = 'text=Founded';
-      const element = await this.page.locator(selector).first();
-      if (await element.count() > 0) {
-        const value = await element.textContent();
-        return this.parseNumber(value);
-      }
-      return null;
-    } catch (error) {
-      console.log('⚠️ Année de fondation non trouvée');
-      return null;
-    }
-  }
-
-  /**
-   * Extrait l'AOV (Average Order Value)
-   * @returns {Promise<number>} - AOV
-   */
-  async extractAOV() {
-    try {
-      // Implémentation basique - à adapter selon la structure de la page
-      const selector = 'text=AOV';
-      const element = await this.page.locator(selector).first();
-      if (await element.count() > 0) {
-        const value = await element.textContent();
-        return this.parseNumber(value);
-      }
-      return null;
-    } catch (error) {
-      console.log('⚠️ AOV non trouvé');
-      return null;
-    }
-  }
-
-  /**
-   * Extrait le trafic de recherche payante
-   * @returns {Promise<number>} - Trafic de recherche payante
-   */
-  async extractPaidSearchTraffic() {
-    try {
-      // Implémentation basique - à adapter selon la structure de la page
-      const selector = 'text=Paid Search';
-      const element = await this.page.locator(selector).first();
-      if (await element.count() > 0) {
-        const value = await element.textContent();
-        return this.parseNumber(value);
-      }
-      return 0;
-    } catch (error) {
-      console.log('⚠️ Trafic de recherche payante non trouvé');
-      return 0;
-    }
-  }
-
-  /**
-   * Extrait le CPC (Cost Per Click)
-   * @returns {Promise<number>} - CPC
-   */
-  async extractCPC() {
-    try {
-      // Implémentation basique - à adapter selon la structure de la page
-      const selector = 'text=CPC';
-      const element = await this.page.locator(selector).first();
-      if (await element.count() > 0) {
-        const value = await element.textContent();
-        return this.parseNumber(value);
-      }
-      return null;
-    } catch (error) {
-      console.log('⚠️ CPC non trouvé');
-      return null;
-    }
-  }
-
-  /**
-   * Extrait le trafic organique
-   * @returns {Promise<number>} - Trafic organique
-   */
-  async extractOrganicTraffic() {
-    try {
-      // Implémentation basique - à adapter selon la structure de la page
-      const selector = 'text=Organic';
-      const element = await this.page.locator(selector).first();
-      if (await element.count() > 0) {
-        const value = await element.textContent();
-        return this.parseNumber(value);
-      }
-      return 0;
-    } catch (error) {
-      console.log('⚠️ Trafic organique non trouvé');
-      return 0;
-    }
-  }
-
-  /**
-   * Extrait le trafic marqué
-   * @returns {Promise<number>} - Trafic marqué
-   */
-  async extractBrandedTraffic() {
-    try {
-      // Implémentation basique - à adapter selon la structure de la page
-      const selector = 'text=Branded';
-      const element = await this.page.locator(selector).first();
-      if (await element.count() > 0) {
-        const value = await element.textContent();
-        return this.parseNumber(value);
-      }
-      return 0;
-    } catch (error) {
-      console.log('⚠️ Trafic marqué non trouvé');
-      return 0;
-    }
-  }
-
-  /**
-   * Extrait le pourcentage de trafic marqué
-   * @returns {Promise<number>} - Pourcentage de trafic marqué
-   */
-  async extractPercentBrandedTraffic() {
-    try {
-      // Implémentation basique - à adapter selon la structure de la page
-      const selector = 'text=% Branded';
-      const element = await this.page.locator(selector).first();
-      if (await element.count() > 0) {
-        const value = await element.textContent();
-        return this.parseNumber(value);
-      }
-      return null;
-    } catch (error) {
-      console.log('⚠️ Pourcentage de trafic marqué non trouvé');
-      return null;
     }
   }
 
@@ -1233,56 +755,12 @@ export class TrendTrackExtractor extends BaseExtractor {
     console.log(`📊 Extraction pixels (JS) pour: ${shopId}`);
     const pixelData = { pixel_google: "non", pixel_facebook: "non" };
     try {
-      const detailUrl = `https://app.trendtrack.io/fr/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops/${shopId}`;
+      const detailUrl = `https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/shop/${shopId}`;
       await this.page.goto(detailUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
       await this.page.waitForTimeout(2000);
 
-      // Détection améliorée des pixels Facebook
-      const facebookSelectors = [
-        'img[alt="facebook"][src*="meta-icon.svg"]',
-        'img[alt="facebook"]',
-        'img[src*="facebook"]',
-        'img[src*="meta-icon"]',
-        '[class*="facebook"]',
-        'script[src*="facebook"]',
-        'script[src*="fbevents"]'
-      ];
-      
-      let facebookPixel = false;
-      for (const selector of facebookSelectors) {
-        try {
-          if (await this.page.locator(selector).isVisible()) {
-            facebookPixel = true;
-            break;
-          }
-        } catch (e) {
-          // Ignorer les erreurs de sélecteur
-        }
-      }
-      
-      // Détection améliorée des pixels Google
-      const googleSelectors = [
-        'img[alt="google"][src*="google-icon.svg"]',
-        'img[alt="google"]',
-        'img[src*="google"]',
-        'img[src*="google-icon"]',
-        '[class*="google"]',
-        'script[src*="google-analytics"]',
-        'script[src*="gtag"]',
-        'script[src*="googletagmanager"]'
-      ];
-      
-      let googlePixel = false;
-      for (const selector of googleSelectors) {
-        try {
-          if (await this.page.locator(selector).isVisible()) {
-            googlePixel = true;
-            break;
-          }
-        } catch (e) {
-          // Ignorer les erreurs de sélecteur
-        }
-      }
+      const facebookPixel = await this.page.locator('img[alt="facebook"][src*="meta-icon.svg"]').isVisible();
+      const googlePixel = await this.page.locator('img[alt="google"][src*="google-icon.svg"]').isVisible();
 
       if (facebookPixel) {
         pixelData.pixel_facebook = "oui";
@@ -1298,63 +776,44 @@ export class TrendTrackExtractor extends BaseExtractor {
     }
   }
 
-
-  async checkSession() {
-    try {
-      const currentUrl = this.page.url();
-      if (currentUrl.includes('/login')) {
-        console.log('❌ Session expirée - Redirection vers login détectée');
-        return false;
-      }
-      
-      // Vérifier qu'on est sur une page TrendTrack valide
-      if (!currentUrl.includes('trendtrack.io')) {
-        console.log('❌ Session invalide - Pas sur TrendTrack');
-        return false;
-      }
-      
-      return true;
-    } catch (error) {
-      console.log(`❌ Erreur vérification session: ${error.message}`);
-      return false;
-    }
-  }
-
-  async ensureAuthenticated() {
-    if (!(await this.checkSession())) {
-      console.log('🔄 Session expirée, reconnexion nécessaire...');
-      // Ici on pourrait implémenter une reconnexion automatique
-      // Pour l'instant, on retourne false pour arrêter l'extraction
-      return false;
-    }
-    return true;
-  }
-
   async extractMarketTrafficForShopJS(shopId, targets = ["us", "uk", "de", "ca", "au", "fr"]) {
     console.log(`🌍 Extraction trafic par pays (JS) pour: ${shopId}`);
     const extractedMarkets = { ...targets.reduce((acc, t) => ({ ...acc, [`market_${t}`]: null }), {}) };
 
     try {
-      // Vérifier la session avant de continuer
-      if (!(await this.ensureAuthenticated())) {
-        console.log('❌ Session non valide, arrêt de l\'extraction trafic par pays');
-        return extractedMarkets;
-      }
-      const detailUrl = `https://app.trendtrack.io/fr/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops/${shopId}`;
+      const detailUrl = `https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/shop/${shopId}`;
       await this.page.goto(detailUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
       await this.page.waitForTimeout(2000);
 
-      // Attendre le bloc "Trafic par pays" (logique exacte du script Python)
-      try {
-        await this.page.waitForSelector('h3:has-text("Trafic par pays")', { state: "visible", timeout: 10000 });
-        console.log('✅ Section "Trafic par pays" trouvée');
-      } catch (error) {
+      // Essayer plusieurs sélecteurs pour trouver la section "Trafic par pays"
+      let sectionFound = false;
+      let workingSelector = null;
+      const selectors = [
+        'h3:has-text("Trafic par pays")',
+        'h3:has-text("Traffic by Country")',
+        'h3.font-semibold.tracking-tight.text-lg:has-text("Trafic")',
+        'h3.font-semibold.tracking-tight.text-lg:has-text("Traffic")'
+      ];
+      
+      for (const selector of selectors) {
+        try {
+          await this.page.waitForSelector(selector, { state: "visible", timeout: 5000 });
+          console.log(`✅ Section trouvée avec le sélecteur: ${selector}`);
+          sectionFound = true;
+          workingSelector = selector;
+          break;
+        } catch (error) {
+          console.log(`⚠️ Sélecteur ${selector} non trouvé, essai suivant...`);
+        }
+      }
+      
+      if (!sectionFound) {
         console.log('⚠️ Section "Trafic par pays" non trouvée sur cette page');
         return extractedMarkets;
       }
 
-      // Localiser la carte contenant les données (logique exacte du script Python)
-      const card = this.page.locator('h3:has-text("Trafic par pays")').locator('xpath=ancestor::div[contains(@class,"bg-card")]').first();
+      // Localiser la carte contenant les données avec le sélecteur qui a fonctionné
+      const card = this.page.locator(workingSelector).locator('xpath=ancestor::div[contains(@class,"bg-card")]').first();
       const rows = card.locator("div.flex.gap-2.w-full.items-center");
       const count = await rows.count();
 

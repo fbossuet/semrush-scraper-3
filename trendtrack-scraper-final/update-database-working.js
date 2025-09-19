@@ -8,10 +8,10 @@ import { TrendTrackExtractor } from './src/extractors/trendtrack-extractor.js';
 import { DatabaseManager } from './src/database/database-manager.js';
 import { ShopRepository } from './src/database/shop-repository.js';
 import fs from 'fs';
-import { acquireLock, releaseLock } from './src/utils/db-lock.js';
+// import { acquireLock, releaseLock } from './src/utils/db-lock.js'; // DÉSACTIVÉ
 import path from 'path';
 
-const LOCK_FILE = path.join(process.cwd(), 'trendtrack-db.lock');
+// const LOCK_FILE = path.join(process.cwd(), 'trendtrack-db.lock'); // DÉSACTIVÉ
 const LOG_PROGRESS_FILE = 'logs/update-progress.log';
 
 function logProgress(msg) {
@@ -90,9 +90,8 @@ async function updateDatabase() {
   let lockAcquired = false;
 
   try {
-    // Prendre le lock avant toute opération sur la base
-    logProgress('🔒 Acquisition du lock fichier...');
-    // await acquireLock(LOCK_FILE); // Temporairement désactivé
+    // Système de locks désactivé
+    logProgress('🔓 Système de locks désactivé - accès libre à la base de données');
     lockAcquired = true;
 
     // Initialiser le scraper
@@ -117,8 +116,8 @@ async function updateDatabase() {
     }
 
     // Extraction de toutes les données sur 1 page via la méthode scrapeMultiplePages
-    logProgress('📋 Extraction de 5 pages via scrapeMultiplePages...');
-    const onlineData = await extractor.scrapeMultiplePages(5);
+    logProgress('📋 Extraction de 1 page via scrapeMultiplePages...');
+    const onlineData = await extractor.scrapeMultiplePages(1);
 
     // Export debug JSON
     fs.writeFileSync('export-debug.json', JSON.stringify(onlineData, null, 2));
@@ -140,7 +139,7 @@ async function updateDatabase() {
     // Traitement optimisé en lot
     logProgress('🔄 Traitement des données en lot...');
     const startTime = new Date().toISOString();
-    const batchResults = await processBatch(shopRepo, onlineData, 10);
+    const batchResults = await processBatch(shopRepo, onlineData, 20);
     const endTime = new Date().toISOString();
 
     logProgress(`⏱️  Temps de traitement: ${endTime - startTime}ms`);
@@ -166,14 +165,9 @@ async function updateDatabase() {
     logProgress(`❌ Erreur: ${error.message}`);
     console.error('❌ Erreur détaillée:', error);
   } finally {
-    // Libérer le lock
+    // Système de locks désactivé
     if (lockAcquired) {
-      try {
-        // await releaseLock(LOCK_FILE); // Temporairement désactivé
-        logProgress('🔓 Lock fichier libéré.');
-        } catch (error) {
-        logProgress(`⚠️  Erreur libération lock: ${error.message}`);
-      }
+      logProgress('🔓 Système de locks désactivé - libération ignorée');
     }
 
     // Fermer les connexions

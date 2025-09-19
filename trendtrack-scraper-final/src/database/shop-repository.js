@@ -242,6 +242,146 @@ export class ShopRepository {
   }
 
   /**
+   * Insère UNIQUEMENT les données du tableau (nouvelle méthode pour architecture parallèle)
+   * @param {Object} shopData - Données du tableau uniquement
+   * @returns {Promise<number>} - ID de la boutique insérée
+   */
+  async insertTableData(shopData) {
+    try {
+      const normalizedUrl = ShopRepository.normalizeUrl(shopData.shop_url || shopData.shopUrl);
+      
+      const query = `
+        INSERT INTO shops (
+          shop_name, shop_url, category, monthly_visits, monthly_revenue,
+          total_products, live_ads_7d, live_ads_30d, scraping_status, last_updated
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      
+      const params = [
+        shopData.shop_name || shopData.shopName,
+        normalizedUrl,
+        shopData.category,
+        shopData.monthly_visits || 0,
+        shopData.monthly_revenue || 0,
+        shopData.total_products || 0,
+        shopData.live_ads_7d || 0,
+        shopData.live_ads_30d || 0,
+        'table_extracted',
+        new Date().toISOString()
+      ];
+      
+      const result = await this.db.run(query, params);
+      this._clearCache();
+      
+      console.log(`✅ Boutique insérée avec ID: ${result.lastID}`);
+      return result.lastID;
+      
+    } catch (error) {
+      console.error('❌ Erreur insertion données tableau:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Met à jour UNIQUEMENT les données du tableau (nouvelle méthode pour architecture parallèle)
+   * @param {number} id - ID de la boutique
+   * @param {Object} shopData - Données du tableau
+   * @returns {Promise<boolean>} - Succès de la mise à jour
+   */
+  async updateTableData(id, shopData) {
+    try {
+      const normalizedUrl = ShopRepository.normalizeUrl(shopData.shop_url || shopData.shopUrl);
+      
+      const query = `
+        UPDATE shops SET
+          shop_name = ?, shop_url = ?, category = ?, monthly_visits = ?,
+          monthly_revenue = ?, total_products = ?, live_ads_7d = ?, live_ads_30d = ?,
+          scraping_status = ?, last_updated = ?
+        WHERE id = ?
+      `;
+      
+      const params = [
+        shopData.shop_name || shopData.shopName,
+        normalizedUrl,
+        shopData.category,
+        shopData.monthly_visits || 0,
+        shopData.monthly_revenue || 0,
+        shopData.total_products || 0,
+        shopData.live_ads_7d || 0,
+        shopData.live_ads_30d || 0,
+        'table_extracted',
+        new Date().toISOString(),
+        id
+      ];
+      
+      const result = await this.db.run(query, params);
+      this._clearCache();
+      
+      console.log(`✅ Données tableau mises à jour pour ID: ${id}`);
+      return result.changes > 0;
+      
+    } catch (error) {
+      console.error('❌ Erreur mise à jour données tableau:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Met à jour UNIQUEMENT les métriques de détail (nouvelle méthode pour architecture parallèle)
+   * @param {number} id - ID de la boutique
+   * @param {Object} detailData - Données de détail
+   * @returns {Promise<boolean>} - Succès de la mise à jour
+   */
+  async updateDetailMetrics(id, detailData) {
+    try {
+      const query = `
+        UPDATE shops SET
+          bounce_rate = ?, avg_visit_duration = ?, conversion_rate = ?,
+          market_us = ?, market_uk = ?, market_de = ?, market_ca = ?, market_au = ?, market_fr = ?,
+          pixel_google = ?, pixel_facebook = ?, year_founded = ?, aov = ?,
+          paid_search_traffic = ?, cpc = ?, organic_traffic = ?,
+          branded_traffic = ?, percent_branded_traffic = ?,
+          scraping_status = ?, last_updated = ?
+        WHERE id = ?
+      `;
+      
+      const params = [
+        detailData.bounce_rate || null,
+        detailData.avg_visit_duration || null,
+        detailData.conversion_rate || null,
+        detailData.market_us || 0,
+        detailData.market_uk || 0,
+        detailData.market_de || 0,
+        detailData.market_ca || 0,
+        detailData.market_au || 0,
+        detailData.market_fr || 0,
+        detailData.pixel_google ? 1 : 0,
+        detailData.pixel_facebook ? 1 : 0,
+        detailData.year_founded || null,
+        detailData.aov || null,
+        detailData.paid_search_traffic || 0,
+        detailData.cpc || null,
+        detailData.organic_traffic || 0,
+        detailData.branded_traffic || 0,
+        detailData.percent_branded_traffic || null,
+        'details_extracted',
+        new Date().toISOString(),
+        id
+      ];
+      
+      const result = await this.db.run(query, params);
+      this._clearCache();
+      
+      console.log(`✅ Métriques de détail mises à jour pour ID: ${id}`);
+      return result.changes > 0;
+      
+    } catch (error) {
+      console.error('❌ Erreur mise à jour métriques détail:', error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Met à jour une boutique
    */
   async update(id, shopData) {

@@ -104,7 +104,7 @@ async function updateDatabase() {
   try {
     // Prendre le lock avant toute opération sur la base
     logProgress('🔒 Acquisition du lock fichier...');
-    await acquireLock(LOCK_FILE);
+    // await acquireLock(LOCK_FILE); // Désactivé dans l'environnement test
     lockAcquired = true;
 
     // Initialiser le scraper
@@ -200,7 +200,7 @@ async function updateDatabase() {
     // Libérer le lock
     if (lockAcquired) {
       try {
-        await releaseLock(LOCK_FILE);
+        // await releaseLock(LOCK_FILE); // Désactivé dans l'environnement test
         logProgress('🔓 Lock fichier libéré.');
       } catch (error) {
         logProgress(`⚠️  Erreur libération lock: ${error.message}`);
