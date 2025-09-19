@@ -58,11 +58,9 @@ class MarketTrafficExtractor:
                 page = await context.new_page()
                 
                 # CORRECTION: Construire l'URL TrendTrack pour cette boutique
-                # Format: https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/shop/[shop_id]
-                # Pour l'instant, on utilise une URL générique - à améliorer avec l'ID réel
-                trendtrack_url = f"https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops"
-                logger.info(f"🌐 Navigation vers TrendTrack: {trendtrack_url}")
-                await page.goto(trendtrack_url, wait_until='domcontentloaded', timeout=30000)
+                # Utiliser l'URL directe de la boutique fournie
+                logger.info(f"🌐 Navigation vers la page de détail boutique: {shop_url}")
+                await page.goto(shop_url, wait_until='domcontentloaded', timeout=30000)
                 
                 # Initialiser les résultats
                 market_data = {
@@ -75,9 +73,100 @@ class MarketTrafficExtractor:
                     "extracted_at": datetime.now(timezone.utc).isoformat()
                 }
                 
-                # Pour l'instant, retourner des données simulées
-                # TODO: Implémenter l'extraction réelle depuis TrendTrack
-                logger.info("⚠️ Extraction simulée - à implémenter avec l'API TrendTrack réelle")
+                # Attendre que la page se charge complètement
+                await page.wait_for_timeout(3000)
+                
+                # Extraire les données de trafic par pays
+                try:
+                    # Attendre la section "Trafic par pays" avec timeout augmenté
+                    logger.info("🔍 Recherche de la section 'Trafic par pays'...")
+                    
+                    # Essayer plusieurs sélecteurs pour la section
+                    section_found = False
+                    selectors_to_try = [
+                        'h3:has-text("Trafic par pays")',
+                        'h3.font-semibold.tracking-tight.text-lg',
+                        'h3:has-text("Traffic by Country")'
+                    ]
+                    
+                    for selector in selectors_to_try:
+                        try:
+                            await page.wait_for_selector(selector, timeout=10000)
+                            logger.info(f"✅ Section trouvée avec le sélecteur: {selector}")
+                            section_found = True
+                            break
+                        except:
+                            logger.info(f"⚠️ Sélecteur {selector} non trouvé, essai suivant...")
+                            continue
+                    
+                    if not section_found:
+                        logger.warning("⚠️ Section 'Trafic par pays' non trouvée sur cette page")
+                        return market_data
+                    
+                    # Extraire les données des pays
+                    country_data = await page.evaluate("""
+                        () => {
+                            const marketData = {
+                                market_us: null,
+                                market_uk: null,
+                                market_de: null,
+                                market_ca: null,
+                                market_au: null,
+                                market_fr: null
+                            };
+                            
+                            // Chercher tous les éléments de pays
+                            const countryElements = document.querySelectorAll('.flex.gap-2.w-full.items-center');
+                            
+                            countryElements.forEach(el => {
+                                try {
+                                    const img = el.querySelector('img');
+                                    const percentageEl = el.querySelector('p:last-child');
+                                    
+                                    if (img && percentageEl) {
+                                        const countryCode = img.alt.toLowerCase();
+                                        const percentageText = percentageEl.textContent.replace('%', '').trim();
+                                        const percentage = parseFloat(percentageText) / 100; // Convertir en décimal
+                                        
+                                        // Mapper les codes pays
+                                        switch(countryCode) {
+                                            case 'us':
+                                                marketData.market_us = percentage;
+                                                break;
+                                            case 'gb':
+                                                marketData.market_uk = percentage;
+                                                break;
+                                            case 'de':
+                                                marketData.market_de = percentage;
+                                                break;
+                                            case 'ca':
+                                                marketData.market_ca = percentage;
+                                                break;
+                                            case 'au':
+                                                marketData.market_au = percentage;
+                                                break;
+                                            case 'fr':
+                                                marketData.market_fr = percentage;
+                                                break;
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.log('Erreur parsing pays:', e);
+                                }
+                            });
+                            
+                            return marketData;
+                        }
+                    """)
+                    
+                    if country_data:
+                        market_data.update(country_data)
+                        logger.info(f"✅ Données de trafic extraites: {country_data}")
+                    else:
+                        logger.warning("⚠️ Aucune donnée de trafic par pays trouvée")
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ Erreur extraction trafic par pays: {e}")
                 
                 await browser.close()
                 
