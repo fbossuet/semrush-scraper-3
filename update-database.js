@@ -8,10 +8,10 @@ import { TrendTrackExtractor } from './src/extractors/trendtrack-extractor.js';
 import { DatabaseManager } from './src/database/database-manager.js';
 import { ShopRepository } from './src/database/shop-repository.js';
 import fs from 'fs';
-import { acquireLock, releaseLock } from './src/utils/db-lock.js';
+// import { acquireLock, releaseLock } from './src/utils/db-lock.js'; // DÉSACTIVÉ
 import path from 'path';
 
-const LOCK_FILE = path.join(process.cwd(), 'trendtrack-db.lock');
+// const LOCK_FILE = path.join(process.cwd(), 'trendtrack-db.lock'); // DÉSACTIVÉ
 const LOG_PROGRESS_FILE = 'logs/update-progress.log';
 
 function logProgress(msg) {
@@ -90,9 +90,8 @@ async function updateDatabase() {
   let lockAcquired = false;
 
   try {
-    // Prendre le lock avant toute opération sur la base
-    logProgress('🔒 Acquisition du lock fichier...');
-    await acquireLock(LOCK_FILE);
+    // Système de locks désactivé
+    logProgress('🔓 Système de locks désactivé - accès libre à la base de données');
     lockAcquired = true;
 
     // Initialiser le scraper
@@ -166,14 +165,9 @@ async function updateDatabase() {
     logProgress(`❌ Erreur: ${error.message}`);
     console.error('❌ Erreur détaillée:', error);
   } finally {
-    // Libérer le lock
+    // Système de locks désactivé
     if (lockAcquired) {
-      try {
-        await releaseLock(LOCK_FILE);
-        logProgress('🔓 Lock fichier libéré.');
-        } catch (error) {
-        logProgress(`⚠️  Erreur libération lock: ${error.message}`);
-      }
+      logProgress('🔓 Système de locks désactivé - libération ignorée');
     }
 
     // Fermer les connexions

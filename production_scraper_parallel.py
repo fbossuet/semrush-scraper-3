@@ -1257,8 +1257,8 @@ class ParallelProductionScraper:
             import subprocess
             import json
             
-            base_dir = "/home/ubuntu/projects/shopshopshops/test"
-            script_path = os.path.join(base_dir, "trendtrack-scraper-final", "python_bridge", "market_traffic_extractor.py")
+            # Utiliser le fichier local corrigé
+            script_path = os.path.join(os.getcwd(), "market_traffic_extractor.py")
             
             result = subprocess.run([
                 "python3", script_path, domain
