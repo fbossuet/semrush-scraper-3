@@ -274,6 +274,23 @@ export class TrendTrackExtractor extends BaseExtractor {
       const liveAdsDiv = await cells[7].locator('div.flex.items-center.justify-center.font-semibold');
       const liveAdsP = await liveAdsDiv.locator('p').first();
       shopData.liveAds = liveAdsP ? (await liveAdsP.textContent()).trim() : '';
+
+      // 🆕 Extraction directe du nombre de produits (colonne 2)
+      try {
+        const productsCell = cells[2]; // 3ème colonne (index 2)
+        const productsP = productsCell.locator('p:has(> span:has-text("products"))');
+        const productsText = await productsP.textContent();
+        if (productsText) {
+          const match = productsText.match(/\d[\d\s.,]*/);
+          shopData.totalProducts = match ? Number(match[0].replace(/[^\d]/g, "")) : null;
+          console.log(`📦 Produits extraits pour ${shopData.shopName}: ${shopData.totalProducts}`);
+        } else {
+          shopData.totalProducts = null;
+        }
+      } catch (error) {
+        console.error(`⚠️ Erreur extraction produits pour ${shopData.shopName}:`, error.message);
+        shopData.totalProducts = null;
+      }
       
       // 🆕 Récupération de l'année de fondation via API
       if (shopData.shopUrl) {

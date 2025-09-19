@@ -73,41 +73,17 @@ class LockManager:
         self.lock_path = self.lock_dir / self.lock_file
     
     def acquire_lock(self) -> bool:
-        """Acquiert le lock global (un seul lock pour tous les workers)"""
-        try:
-            if self.lock_path.exists():
-                # Vérifier si le lock est ancien (plus de 5 minutes)
-                lock_age = time.time() - self.lock_path.stat().st_mtime
-                if lock_age > 300:  # 5 minutes
-                    logger.warning(f"⚠️ Worker {self.worker_id}: Lock ancien détecté, suppression...")
-                    self.lock_path.unlink()
-                else:
-                    logger.warning(f"⚠️ Worker {self.worker_id}: Lock global déjà existant")
-                    return False
-            
-            # Créer le lock global
-            with open(self.lock_path, 'w') as f:
-                f.write(f"Global Lock - Worker {self.worker_id} - {DateConverter.convert_to_iso8601_utc(datetime.now(timezone.utc))}")
-            
-            logger.info(f"✅ Worker {self.worker_id}: Lock global acquis")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur acquisition lock: {e}")
-            return False
+        """Acquiert le lock global (DÉSACTIVÉ - retourne toujours True)"""
+        logger.info(f"🔓 Worker {self.worker_id}: Système de locks désactivé - accès libre")
+        return True
     
     def release_lock(self):
-        """Libère le lock global"""
-        try:
-            if self.lock_path.exists():
-                self.lock_path.unlink()
-                logger.info(f"✅ Worker {self.worker_id}: Lock global libéré")
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur libération lock: {e}")
+        """Libère le lock global (DÉSACTIVÉ - ne fait rien)"""
+        logger.info(f"🔓 Worker {self.worker_id}: Système de locks désactivé - libération ignorée")
     
     def is_locked(self) -> bool:
-        """Vérifie si le lock global existe"""
-        return self.lock_path.exists()
+        """Vérifie si le lock global existe (DÉSACTIVÉ - retourne toujours False)"""
+        return False
 
 class ParallelProductionScraper:
     """Scraper de production parallélisé avec session partagée"""
@@ -1258,8 +1234,8 @@ class ParallelProductionScraper:
             import subprocess
             import json
             
-            base_dir = "/home/ubuntu/projects/shopshopshops/test"
-            script_path = os.path.join(base_dir, "trendtrack-scraper-final", "python_bridge", "market_traffic_extractor.py")
+            # Utiliser le fichier local corrigé
+            script_path = os.path.join(os.getcwd(), "market_traffic_extractor.py")
             
             result = subprocess.run([
                 "python3", script_path, domain
