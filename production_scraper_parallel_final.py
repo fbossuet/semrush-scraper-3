@@ -71,41 +71,17 @@ class LockManager:
         self.lock_path = self.lock_dir / self.lock_file
     
     def acquire_lock(self) -> bool:
-        """Acquiert le lock global (un seul lock pour tous les workers)"""
-        try:
-            if self.lock_path.exists():
-                # Vérifier si le lock est ancien (plus de 5 minutes)
-                lock_age = time.time() - self.lock_path.stat().st_mtime
-                if lock_age > 300:  # 5 minutes
-                    logger.warning(f"⚠️ Worker {self.worker_id}: Lock ancien détecté, suppression...")
-                    self.lock_path.unlink()
-                else:
-                    logger.warning(f"⚠️ Worker {self.worker_id}: Lock global déjà existant")
-                    return False
-            
-            # Créer le lock global
-            with open(self.lock_path, 'w') as f:
-                f.write(f"Global Lock - Worker {self.worker_id} - {DateConverter.convert_to_iso8601_utc(datetime.now(timezone.utc))}")
-            
-            logger.info(f"✅ Worker {self.worker_id}: Lock global acquis")
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur acquisition lock: {e}")
-            return False
+        """Acquiert le lock global (DÉSACTIVÉ - retourne toujours True)"""
+        logger.info(f"🔓 Worker {self.worker_id}: Système de locks désactivé - accès libre")
+        return True
     
     def release_lock(self):
-        """Libère le lock global"""
-        try:
-            if self.lock_path.exists():
-                self.lock_path.unlink()
-                logger.info(f"✅ Worker {self.worker_id}: Lock global libéré")
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur libération lock: {e}")
+        """Libère le lock global (DÉSACTIVÉ - ne fait rien)"""
+        logger.info(f"🔓 Worker {self.worker_id}: Système de locks désactivé - libération ignorée")
     
     def is_locked(self) -> bool:
-        """Vérifie si le lock global existe"""
-        return self.lock_path.exists()
+        """Vérifie si le lock global existe (DÉSACTIVÉ - retourne toujours False)"""
+        return False
 
 class ParallelProductionScraper:
     """Scraper de production parallélisé avec session partagée"""
@@ -133,6 +109,9 @@ class ParallelProductionScraper:
             'pixel_google': {'found': 0, 'not_found': 0, 'skipped': 0},
             'pixel_facebook': {'found': 0, 'not_found': 0, 'skipped': 0},
             'aov': {'found': 0, 'not_found': 0, 'skipped': 0},
+            # P0: Variations Live Ads
+            'live_ads_7d': {'found': 0, 'not_found': 0, 'skipped': 0},
+            'live_ads_30d': {'found': 0, 'not_found': 0, 'skipped': 0},
             'market_us': {'found': 0, 'not_found': 0, 'skipped': 0},
             'market_uk': {'found': 0, 'not_found': 0, 'skipped': 0},
             'market_de': {'found': 0, 'not_found': 0, 'skipped': 0},
@@ -1256,8 +1235,8 @@ class ParallelProductionScraper:
             import subprocess
             import json
             
-            base_dir = "/home/ubuntu/projects/shopshopshops/test"
-            script_path = os.path.join(base_dir, "trendtrack-scraper-final", "python_bridge", "market_traffic_extractor.py")
+            # Utiliser le fichier local corrigé
+            script_path = os.path.join(os.getcwd(), "market_traffic_extractor.py")
             
             result = subprocess.run([
                 "python3", script_path, domain
@@ -1277,6 +1256,40 @@ class ParallelProductionScraper:
                 
         except Exception as e:
             logger.error(f"❌ Worker {self.worker_id}: Erreur market traffic: {e}")
+            return {}
+    
+    async def scrape_live_ads_progression(self, domain: str) -> dict:
+        """
+        Récupère les variations de Live Ads (live_ads_7d, live_ads_30d)
+        """
+        try:
+            logger.info(f"📊 Worker {self.worker_id}: Récupération progression Live Ads pour {domain}")
+            
+            # Appeler le script Python via subprocess
+            import subprocess
+            import json
+            
+            # Utiliser le fichier local
+            script_path = os.path.join(os.getcwd(), "live_ads_progression_extractor.py")
+            
+            result = subprocess.run([
+                "python3", script_path, f"https://{domain}"
+            ], capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                try:
+                    progression_data = json.loads(result.stdout)
+                    logger.info(f"✅ Worker {self.worker_id}: Progression Live Ads récupérée: {progression_data}")
+                    return progression_data
+                except json.JSONDecodeError:
+                    logger.warning(f"⚠️ Worker {self.worker_id}: Erreur parsing JSON progression Live Ads")
+                    return {}
+            else:
+                logger.warning(f"⚠️ Worker {self.worker_id}: Erreur script progression Live Ads: {result.stderr}")
+                return {}
+                
+        except Exception as e:
+            logger.error(f"❌ Worker {self.worker_id}: Erreur progression Live Ads: {e}")
             return {}
     
     async def scrape_pixel_data(self, domain: str) -> dict:
@@ -2254,6 +2267,14 @@ class ParallelProductionScraper:
                             for pixel_key, pixel_value in pixel_data.items():
                                 setattr(self, pixel_key, pixel_value)
                                 logger.info(f"✅ Worker {self.worker_id}: {pixel_key}: {pixel_value}")
+                        
+                        # 3. P0: Progression Live Ads (7d et 30d)
+                        progression_data = await self.scrape_live_ads_progression(domain)
+                        if progression_data:
+                            for progression_key, progression_value in progression_data.items():
+                                if progression_key in ['live_ads_7d', 'live_ads_30d'] and progression_value is not None:
+                                    setattr(self, progression_key, str(progression_value))
+                                    logger.info(f"✅ Worker {self.worker_id}: {progression_key}: {progression_value}%")
                         
                         # 3. Total products
                         total_products = await self.scrape_total_products(domain)
