@@ -109,6 +109,9 @@ class ParallelProductionScraper:
             'pixel_google': {'found': 0, 'not_found': 0, 'skipped': 0},
             'pixel_facebook': {'found': 0, 'not_found': 0, 'skipped': 0},
             'aov': {'found': 0, 'not_found': 0, 'skipped': 0},
+            # P0: Variations Live Ads
+            'live_ads_7d': {'found': 0, 'not_found': 0, 'skipped': 0},
+            'live_ads_30d': {'found': 0, 'not_found': 0, 'skipped': 0},
             'market_us': {'found': 0, 'not_found': 0, 'skipped': 0},
             'market_uk': {'found': 0, 'not_found': 0, 'skipped': 0},
             'market_de': {'found': 0, 'not_found': 0, 'skipped': 0},
@@ -1255,6 +1258,40 @@ class ParallelProductionScraper:
             logger.error(f"❌ Worker {self.worker_id}: Erreur market traffic: {e}")
             return {}
     
+    async def scrape_live_ads_progression(self, domain: str) -> dict:
+        """
+        Récupère les variations de Live Ads (live_ads_7d, live_ads_30d)
+        """
+        try:
+            logger.info(f"📊 Worker {self.worker_id}: Récupération progression Live Ads pour {domain}")
+            
+            # Appeler le script Python via subprocess
+            import subprocess
+            import json
+            
+            # Utiliser le fichier local
+            script_path = os.path.join(os.getcwd(), "live_ads_progression_extractor.py")
+            
+            result = subprocess.run([
+                "python3", script_path, f"https://{domain}"
+            ], capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                try:
+                    progression_data = json.loads(result.stdout)
+                    logger.info(f"✅ Worker {self.worker_id}: Progression Live Ads récupérée: {progression_data}")
+                    return progression_data
+                except json.JSONDecodeError:
+                    logger.warning(f"⚠️ Worker {self.worker_id}: Erreur parsing JSON progression Live Ads")
+                    return {}
+            else:
+                logger.warning(f"⚠️ Worker {self.worker_id}: Erreur script progression Live Ads: {result.stderr}")
+                return {}
+                
+        except Exception as e:
+            logger.error(f"❌ Worker {self.worker_id}: Erreur progression Live Ads: {e}")
+            return {}
+    
     async def scrape_pixel_data(self, domain: str) -> dict:
         """
         Récupère les données de pixels (pixel_google, pixel_facebook)
@@ -2230,6 +2267,14 @@ class ParallelProductionScraper:
                             for pixel_key, pixel_value in pixel_data.items():
                                 setattr(self, pixel_key, pixel_value)
                                 logger.info(f"✅ Worker {self.worker_id}: {pixel_key}: {pixel_value}")
+                        
+                        # 3. P0: Progression Live Ads (7d et 30d)
+                        progression_data = await self.scrape_live_ads_progression(domain)
+                        if progression_data:
+                            for progression_key, progression_value in progression_data.items():
+                                if progression_key in ['live_ads_7d', 'live_ads_30d'] and progression_value is not None:
+                                    setattr(self, progression_key, str(progression_value))
+                                    logger.info(f"✅ Worker {self.worker_id}: {progression_key}: {progression_value}%")
                         
                         # 3. Total products
                         total_products = await self.scrape_total_products(domain)
