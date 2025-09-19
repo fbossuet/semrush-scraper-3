@@ -3,16 +3,20 @@
  * Extrait les données des boutiques tendances avec pagination
  */
 
-import { BaseExtractor } from './src/extractors/base-extractor.js';
-import { MarketTrafficPythonBridge } from './src/extractors/market-traffic-python-bridge.js';
-import { AdditionalMetricsPythonBridge } from './src/extractors/additional-metrics-python-bridge.js';
+import { BaseExtractor } from './base-extractor.js';
+import { MarketTrafficExtractor } from './market-traffic-extractor.js';
+import { MarketTrafficPythonBridge } from './market-traffic-python-bridge.js';
+import { AdditionalMetricsPythonBridge } from './additional-metrics-python-bridge.js';
 
 export class TrendTrackExtractor extends BaseExtractor {
   constructor(page, errorHandler) {
     super(page, errorHandler);
     
-    // Initialiser les ponts Python pour les métriques avancées
-    this.marketTrafficBridge = new MarketTrafficPythonBridge();
+    // Initialiser l'extracteur de trafic par pays (JavaScript)
+    this.marketTrafficExtractor = new MarketTrafficExtractor(page);
+    
+    // Initialiser le pont Python pour les nouvelles fonctionnalités
+    this.marketTrafficPythonBridge = new MarketTrafficPythonBridge();
     this.additionalMetricsBridge = new AdditionalMetricsPythonBridge();
     
     // Sélecteurs spécifiques à TrendTrack basés sur l'analyse HTML
@@ -32,6 +36,11 @@ export class TrendTrackExtractor extends BaseExtractor {
         multiple: false
       },
       
+      // Catégorie
+      category: {
+        selector: 'td div.h-full.w-full.flex.items-center.justify-center.text-center.flex-col.font-semibold div',
+        multiple: false
+      },
       
       // Visites mensuelles
       monthlyVisits: {
@@ -97,7 +106,7 @@ export class TrendTrackExtractor extends BaseExtractor {
       });
       
       // Attendre que le formulaire soit chargé
-      await this.page.waitForSelector('input[type="email"][name="email"]', { timeout: 10000 });
+      await this.page.waitForSelector('input[type="email"][name="email"]', { timeout: 30000 });
       
       // Attendre 3 secondes comme dans le test visuel
       await this.page.waitForTimeout(3000);
@@ -117,7 +126,7 @@ export class TrendTrackExtractor extends BaseExtractor {
       
       // Vérifier que la connexion a réussi en cherchant un élément de la page d'accueil
       try {
-        await this.page.waitForSelector('a[href*="trending-shops"]', { timeout: 10000 });
+        await this.page.waitForSelector('a[href*="trending-shops"]', { timeout: 30000 });
         console.log('✅ Connexion réussie - Page d\'accueil détectée');
         return true;
       } catch (error) {
@@ -152,12 +161,27 @@ export class TrendTrackExtractor extends BaseExtractor {
   async navigateToTrendingShops(page = 1) {
     console.log(`📊 Navigation vers les boutiques tendances (page ${page})...`);
     try {
-      // URL complète avec tous les paramètres (corrigée)
-      // Ancienne URL (commentée)
-      // let url = 'https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops?minTraffic=10000&creationCountry=US&include=true&languages=en&currencies=USD&orderBy=liveAds&growth=1m=100=greater&minGrowth=100';
+      // Vérifier qu'on est bien connecté et sur la page d'accueil
+      const currentUrl = this.page.url();
+      console.log(`🔍 URL actuelle: ${currentUrl}`);
       
-                  // Nouvelle URL avec paramètres mis à jour
-            let url = 'https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops?include=true&tab=websites&minTraffic=500000&minAds=120&languages=en&currencies=USD&creationCountry=US=include&maxAds=1000&minDate=2020-06-01&maxDate=2025-08-19&orderBy=liveAds';
+      if (currentUrl.includes('/login')) {
+        console.log('❌ Pas connecté - Redirection vers login détectée');
+        return false;
+      }
+      
+      // Si on n'est pas sur la page d'accueil, y aller d'abord
+      if (!currentUrl.includes('workspace') && !currentUrl.includes('trending-shops')) {
+        console.log('🔄 Navigation vers la page d\'accueil...');
+        await this.page.goto('https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st', {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000
+        });
+        await this.page.waitForTimeout(2000);
+      }
+      
+      // URL complète avec tous les paramètres
+      let url = 'https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops?include=true&tab=websites&minTraffic=500000&languages=en&currencies=USD&creationCountry=US&orderBy=liveAds';
       
       // Ajouter le paramètre de page si nécessaire
       if (page > 1) {
@@ -166,7 +190,7 @@ export class TrendTrackExtractor extends BaseExtractor {
       
       console.log(`🌐 URL complète de navigation: ${url}`);
       
-      // Navigation avec plus de détails de debug
+      // Navigation en maintenant la session
       console.log(`🔄 Chargement de la page...`);
       await this.page.goto(url, {
         waitUntil: 'domcontentloaded',
@@ -175,6 +199,15 @@ export class TrendTrackExtractor extends BaseExtractor {
       
       // Attendre un peu pour que la page se charge complètement
       await this.page.waitForTimeout(3000);
+      
+      // Vérifier qu'on n'a pas été redirigé vers login
+      const finalUrl = this.page.url();
+      console.log(`🔍 URL finale: ${finalUrl}`);
+      
+      if (finalUrl.includes('/login')) {
+        console.log('❌ Redirection vers login détectée - Session perdue');
+        return false;
+      }
       
       console.log(`🔍 Recherche du tableau...`);
       // Attendre que le tableau soit chargé
@@ -211,7 +244,7 @@ export class TrendTrackExtractor extends BaseExtractor {
     
     try {
       // Attendre que l'en-tête soit chargé
-      await this.page.waitForSelector('th div.flex.items-center.gap-1', { timeout: 10000 });
+      await this.page.waitForSelector('th div.flex.items-center.gap-1', { timeout: 30000 });
       
       // Trouver l'en-tête "Live Ads" et cliquer dessus
       const liveAdsHeader = await this.page.$('th div.flex.items-center.gap-1:has-text("Live Ads")');
@@ -237,9 +270,10 @@ export class TrendTrackExtractor extends BaseExtractor {
   /**
    * Extrait les données d'une ligne de boutique
    * @param {Object} row - Élément de ligne
+   * @param {boolean} includeMarketData - Inclure les données de trafic par pays
    * @returns {Promise<Object>} - Données de la boutique
    */
-  async extractShopData(row) {
+  async extractShopData(row, includeMarketData = false) {
     try {
       const shopData = {};
       const cells = await row.locator('td').all();
@@ -253,9 +287,9 @@ export class TrendTrackExtractor extends BaseExtractor {
       shopData.shopUrl = shopUrlMatch ? shopUrlMatch[1] : '';
       const dateMatch = shopInfoHtml.match(/(\d{2}\/\d{2}\/\d{4})/);
       shopData.creationDate = dateMatch ? dateMatch[1] : '';
+      shopData.category = (await cells[3].textContent()).trim();
       shopData.monthlyVisits = (await cells[4].textContent()).trim();
       shopData.monthlyRevenue = (await cells[5].textContent()).trim();
-      
       // Live Ads (cellule 7)
       if (shopData.shopName.toLowerCase().includes('beyondalpha')) {
         const liveAdsHtml = await cells[7].innerHTML();
@@ -274,12 +308,27 @@ export class TrendTrackExtractor extends BaseExtractor {
       const liveAdsDiv = await cells[7].locator('div.flex.items-center.justify-center.font-semibold');
       const liveAdsP = await liveAdsDiv.locator('p').first();
       shopData.liveAds = liveAdsP ? (await liveAdsP.textContent()).trim() : '';
-      
-      // 🆕 Récupération de l'année de fondation via API
-      if (shopData.shopUrl) {
-        shopData.yearFounded = await this.extractYearFounded(shopData.shopUrl);
+
+      // Ajouter les données de trafic par pays si demandé
+      if (includeMarketData && shopData.shopUrl) {
+        try {
+          console.log(`🌍 Extraction trafic par pays pour: ${shopData.shopName}`);
+          const marketData = await this.extractMarketTrafficForShop(shopData.shopUrl);
+          if (marketData) {
+            Object.assign(shopData, marketData);
+          }
+        } catch (error) {
+          console.error(`⚠️ Erreur extraction trafic pour ${shopData.shopName}:`, error.message);
+          // Ajouter des valeurs null pour les champs market_*
+          shopData.market_us = null;
+          shopData.market_uk = null;
+          shopData.market_de = null;
+          shopData.market_ca = null;
+          shopData.market_au = null;
+          shopData.market_fr = null;
+        }
       }
-      
+
       // 🆕 Récupération des métriques supplémentaires via Python
       if (shopData.shopUrl) {
         try {
@@ -295,34 +344,16 @@ export class TrendTrackExtractor extends BaseExtractor {
             console.log(`✅ Métriques supplémentaires extraites pour ${shopData.shopName}`);
           }
           
-          // Extraire les données de trafic par pays (market_*)
-          const marketData = await this.marketTrafficBridge.extractMarketTraffic(shopData.shopUrl, ["us", "uk", "de", "ca", "au", "fr"]);
-          if (marketData) {
-            shopData.marketUs = marketData.market_us;
-            shopData.marketUk = marketData.market_uk;
-            shopData.marketDe = marketData.market_de;
-            shopData.marketCa = marketData.market_ca;
-            shopData.marketAu = marketData.market_au;
-            shopData.marketFr = marketData.market_fr;
-            console.log(`✅ Données de trafic par pays extraites pour ${shopData.shopName}`);
-          }
-          
         } catch (error) {
-          console.error(`⚠️ Erreur extraction métriques avancées pour ${shopData.shopName}:`, error.message);
+          console.error(`⚠️ Erreur extraction métriques supplémentaires pour ${shopData.shopName}:`, error.message);
           // Ajouter des valeurs null pour les champs en cas d'erreur
           shopData.totalProducts = null;
           shopData.pixelGoogle = null;
           shopData.pixelFacebook = null;
           shopData.aov = null;
-          shopData.marketUs = null;
-          shopData.marketUk = null;
-          shopData.marketDe = null;
-          shopData.marketCa = null;
-          shopData.marketAu = null;
-          shopData.marketFr = null;
         }
       }
-      
+
       return shopData;
     } catch (error) {
       console.error('❌ Erreur extraction données boutique:', error.message);
@@ -331,260 +362,16 @@ export class TrendTrackExtractor extends BaseExtractor {
   }
 
   /**
-   * Extrait l'année de fondation d'une boutique via interception d'API
-   * @param {string} url - URL de la boutique
-   * @returns {Promise<string|null>} - Année de fondation ou null
-   */
-  async extractYearFounded(url) {
-    try {
-      console.log(`🔍 Extraction année de fondation pour: ${url}`);
-      
-      // Créer un nouveau contexte pour cette requête
-      const context = await this.page.context().browser().newContext({
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      });
-      const newPage = await context.newPage();
-      
-      const apiData = [];
-      
-      // Intercepter les requêtes API
-      newPage.on('response', async (response) => {
-        try {
-          const responseUrl = response.url();
-          
-          if (this.isRelevantAPI(responseUrl)) {
-            const data = await response.json();
-            if (this.containsTargetData(data)) {
-              apiData.push({
-                url: responseUrl,
-                method: response.request().method(),
-                status: response.status(),
-                data: data
-              });
-              console.log(`📡 API pertinente trouvée: ${responseUrl}`);
-            }
-          }
-        } catch (e) {
-          // Ignore les erreurs de parsing JSON
-        }
-      });
-      
-      // Navigation avec timeout
-      await newPage.goto(url, { 
-        waitUntil: 'networkidle', 
-        timeout: 30000 
-      });
-      
-      // Attendre le chargement des données dynamiques
-      await newPage.waitForTimeout(3000);
-      
-      // Extraire les données du DOM pour les dates
-      const domData = await newPage.evaluate(() => {
-        const findDates = () => {
-          const elements = Array.from(document.querySelectorAll('*'));
-          return elements
-            .filter(el => el.textContent && el.textContent.match(/\d{2}\/\d{2}\/\d{4}|\d{4}-\d{2}-\d{2}|\d{4}/))
-            .map(el => ({
-              text: el.textContent.trim(),
-              tag: el.tagName
-            }))
-            .slice(0, 10); // Limiter à 10 résultats
-        };
-
-        return {
-          title: document.title || '',
-          url: window.location.href,
-          dates: findDates(),
-          metaDescription: document.querySelector('meta[name="description"]')?.content || '',
-          h1Count: document.querySelectorAll('h1').length,
-          imageCount: document.querySelectorAll('img').length
-        };
-      });
-      
-      // Extraire l'année de fondation des données collectées
-      const yearFounded = this.extractYearFromData(apiData, domData);
-      
-      await context.close();
-      
-      if (yearFounded) {
-        console.log(`📅 Année de fondation trouvée: ${yearFounded}`);
-      } else {
-        console.log(`❌ Aucune année de fondation trouvée pour ${url}`);
-      }
-      
-      return yearFounded;
-      
-    } catch (error) {
-      console.error(`❌ Erreur extraction année de fondation pour ${url}:`, error.message);
-      return null;
-    }
-  }
-  
-  /**
-   * Vérifie si une URL d'API est pertinente
-   * @param {string} url - URL à vérifier
-   * @returns {boolean} - True si pertinente
-   */
-  isRelevantAPI(url) {
-    const staticExtensions = /\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|ico|webp)(\?.*)?$/i;
-    const relevantPaths = /(api|data|ajax|json|graphql|analytics|metrics|stats|company|about|founded)/i;
-    
-    return !staticExtensions.test(url) && relevantPaths.test(url);
-  }
-  
-  /**
-   * Vérifie si les données contiennent des informations pertinentes
-   * @param {Object} data - Données à vérifier
-   * @returns {boolean} - True si pertinentes
-   */
-  containsTargetData(data) {
-    if (!data || typeof data !== 'object') return false;
-    
-    const jsonStr = JSON.stringify(data).toLowerCase();
-    const targetKeywords = [
-      'shop_created_at',
-      'website',
-      'domain',
-      'traffic',
-      'visitors',
-      'analytics',
-      'created_at',
-      'launch_date',
-      'founded',
-      'established',
-      'year',
-      'company',
-      'about'
-    ];
-    
-    return targetKeywords.some(keyword => jsonStr.includes(keyword)) ||
-           jsonStr.match(/\d{4}-\d{2}-\d{2}|\d{4}/);
-  }
-  
-  /**
-   * Extrait l'année de fondation des données collectées
-   * @param {Array} apiData - Données API
-   * @param {Object} domData - Données DOM
-   * @returns {string|null} - Année de fondation ou null
-   */
-  extractYearFromData(apiData, domData) {
-    // Chercher dans les données API
-    for (const api of apiData) {
-      const data = api.data;
-      
-      // Chercher des champs spécifiques
-      const yearFields = [
-        'shop_created_at', 'created_at', 'launch_date', 
-        'founded', 'established', 'year_founded', 'founding_year'
-      ];
-      
-      for (const field of yearFields) {
-        if (field in data) {
-          const yearValue = data[field];
-          if (yearValue) {
-            const year = this.extractYearFromString(String(yearValue));
-            if (year && this.isValidFoundingYear(year)) {
-              return year;
-            }
-          }
-        }
-      }
-      
-      // Chercher dans les structures imbriquées
-      const year = this.searchYearInObject(data);
-      if (year) {
-        return year;
-      }
-    }
-    
-    // Chercher dans les données DOM
-    if (domData.dates) {
-      for (const dateInfo of domData.dates) {
-        const year = this.extractYearFromString(dateInfo.text);
-        if (year && this.isValidFoundingYear(year)) {
-          return year;
-        }
-      }
-    }
-    
-    return null;
-  }
-  
-  /**
-   * Recherche récursive d'année dans un objet
-   * @param {Object} obj - Objet à rechercher
-   * @param {number} maxDepth - Profondeur maximale
-   * @returns {string|null} - Année trouvée ou null
-   */
-  searchYearInObject(obj, maxDepth = 3) {
-    if (maxDepth <= 0) return null;
-    
-    for (const [key, value] of Object.entries(obj)) {
-      if (typeof value === 'object' && value !== null) {
-        const year = this.searchYearInObject(value, maxDepth - 1);
-        if (year) return year;
-      } else if (typeof value === 'string') {
-        const year = this.extractYearFromString(value);
-        if (year && this.isValidFoundingYear(year)) {
-          return year;
-        }
-      }
-    }
-    
-    return null;
-  }
-  
-  /**
-   * Extrait une année d'une chaîne de caractères
-   * @param {string} text - Texte à analyser
-   * @returns {string|null} - Année trouvée ou null
-   */
-  extractYearFromString(text) {
-    const patterns = [
-      /\b(19|20)\d{2}\b/,  // Année simple (1900-2099)
-      /\d{4}-\d{2}-\d{2}/,  // Format ISO
-      /\d{2}\/\d{2}\/\d{4}/,   // Format MM/DD/YYYY
-    ];
-    
-    for (const pattern of patterns) {
-      const matches = text.match(pattern);
-      if (matches) {
-        const year = matches[0];
-        if (this.isValidFoundingYear(year)) {
-          return year;
-        }
-      }
-    }
-    
-    return null;
-  }
-  
-  /**
-   * Vérifie si l'année est valide pour une fondation d'entreprise
-   * @param {string} year - Année à vérifier
-   * @returns {boolean} - True si valide
-   */
-  isValidFoundingYear(year) {
-    try {
-      const yearInt = parseInt(year);
-      const currentYear = new Date().toISOString().getFullYear();
-      // Accepter les années entre 1800 et l'année actuelle
-      return 1800 <= yearInt && yearInt <= currentYear;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  /**
    * Extrait toutes les données du tableau
+   * @param {boolean} includeMarketData - Inclure les données de trafic par pays
    * @returns {Promise<Array>} - Liste des boutiques
    */
-  async extractAllShopsData() {
+  async extractAllShopsData(includeMarketData = false) {
     console.log('📋 Extraction de toutes les données du tableau...');
     
     try {
       // Attendre que le tableau soit chargé
-      await this.page.waitForSelector('tbody tr', { timeout: 10000 });
+      await this.page.waitForSelector('tbody tr', { timeout: 30000 });
       
       // Récupérer toutes les lignes du tableau
       const rows = await this.page.locator('tbody tr').all();
@@ -595,7 +382,7 @@ export class TrendTrackExtractor extends BaseExtractor {
       for (let i = 0; i < rows.length; i++) {
         console.log(`🔍 Extraction ligne ${i + 1}/${rows.length}...`);
         
-        const shopData = await this.extractShopData(rows[i]);
+        const shopData = await this.extractShopData(rows[i], true); // Toujours activer l'extraction des métriques avancées
         if (shopData) {
           shopsData.push({
             ...shopData,
@@ -604,8 +391,8 @@ export class TrendTrackExtractor extends BaseExtractor {
           });
         }
         
-        // Pause entre les extractions
-        await this.sleep(100);
+        // Pause entre les extractions (plus longue si on inclut les données de trafic)
+        await this.sleep(includeMarketData ? 2000 : 100);
       }
       
       console.log(`✅ ${shopsData.length} boutiques extraites`);
@@ -718,9 +505,10 @@ export class TrendTrackExtractor extends BaseExtractor {
   /**
    * Scrape plusieurs pages
    * @param {number} maxPages - Nombre maximum de pages à scraper
+   * @param {boolean} includeMarketData - Inclure les données de trafic par pays
    * @returns {Promise<Array>} - Toutes les données scrapées
    */
-  async scrapeMultiplePages(maxPages = 3) {
+  async scrapeMultiplePages(maxPages = 30, includeMarketData = false) {
     console.log(`📋 Scraping de ${maxPages} pages...`);
     
     // 🔑 Login automatique avant de scraper
@@ -734,11 +522,21 @@ export class TrendTrackExtractor extends BaseExtractor {
     
     const allShopsData = [];
     
+    // Naviguer vers la première page pour s'assurer qu'on est au bon endroit
+    if (maxPages > 1) {
+      console.log('🔄 Navigation vers la page 1...');
+      const navSuccess = await this.navigateToTrendingShops(1);
+      if (!navSuccess) {
+        console.log('❌ Échec navigation vers la page 1');
+        return [];
+      }
+    }
+    
     for (let page = 1; page <= maxPages; page++) {
       console.log(`\n📄 Scraping page ${page}...`);
       
       // Extraire les données de la page actuelle
-      const pageData = await this.extractAllShopsData();
+      const pageData = await this.extractAllShopsData(includeMarketData);
       
       // Ajouter les données avec l'information de page
       const pageDataWithPage = pageData.map(shop => ({
@@ -762,8 +560,8 @@ export class TrendTrackExtractor extends BaseExtractor {
             break;
           }
           
-          // Attendre un peu entre les pages
-          await this.sleep(2000);
+          // Attendre un peu entre les pages (plus longtemps si on inclut les données de trafic)
+          await this.sleep(includeMarketData ? 5000 : 2000);
         } else {
           console.log('⚠️ Plus de pages disponibles');
           break;
@@ -776,92 +574,135 @@ export class TrendTrackExtractor extends BaseExtractor {
   }
 
   /**
-   * Sauvegarde les données en base via l'API TrendTrack
+   * Formate les données pour CSV
    * @param {Array} shopsData - Données des boutiques
-   * @returns {Promise<Object>} - Résultats de la sauvegarde
+   * @returns {string} - Contenu CSV
    */
-  async saveToDatabase(shopsData) {
+  formatToCSV(shopsData) {
     if (!shopsData || shopsData.length === 0) {
-      console.log('⚠️ Aucune donnée à sauvegarder');
-      return { success: 0, errors: 0, skipped: 0 };
+      return '';
     }
     
-    console.log(`💾 Sauvegarde de ${shopsData.length} boutiques en base...`);
+    // Définir les colonnes
+    const headers = [
+      'Page',
+      'Shop Name',
+      'Shop URL',
+      'Creation Date',
+      'Category',
+      'Monthly Visits',
+      'Monthly Revenue',
+      'Live Ads',
+      'Market US',
+      'Market UK',
+      'Market DE',
+      'Market CA',
+      'Market AU',
+      'Market FR',
+      'Timestamp'
+    ];
     
-    const results = {
-      success: 0,
-      errors: 0,
-      skipped: 0
-    };
-    
-    const { spawn } = require('child_process');
+    const csvRows = [headers.join(',')];
     
     for (const shop of shopsData) {
-      try {
-        // Préparer les données pour le script Python
-        const shopData = {
-          shopName: shop.shopName || '',
-          shopUrl: shop.shopUrl || '',
-          monthlyVisits: shop.monthlyVisits || '',
-          monthlyRevenue: shop.monthlyRevenue || '',
-          liveAds: shop.liveAds || '',
-          creationDate: shop.creationDate || '',
-          page: shop.page || '',
-          yearFounded: shop.yearFounded || null
-        };
-        
-        // Appeler le script Python
-        const pythonProcess = spawn('python3', ['save_shop_data.py', JSON.stringify(shopData)]);
-        
-        let output = '';
-        let errorOutput = '';
-        
-        pythonProcess.stdout.on('data', (data) => {
-          output += data.toString();
-        });
-        
-        pythonProcess.stderr.on('data', (data) => {
-          errorOutput += data.toString();
-        });
-        
-        // Attendre la fin du processus
-        await new Promise((resolve, reject) => {
-          pythonProcess.on('close', (code) => {
-            if (code === 0) {
-              try {
-                const result = JSON.parse(output.trim());
-                console.log(`📊 Résultat pour ${shopData.shopName}: ${result.status}`);
-                
-                if (result.status === 'added') {
-                  results.success++;
-                } else if (result.status === 'updated') {
-                  results.skipped++;
-                } else if (result.status === 'skipped') {
-                  results.skipped++;
-                } else {
-                  results.errors++;
-                }
-              } catch (e) {
-                console.error(`❌ Erreur parsing résultat: ${e.message}`);
-                results.errors++;
-              }
-              resolve();
-            } else {
-              console.error(`❌ Erreur script Python: ${errorOutput}`);
-              results.errors++;
-              reject(new Error(`Script Python failed with code ${code}`));
-            }
-          });
-        });
-        
-      } catch (error) {
-        console.error(`❌ Erreur sauvegarde ${shop.shopName}:`, error.message);
-        results.errors++;
-      }
+      const row = [
+        shop.page || '',
+        `"${(shop.shopName || '').replace(/"/g, '""')}"`,
+        `"${(shop.shopUrl || '').replace(/"/g, '""')}"`,
+        `"${(shop.creationDate || '').replace(/"/g, '""')}"`,
+        `"${(shop.category || '').replace(/"/g, '""')}"`,
+        `"${(shop.monthlyVisits || '').replace(/"/g, '""')}"`,
+        `"${(shop.monthlyRevenue || '').replace(/"/g, '""')}"`,
+        `"${(shop.liveAds || '').replace(/"/g, '""')}"`,
+        shop.market_us || '',
+        shop.market_uk || '',
+        shop.market_de || '',
+        shop.market_ca || '',
+        shop.market_au || '',
+        shop.market_fr || '',
+        `"${(shop.timestamp || '').replace(/"/g, '""')}"`
+      ];
+      
+      csvRows.push(row.join(','));
     }
     
-    console.log(`📊 Résultats sauvegarde: ${results.success} ajoutées, ${results.skipped} mises à jour, ${results.errors} erreurs`);
-    return results;
+    return csvRows.join('\n');
+  }
+
+  /**
+   * Extrait les données de trafic par pays pour une boutique
+   * @param {string} shopUrl - URL de la boutique
+   * @param {Array} targets - Liste des pays cibles (défaut: ["us", "uk", "de", "ca", "au", "fr"])
+   * @returns {Promise<Object>} - Données de trafic par pays
+   */
+  async extractMarketTrafficForShop(shopUrl, targets = ["us", "uk", "de", "ca", "au", "fr"]) {
+    console.log(`🌍 Extraction trafic par pays pour: ${shopUrl}`);
+    
+    try {
+      // Utiliser le pont Python pour les nouvelles fonctionnalités
+      const marketData = await this.marketTrafficPythonBridge.extractMarketTraffic(shopUrl, targets);
+      return marketData;
+    } catch (error) {
+      console.error(`❌ Erreur extraction trafic pour ${shopUrl}:`, error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Extrait les données de trafic par pays pour plusieurs boutiques
+   * @param {Array} shopUrls - Liste des URLs de boutiques
+   * @param {Array} targets - Liste des pays cibles
+   * @returns {Promise<Array>} - Liste des données de trafic
+   */
+  async extractMarketTrafficForMultipleShops(shopUrls, targets = ["us", "uk", "de", "ca", "au", "fr"]) {
+    console.log(`🌍 Extraction trafic par pays pour ${shopUrls.length} boutiques...`);
+    
+    try {
+      const marketData = await this.marketTrafficExtractor.extractMarketTrafficForMultipleShops(shopUrls, targets);
+      return marketData;
+    } catch (error) {
+      console.error('❌ Erreur extraction trafic multiple:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Extrait les données complètes d'une boutique (données de base + trafic par pays)
+   * @param {Object} shopData - Données de base de la boutique
+   * @param {Array} targets - Liste des pays cibles
+   * @returns {Promise<Object>} - Données complètes de la boutique
+   */
+  async extractCompleteShopData(shopData, targets = ["us", "uk", "de", "ca", "au", "fr"]) {
+    console.log(`🔍 Extraction complète pour: ${shopData.shopName}`);
+    
+    try {
+      // Extraire les données de trafic par pays
+      const marketData = await this.extractMarketTrafficForShop(shopData.shopUrl, targets);
+      
+      // Combiner les données
+      const completeData = {
+        ...shopData,
+        ...marketData
+      };
+      
+      console.log(`✅ Données complètes extraites pour: ${shopData.shopName}`);
+      return completeData;
+      
+    } catch (error) {
+      console.error(`❌ Erreur extraction complète pour ${shopData.shopName}:`, error.message);
+      
+      // Retourner les données de base en cas d'erreur
+      return {
+        ...shopData,
+        market_us: null,
+        market_uk: null,
+        market_de: null,
+        market_ca: null,
+        market_au: null,
+        market_fr: null,
+        error: error.message
+      };
+    }
   }
 
   /**

@@ -14,23 +14,19 @@ import platform
 import multiprocessing
 import time
 from datetime import datetime, timezone, timedelta
-
-# Import du convertisseur de dates centralisé
+from pathlib import Path
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'trendtrack-scraper-final', 'utils'))
-from date_converter import DateConverter, convert_api_response_dates
-from pathlib import Path
+sys.path.append(os.getcwd())
 from typing import Dict, List, Optional
 import sqlite3
 
 # Imports pour la refactorisation
 from api_client import APIClient
-from stealth_system import stealth_system
 
 import config
 from playwright.async_api import async_playwright
-from trendtrack_api_vps_adapted import api
+from trendtrack_api import TrendTrackAPI as api
 
 # Configuration du logging
 logger = logging.getLogger(__name__)
@@ -82,7 +78,7 @@ class LockManager:
             
             # Créer le lock global
             with open(self.lock_path, 'w') as f:
-                f.write(f"Global Lock - Worker {self.worker_id} - {DateConverter.convert_to_iso8601_utc(datetime.now(timezone.utc))}")
+                f.write(f"Global Lock - Worker {self.worker_id} - {datetime.now(timezone.utc)}")
             
             logger.info(f"✅ Worker {self.worker_id}: Lock global acquis")
             return True
@@ -115,66 +111,7 @@ class ParallelProductionScraper:
         self.session_data = {'data': {}}
         self.metrics_found = 0
         self.metrics_not_found = 0
-        # Comptage détaillé par métrique
-        self.metrics_count = {
-            'organic_traffic': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'paid_search_traffic': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'visits': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'bounce_rate': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'average_visit_duration': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'branded_traffic': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'conversion_rate': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'percent_branded_traffic': {'found': 0, 'not_found': 0, 'skipped': 0},
-            # Nouveaux traitements ajoutés
-            'total_products': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'pixel_google': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'pixel_facebook': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'aov': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'market_us': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'market_uk': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'market_de': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'market_ca': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'market_au': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'market_fr': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'cpc': {'found': 0, 'not_found': 0, 'skipped': 0},
-            # Nouveaux traitements ajoutés
-            'total_products': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'pixel_google': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'pixel_facebook': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'aov': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'market_us': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'market_uk': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'market_de': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'market_ca': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'market_au': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'market_fr': {'found': 0, 'not_found': 0, 'skipped': 0},
-            'cpc': {'found': 0, 'not_found': 0, 'skipped': 0}
-        }
-        # Comptage des statuts attribués
-        self.status_count = {
-            'completed': 0,
-            'partial': 0,
-            'na': 0,
-            'failed': 0
-        }
         self.lock_manager = LockManager(worker_id)
-        
-        # Initialisation des nouvelles métriques
-        self.total_products = ""
-        self.pixel_google = ""
-        self.pixel_facebook = ""
-        self.aov = ""
-        self.cpc = ""
-        self.market_us = ""
-        self.market_uk = ""
-        self.market_de = ""
-        self.market_ca = ""
-        self.market_au = ""
-        self.market_fr = ""
-        
-        # Calculer la date une seule fois au début
-        self.target_date = self.calculate_target_date()
-        logger.info(f"📅 Worker {self.worker_id}: Date calculée une seule fois: {self.target_date} (mois en cours - 2 mois, 15 du mois)")
         
         # Initialisation de l'APIClient pour la refactorisation
         self.api_client = APIClient()
@@ -183,7 +120,7 @@ class ParallelProductionScraper:
         self.selector_timeouts = {
             'organic_search_traffic': 30000,
             'paid_search_traffic': 30000,
-            'average_visit_duration': 30000,
+            'avg_visit_duration': 30000,
             'bounce_rate': 30000,
             'branded_traffic': 30000,
             'conversion_rate': 30000
@@ -207,15 +144,14 @@ class ParallelProductionScraper:
         # Format: YYYYMMDD avec le 15 du mois
         target_date = f"{target_year:04d}{target_month:02d}15"
         
+        logger.info(f"📅 Worker {self.worker_id}: Date calculée: {target_date} (mois en cours - 2 mois, 15 du mois)")
         return target_date
     
     async def get_organic_traffic_via_api_OLD(self, domain: str) -> Optional[Dict[str, str]]:
         """Récupère le traffic organique et payant via l'API organic.Summary"""
         try:
-            # Throttling avant appel API
-            await stealth_system.throttle_api_call(self.worker_id, "organic_summary")
             
-            target_date = self.target_date
+            target_date = self.calculate_target_date()
             
             # Nettoyer le domaine (enlever https://, http://, www.)
             clean_domain = domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
@@ -224,24 +160,16 @@ class ParallelProductionScraper:
             
             # Navigation vers sam.mytoolsplan.xyz pour les appels API (comme dans l'ancien code qui marchait)
             logger.info(f"🌐 Worker {self.worker_id}: Navigation vers sam.mytoolsplan.xyz pour les appels API...")
-            await self.page.goto("https://sam.mytoolsplan.xyz/analytics/overview/", wait_until='domcontentloaded', timeout=30000)
-            await stealth_system.human_pause(self.worker_id, "session")
+            await self.page.goto("https://sam.mytoolsplan.xyz/analytics/", wait_until='domcontentloaded', timeout=30000)
+            await asyncio.sleep(2)
             
-            # Appel API organic.Summary avec headers de discrétion et retry
-            stealth_headers = stealth_system.get_stealth_headers()
-            fetch_code = """
+            # Appel API organic.Summary
+            result = await self.page.evaluate("""
                 async (data) => {
                     try {
                         const response = await fetch('/dpa/rpc', {
                             method: 'POST',
-                            headers: { 
-                                'Content-Type': 'application/json',
-                                'User-Agent': data.stealthHeaders['User-Agent'],
-                                'Accept-Language': data.stealthHeaders['Accept-Language'],
-                                'Accept-Encoding': data.stealthHeaders['Accept-Encoding'],
-                                'Accept': data.stealthHeaders['Accept'],
-                                'DNT': data.stealthHeaders['DNT']
-                            },
+                            headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 "id": Math.floor(Math.random() * 10000),
                                 "jsonrpc": "2.0",
@@ -281,13 +209,14 @@ class ParallelProductionScraper:
                         };
                     }
                 }
-            """
-            
-            result = await self.fetch_with_retry(
-                fetch_code, 
-                "API organic.Summary", 
-                max_retries=3
-            )
+            """, {
+                'domain': clean_domain,
+                'target_date': target_date,
+                'credentials': {
+                    'userId': 26931056,
+                    'apiKey': "943cfac719badc2ca14126e08b8fe44f"
+                }
+            })
             
             if result.get('error'):
                 logger.error(f"❌ Worker {self.worker_id}: Erreur API organic.Summary: {result['error']}")
@@ -341,7 +270,7 @@ class ParallelProductionScraper:
         """
         try:
             
-            target_date = self.target_date
+            target_date = self.calculate_target_date()
             
             # Nettoyer le domaine (enlever https://, http://, www.)
             clean_domain = domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
@@ -369,7 +298,6 @@ class ParallelProductionScraper:
                 
                 organic_raw = us_entry.get('organicTraffic', 0)
                 paid_raw = us_entry.get('adwordsTraffic', 0)  # Traffic payant direct
-                cpc_raw = us_entry.get('adwordsCpc', us_entry.get('cpc', 0))  # CPC depuis la même session API
                 
                 # GESTION DU STATUT 'na' - MÊME LOGIQUE que l'ancienne méthode
                 if organic_raw < 1000:
@@ -377,16 +305,14 @@ class ParallelProductionScraper:
                     return 'na'
                 
                 # TOUJOURS RETOURNER LES VALEURS RAW (BRUTES)
-                logger.info(f"✅ Worker {self.worker_id}: Organic Traffic: {organic_raw}, Paid Traffic: {paid_raw}, CPC: {cpc_raw}")
+                logger.info(f"✅ Worker {self.worker_id}: Organic Traffic: {organic_raw}, Paid Traffic: {paid_raw}")
                 
                 # RETOURNER LES VALEURS BRUTES
                 return {
                     'organic_search_traffic': str(organic_raw),
                     'paid_search_traffic': str(paid_raw),
-                    'cpc': str(cpc_raw) if cpc_raw else "",
                     'organic_raw': organic_raw,
                     'paid_raw': paid_raw,
-                    'cpc_raw': cpc_raw,
                     'source': 'organic.Summary API (REFACTORISÉ - RAW)'
                 }
             
@@ -411,7 +337,7 @@ class ParallelProductionScraper:
         Récupère: traffic (total), branded_traffic
         """
         try:
-            target_date = self.target_date
+            target_date = self.calculate_target_date()
             clean_domain = domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
             
             # Appel API organic.OverviewTrend
@@ -448,18 +374,44 @@ class ParallelProductionScraper:
             return None
     
     async def setup_browser(self):
-        """Configuration du navigateur avec session partagée via bootstrap global"""
+        """Configuration du navigateur avec session partagée"""
         logger.info(f"🔧 Worker {self.worker_id}: Configuration du navigateur...")
         
-        # Utiliser le bootstrap global (Xvfb + navigateur déjà initialisés)
-        try:
-            from global_bootstrap import get_shared_browser_context
-            self.context = await get_shared_browser_context()
-            self.page = await self.context.new_page()
-            logger.info(f"✅ Worker {self.worker_id}: Navigateur configuré (session partagée)")
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur configuration navigateur: {e}")
-            raise
+        # Configuration Xvfb pour Linux
+        if platform.system() == "Linux":
+            try:
+                import subprocess
+                subprocess.run(["Xvfb", ":99", "-screen", "0", "1024x768x24"], 
+                             check=False, capture_output=True)
+                os.environ["DISPLAY"] = ":99"
+                logger.info(f"🖥️ Worker {self.worker_id}: Xvfb configuré")
+            except:
+                logger.info(f"🖥️ Worker {self.worker_id}: Xvfb déjà en cours")
+        
+        playwright = await async_playwright().start()
+        
+        # Configuration identique au scraper de production
+        self.context = await playwright.chromium.launch_persistent_context(
+            user_data_dir='./session-profile-shared',
+            headless=False,  # Pas de headless comme demandé
+            args=[
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-gpu',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding'
+            ],
+            viewport={'width': 1920, 'height': 1080},
+            user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        )
+        
+        self.page = await self.context.new_page()
+        logger.info(f"✅ Worker {self.worker_id}: Navigateur configuré")
     
     async def authenticate_mytoolsplan(self):
         """Authentification MyToolsPlan avec gestion des locks pour session partagée"""
@@ -575,98 +527,14 @@ class ParallelProductionScraper:
         """Navigation avec timeout adaptatif"""
         try:
             logger.info(f"🌐 Worker {self.worker_id}: Navigation vers {description}")
-            await self.page.goto(url, wait_until='domcontentloaded', timeout=60000)  # 60s au lieu de 30s
+            await self.page.goto(url, wait_until='domcontentloaded', timeout=30000)
             await asyncio.sleep(1)
             return True
         except Exception as e:
             logger.error(f"❌ Worker {self.worker_id}: Erreur navigation {description}: {e}")
             return False
-
-    async def fetch_with_retry(self, fetch_code: str, description: str, max_retries: int = 3) -> dict:
-        """Exécute un appel fetch avec retry automatique et backoff adaptatif"""
-        for attempt in range(max_retries):
-            try:
-                logger.debug(f"🔄 Worker {self.worker_id}: {description} (tentative {attempt + 1}/{max_retries})")
-                
-                result = await self.page.evaluate(fetch_code)
-                
-                # Vérifier si c'est une erreur fetch
-                if result.get('type') == 'fetch_error':
-                    error_msg = result.get('error', 'Unknown fetch error')
-                    logger.warning(f"⚠️ Worker {self.worker_id}: {description} - Fetch error: {error_msg} (tentative {attempt + 1})")
-                    
-                    # Si ce n'est pas la dernière tentative, attendre avant de retry
-                    if attempt < max_retries - 1:
-                        backoff_delay = (2 ** attempt) * 2  # 2s, 4s, 8s
-                        logger.info(f"🔄 Worker {self.worker_id}: Retry {description} dans {backoff_delay}s...")
-                        await asyncio.sleep(backoff_delay)
-                        continue
-                    else:
-                        logger.error(f"❌ Worker {self.worker_id}: {description} - Toutes les tentatives ont échoué")
-                        return result
-                else:
-                    # Succès
-                    if attempt > 0:
-                        logger.info(f"✅ Worker {self.worker_id}: {description} - Succès après {attempt + 1} tentatives")
-                    return result
-                    
-            except Exception as e:
-                logger.error(f"❌ Worker {self.worker_id}: {description} - Exception (tentative {attempt + 1}): {e}")
-                
-                # Si ce n'est pas la dernière tentative, attendre avant de retry
-                if attempt < max_retries - 1:
-                    backoff_delay = (2 ** attempt) * 2  # 2s, 4s, 8s
-                    logger.info(f"🔄 Worker {self.worker_id}: Retry {description} dans {backoff_delay}s...")
-                    await asyncio.sleep(backoff_delay)
-                else:
-                    logger.error(f"❌ Worker {self.worker_id}: {description} - Toutes les tentatives ont échoué")
-                    return {"success": False, "error": str(e), "type": "exception"}
-        
-        return {"success": False, "error": "Max retries exceeded", "type": "max_retries"}
-
-    def count_metrics_detailed(self, analytics_data: Dict[str, str]):
-        """Compte les métriques trouvées/not trouvées de manière détaillée"""
-        for metric_name in self.metrics_count.keys():
-            # Gérer les incohérences de noms de métriques
-            if metric_name == 'average_visit_duration':
-                # Chercher dans analytics_data avec le nom utilisé dans session_data
-                value = analytics_data.get('average_visit_duration', '') or analytics_data.get('avg_visit_duration', '')
-            else:
-                value = analytics_data.get(metric_name, '')
-            
-            # Ne compter que les métriques qui ont été réellement tentées (présentes dans analytics_data)
-            # Si une métrique n'est pas dans analytics_data, c'est qu'elle a été skippée
-            metric_in_analytics = (metric_name in analytics_data or 
-                                 (metric_name == 'average_visit_duration' and 'avg_visit_duration' in analytics_data))
-            
-            if metric_in_analytics:
-                if value and value != 'na' and value != '' and value != 'N/A':
-                    self.metrics_count[metric_name]['found'] += 1
-                else:
-                    self.metrics_count[metric_name]['not_found'] += 1
-            # Si la métrique n'est pas dans analytics_data, elle a été skippée (pas de comptage)
-
-    def count_metrics_skipped(self, existing_metrics: Dict[str, str]):
-        """Compte les métriques skippées car déjà présentes"""
-        logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Comptage métriques skippées pour {len(existing_metrics)} métriques existantes")
-        for metric_name in self.metrics_count.keys():
-            # Gérer les incohérences de noms de métriques
-            if metric_name == 'average_visit_duration':
-                # Chercher dans existing_metrics avec le nom utilisé dans session_data
-                value = existing_metrics.get('average_visit_duration', '') or existing_metrics.get('avg_visit_duration', '')
-            else:
-                value = existing_metrics.get(metric_name, '')
-            
-            if value and value != 'na' and value != '' and value != 'N/A':
-                self.metrics_count[metric_name]['skipped'] += 1
-                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Métrique {metric_name} skippée (valeur: {value})")
-
-    def count_status(self, status: str):
-        """Compte les statuts attribués"""
-        if status in self.status_count:
-            self.status_count[status] += 1
     
-    async def validate_selector_adaptive(self, selector: str, description: str, base_timeout: int = 60000):
+    async def validate_selector_adaptive(self, selector: str, description: str, base_timeout: int = 30000):
         """Validation de sélecteur avec timeout adaptatif"""
         try:
             adaptive_timeout = api.calculate_adaptive_timeout(description, base_timeout)
@@ -692,7 +560,8 @@ class ParallelProductionScraper:
             # Organic Search Traffic et Paid Search Traffic via API
             if existing_metrics and existing_metrics.get("organic_traffic") and existing_metrics.get("organic_traffic") != "na":
                 logger.info(f"⏭️ Worker {self.worker_id}: Organic Traffic déjà présente: {existing_metrics.get('organic_traffic')} - SKIP")
-                # NE PAS retourner True ici - continuer avec les autres métriques
+                # Retourner True pour continuer avec les autres métriques
+                return True
             else:
                 # NOUVELLE LOGIQUE: Appel API organic.Summary
                 api_result = await self.get_organic_traffic_via_api(domain)
@@ -712,7 +581,6 @@ class ParallelProductionScraper:
                     self.session_data['data']['domain_overview'] = {
                         'organic_search_traffic': organic_traffic_value,
                         'paid_search_traffic': "",
-                        'cpc': "",
                         'avg_visit_duration': "",
                         'bounce_rate': ""
                     }
@@ -726,20 +594,17 @@ class ParallelProductionScraper:
                     self.session_data['data']['domain_overview'] = {
                         'organic_search_traffic': api_result['organic_search_traffic'],
                         'paid_search_traffic': api_result['paid_search_traffic'],
-                        'cpc': api_result.get('cpc', ''),
                         'avg_visit_duration': "",
                         'bounce_rate': ""
                     }
                     logger.info(f"✅ Worker {self.worker_id}: Métriques récupérées via API organic.Summary")
                     logger.info(f"   🌱 Organic: {api_result['organic_search_traffic']}")
                     logger.info(f"   💰 Paid: {api_result['paid_search_traffic']}")
-                    logger.info(f"   💸 CPC: {api_result.get('cpc', 'N/A')}")
                 else:
                     # Échec de l'API
                     self.session_data['data']['domain_overview'] = {
                         'organic_search_traffic': "",
                         'paid_search_traffic': "",
-                        'cpc': "",
                         'avg_visit_duration': "",
                         'bounce_rate': ""
                     }
@@ -769,9 +634,7 @@ class ParallelProductionScraper:
                 self.session_data['data']['domain_overview']['branded_traffic'] = ""
             
             # Récupérer conversion_rate via DOM scraping (SEULE MÉTRIQUE DOM)
-            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Appel scrape_purchase_conversion pour {domain}")
             conversion_rate = await self.scrape_purchase_conversion(domain)
-            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Résultat scrape_purchase_conversion: '{conversion_rate}'")
             self.session_data['data']['domain_overview']['conversion_rate'] = conversion_rate
             
             # AFFICHAGE DES MÉTRIQUES DANS LES LOGS (SANS ENREGISTREMENT BDD)
@@ -846,140 +709,81 @@ class ParallelProductionScraper:
             return False
     
     async def scrape_engagement_metrics_OLD(self, domain: str) -> Dict[str, str]:
-        """Récupère bounce_rate et average_visit_duration via l'API engagement avec retry et fallback"""
-        max_retries = 3
-        base_timeout = 60000  # 60s au lieu de 30s
-        
-        for attempt in range(max_retries):
-            try:
-                # Throttling avant appel API
-                await stealth_system.throttle_api_call(self.worker_id, "engagement")
-                
-                # Nettoyer le domaine
-                domain_clean = domain.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
-                
-                # Navigation vers sam.mytoolsplan.xyz pour l'API engagement avec timeout augmenté
-                logger.info(f"🌐 Worker {self.worker_id}: Navigation vers sam.mytoolsplan.xyz pour l'API engagement... (tentative {attempt + 1}/{max_retries})")
-                await self.page.goto("https://sam.mytoolsplan.xyz/analytics/", wait_until='domcontentloaded', timeout=base_timeout)
-                await stealth_system.human_pause(self.worker_id, "session")
-                
-                api_url = f"/analytics/ta/targ/v2/engagement?target={domain_clean}&device_type=desktop"
-                
-                fetch_code = f"""
-                    async () => {{
-                        try {{
-                            const response = await fetch("{api_url}", {{
-                                method: "GET",
-                                headers: {{
-                                    "Content-Type": "application/json"
-                                }}
-                            }});
-                            
-                            if (response.ok) {{
-                                const data = await response.json();
-                                return {{ success: true, data: data }};
-                            }} else {{
-                                return {{ success: false, error: response.status }}
-                            }}
-                        }} catch (error) {{
-                            return {{ 
-                                success: false, 
-                                error: error.toString(),
-                                type: 'fetch_error'
-                            }}
-                        }}
-                    }}
-                """
-                
-                result = await self.fetch_with_retry(
-                    fetch_code, 
-                    "API engagement", 
-                    max_retries=3
-                )
-                
-                if result.get("success") and result.get("data"):
-                    api_data = result["data"]
-                    
-                    # Vérification du code 200 (comme dans la version qui marchait)
-                    if api_data.get('code') == 200:
-                        engagement_data = api_data.get('data', {})
-                        
-                        # Conversion des métriques (comme dans la version qui marchait)
-                        avg_duration_seconds = engagement_data.get('totalAvgVisitDuration', 0)
-                        if avg_duration_seconds:
-                            avg_duration_minutes = avg_duration_seconds // 60
-                            avg_duration_remaining_seconds = avg_duration_seconds % 60
-                            avg_duration_formatted = f"{avg_duration_minutes:02d}:{avg_duration_remaining_seconds:02d}"
-                        else:
-                            avg_duration_formatted = ""
-                        
-                        # Pour bounce_rate, on prend la valeur décimale brute (pas de conversion en pourcentage)
-                        bounce_rate = engagement_data.get("totalBounceRate", "")
-                        
-                        logger.info(f"✅ Worker {self.worker_id}: Engagement API - Bounce: {bounce_rate}, Duration: {avg_duration_formatted}")
-                        
-                        return {
-                            "bounce_rate": bounce_rate,
-                            "avg_visit_duration": avg_duration_formatted
-                        }
-                    else:
-                        logger.warning(f"⚠️ Worker {self.worker_id}: API engagement retourne code: {api_data.get('code')} (tentative {attempt + 1})")
-                else:
-                    logger.warning(f"⚠️ Worker {self.worker_id}: API engagement échouée pour {domain} (tentative {attempt + 1})")
-                
-                # Si ce n'est pas la dernière tentative, attendre avant de retry
-                if attempt < max_retries - 1:
-                    backoff_delay = (2 ** attempt) * 2  # 2s, 4s, 8s
-                    logger.info(f"🔄 Worker {self.worker_id}: Retry dans {backoff_delay}s...")
-                    await asyncio.sleep(backoff_delay)
-                    
-                    # Resynchroniser les cookies avant retry
-                    logger.info(f"🔄 Worker {self.worker_id}: Resynchronisation des cookies avant retry...")
-                    await self.sync_cookies_with_sam()
-                
-            except Exception as e:
-                logger.error(f"❌ Worker {self.worker_id}: Erreur API engagement (tentative {attempt + 1}): {e}")
-                
-                # Si ce n'est pas la dernière tentative, attendre avant de retry
-                if attempt < max_retries - 1:
-                    backoff_delay = (2 ** attempt) * 2  # 2s, 4s, 8s
-                    logger.info(f"🔄 Worker {self.worker_id}: Retry dans {backoff_delay}s...")
-                    await asyncio.sleep(backoff_delay)
-                    
-                    # Resynchroniser les cookies avant retry
-                    logger.info(f"🔄 Worker {self.worker_id}: Resynchronisation des cookies avant retry...")
-                    await self.sync_cookies_with_sam()
-        
-        # Si toutes les tentatives ont échoué, essayer le fallback DOM scraping
-        logger.warning(f"⚠️ Worker {self.worker_id}: Toutes les tentatives API engagement ont échoué, tentative fallback DOM scraping...")
-        return await self.scrape_engagement_metrics_fallback(domain)
-
-    async def scrape_engagement_metrics_fallback(self, domain: str) -> Dict[str, str]:
-        """Fallback DOM scraping pour les métriques engagement si l'API échoue"""
+        """Récupère bounce_rate et average_visit_duration via l'API engagement"""
         try:
-            logger.info(f"🔄 Worker {self.worker_id}: Fallback DOM scraping pour engagement metrics...")
             
-            # Navigation vers la page d'engagement
-            await self.page.goto("https://sam.mytoolsplan.xyz/analytics/engagement/", wait_until='domcontentloaded', timeout=60000)
-            await asyncio.sleep(3)
+            # Nettoyer le domaine
+            domain_clean = domain.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
             
-            # Scraping DOM pour bounce rate
-            bounce_element = await self.page.query_selector('div[data-testid="bounce-rate"] span[data-testid="value"]')
-            bounce_rate = await bounce_element.inner_text() if bounce_element else ""
+            # Navigation vers sam.mytoolsplan.xyz pour l'API engagement (comme dans l'ancien code qui marchait)
+            logger.info(f"🌐 Worker {self.worker_id}: Navigation vers sam.mytoolsplan.xyz pour l'API engagement...")
+            await self.page.goto("https://sam.mytoolsplan.xyz/analytics/", wait_until='domcontentloaded', timeout=30000)
+            await asyncio.sleep(2)
             
-            # Scraping DOM pour avg visit duration
-            duration_element = await self.page.query_selector('div[data-testid="avg-visit-duration"] span[data-testid="value"]')
-            avg_duration = await duration_element.inner_text() if duration_element else ""
+            api_url = f"/analytics/ta/targ/v2/engagement?target={domain_clean}&device_type=desktop"
             
-            logger.info(f"✅ Worker {self.worker_id}: Fallback DOM scraping - Bounce: {bounce_rate}, Duration: {avg_duration}")
+            result = await self.page.evaluate(f"""
+                async () => {{
+                    try {{
+                        const response = await fetch("{api_url}", {{
+                            method: "GET",
+                            headers: {{
+                                "Content-Type": "application/json"
+                            }}
+                        }});
+                        
+                        if (response.ok) {{
+                            const data = await response.json();
+                            return {{ success: true, data: data }};
+                        }} else {{
+                            return {{ success: false, error: response.status }}
+                        }}
+                    }} catch (error) {{
+                        return {{ success: false, error: error.toString() }}
+                    }}
+                }}
+            """)
             
-            return {
-                "bounce_rate": bounce_rate,
-                "avg_visit_duration": avg_duration
-            }
-            
+            if result.get("success") and result.get("data"):
+                api_data = result["data"]
+                
+                # Vérification du code 200 (comme dans la version qui marchait)
+                if api_data.get('code') == 200:
+                    engagement_data = api_data.get('data', {})
+                    
+                    # Conversion des métriques (comme dans la version qui marchait)
+                    avg_duration_seconds = engagement_data.get('totalAvgVisitDuration', 0)
+                    if avg_duration_seconds:
+                        avg_duration_minutes = avg_duration_seconds // 60
+                        avg_duration_remaining_seconds = avg_duration_seconds % 60
+                        avg_duration_formatted = f"{avg_duration_minutes:02d}:{avg_duration_remaining_seconds:02d}"
+                    else:
+                        avg_duration_formatted = ""
+                    
+                    # Pour bounce_rate, on prend la valeur décimale brute (pas de conversion en pourcentage)
+                    bounce_rate = engagement_data.get("totalBounceRate", "")
+                    
+                    logger.info(f"✅ Worker {self.worker_id}: Engagement API - Bounce: {bounce_rate}, Duration: {avg_duration_formatted}")
+                    
+                    return {
+                        "bounce_rate": bounce_rate,
+                        "avg_visit_duration": avg_duration_formatted
+                    }
+                else:
+                    logger.warning(f"⚠️ Worker {self.worker_id}: API engagement retourne code: {api_data.get('code')}")
+                    return {
+                        "bounce_rate": "",
+                        "avg_visit_duration": ""
+                    }
+            else:
+                logger.warning(f"⚠️ Worker {self.worker_id}: API engagement échouée pour {domain}")
+                return {
+                    "bounce_rate": "",
+                    "avg_visit_duration": ""
+                }
+                
         except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur fallback DOM scraping: {e}")
+            logger.error(f"❌ Worker {self.worker_id}: Erreur API engagement: {e}")
             return {
                 "bounce_rate": "",
                 "avg_visit_duration": ""
@@ -999,25 +803,7 @@ class ParallelProductionScraper:
             result = await self.api_client.call_engagement_api(self.page, domain_clean, self.worker_id)
             
             if not result:
-                logger.warning(f"⚠️ Worker {self.worker_id}: API engagement (REFACTORISÉ) échouée pour {domain} - seconde tentative après resynchronisation cookies")
-                # Second essai: resynchroniser les cookies puis réessayer une fois
-                try:
-                    await self.sync_cookies_with_sam()
-                    await asyncio.sleep(1)
-                    result_retry = await self.api_client.call_engagement_api(self.page, domain_clean, self.worker_id)
-                    if result_retry.get('success'):
-                        api_data = result_retry
-                        if api_data.get('success', False):
-                            engagement_data = api_data.get('data', {})
-                            avg_duration_seconds = engagement_data.get('totalAvgVisitDuration', 0)
-                            bounce_rate = engagement_data.get("totalBounceRate", "")
-                            logger.info(f"✅ Worker {self.worker_id}: Engagement API (retry) - Bounce: {bounce_rate}, Duration: {avg_duration_seconds}")
-                            return {
-                                "bounce_rate": str(bounce_rate),
-                                "avg_visit_duration": str(avg_duration_seconds)
-                            }
-                except Exception:
-                    pass
+                logger.warning(f"⚠️ Worker {self.worker_id}: API engagement (REFACTORISÉ) échouée pour {domain}")
                 return {
                     "bounce_rate": "",
                     "avg_visit_duration": ""
@@ -1075,7 +861,8 @@ class ParallelProductionScraper:
             domain_clean = domain.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
             
             # Calculer la date cible (MÊME LOGIQUE que les autres APIs)
-            target_date = self.target_date
+            target_date = self.calculate_target_date()
+            logger.info(f"📅 Worker {self.worker_id}: Date calculée: {target_date}")
             
             # Utiliser APIClient pour organic.OverviewTrend
             params = self.api_client.get_visits_params(domain_clean, target_date)
@@ -1105,11 +892,11 @@ class ParallelProductionScraper:
         """🔍 Récupère le FID (Folder ID) pour un domaine via l'API"""
         try:
             domain_clean = domain.replace('https://', '').replace('http://', '').replace('www.', '')
-            logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Recherche FID pour domaine: {domain_clean}")
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Recherche FID pour domaine: {domain_clean}")
             
             # 1. Récupérer la liste des projets/dossiers existants
-            logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Appel API folders/selector-list...")
-            fetch_code = """
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Appel API folders/selector-list...")
+            projects_response = await self.page.evaluate("""
                 async () => {
                     try {
                         const response = await fetch('/apis/v4-raw/folders/api/v0/folders/selector-list?limit=2000&offset=0', {
@@ -1126,49 +913,39 @@ class ParallelProductionScraper:
                         const data = await response.json();
                         return { success: true, data: data };
                     } catch (error) {
-                        return { 
-                            success: false, 
-                            error: error.message,
-                            type: 'fetch_error'
-                        };
+                        return { success: false, error: error.message };
                     }
                 }
-            """
+            """)
             
-            projects_response = await self.fetch_with_retry(
-                fetch_code, 
-                "API folders/selector-list", 
-                max_retries=3
-            )
-            
-            logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Réponse API folders: {projects_response}")
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Réponse API folders: {projects_response}")
             
             if projects_response.get('success', False):
                 folders_data = projects_response.get('data', {})
                 folders = folders_data.get('projects', [])
-                logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - {len(folders)} dossiers trouvés")
+                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - {len(folders)} dossiers trouvés")
                 
                 # Chercher un dossier existant pour ce domaine
                 for folder in folders:
                     folder_domain = folder.get('domain', '').lower()
-                    logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Dossier trouvé: domain='{folder_domain}', id='{folder.get('id')}'")
+                    logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Dossier trouvé: domain='{folder_domain}', id='{folder.get('id')}'")
                     if folder_domain == domain_clean.lower() or folder_domain == domain_clean.lower().replace('www.', ''):
                         existing_fid = folder.get('id')
                         if existing_fid:
-                            logger.debug(f"✅ Worker {self.worker_id}: DEBUG - FID existant trouvé: {existing_fid}")
+                            logger.info(f"✅ Worker {self.worker_id}: DEBUG - FID existant trouvé: {existing_fid}")
                             return str(existing_fid)
                 
                 # Si pas trouvé, créer un nouveau dossier
-                logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Aucun FID existant, création d'un nouveau dossier...")
+                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Aucun FID existant, création d'un nouveau dossier...")
                 api_data = {
                     "properties": [
-                        {"name": {"value": domain_clean}},
+                        {"name": {"value": f"Traffic Analysis - {domain_clean}"}},
                         {"domain": {"value": domain_clean}}
                     ]
                 }
                 
-                logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Données création dossier: {api_data}")
-                fetch_code = """
+                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Données création dossier: {api_data}")
+                create_response = await self.page.evaluate("""
                     async (apiData) => {
                         try {
                             const response = await fetch('/apis/v4-raw/folders/api/v0/folders', {
@@ -1186,27 +963,17 @@ class ParallelProductionScraper:
                             const data = await response.json();
                             return { success: true, data: data };
                         } catch (error) {
-                            return { 
-                                success: false, 
-                                error: error.message,
-                                type: 'fetch_error'
-                            };
+                            return { success: false, error: error.message };
                         }
                     }
-                """
+                """, api_data)
                 
-                create_response = await self.fetch_with_retry(
-                    fetch_code, 
-                    "API création dossier", 
-                    max_retries=3
-                )
-                
-                logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Réponse création dossier: {create_response}")
+                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Réponse création dossier: {create_response}")
                 
                 if create_response.get('success', False):
                     new_fid = create_response.get('data', {}).get('folder', {}).get('id')
                     if new_fid:
-                        logger.debug(f"✅ Worker {self.worker_id}: DEBUG - Nouveau FID créé: {new_fid}")
+                        logger.info(f"✅ Worker {self.worker_id}: DEBUG - Nouveau FID créé: {new_fid}")
                         return str(new_fid)
                         
             else:
@@ -1219,166 +986,112 @@ class ParallelProductionScraper:
 
     async def scrape_purchase_conversion(self, domain: str) -> str:
         """
-        Récupère conversion_rate via DOM scraping simple (méthode qui marchait).
+        Récupère conversion_rate via DOM scraping avec FID (SEULE MÉTRIQUE DOM).
         """
         try:
-            logger.info(f"🔍 Worker {self.worker_id}: Récupération purchase conversion via DOM scraping")
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - DÉBUT scrape_purchase_conversion pour {domain}")
             
-            # Utiliser la méthode qui marchait : DOM scraping simple
-            element = await self.validate_selector_adaptive(
-                'div[data-testid="summary-cell conversion"] > div > div > div > span[data-testid="value"]',
-                "Purchase Conversion"
-            )
+            # 1. Récupérer le FID pour ce domaine
+            fid = await self.get_folder_id_for_domain(domain)
             
-            if element:
-                value = await element.inner_text()
-                logger.info(f"✅ Worker {self.worker_id}: Purchase Conversion (DOM): {value}")
-                return value
-            else:
-                logger.info(f"❌ Worker {self.worker_id}: Purchase Conversion (DOM): Sélecteur non trouvé")
-                return "Sélecteur non trouvé"
-                
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur purchase conversion DOM: {e}")
-            return ""
+            if not fid:
+                logger.warning(f"⚠️ Worker {self.worker_id}: Impossible de récupérer le FID pour {domain}")
+                return ""
             
-    async def scrape_market_traffic(self, domain: str) -> dict:
-        """
-        Récupère les données de trafic par pays (market_*)
-        """
-        try:
-            logger.info(f"🌍 Worker {self.worker_id}: Récupération market traffic pour {domain}")
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - FID récupéré: {fid}")
             
-            # Appeler le script Python via subprocess
-            import subprocess
-            import json
+            # 2. Navigation vers Traffic Analytics avec FID
+            target_url = f"https://sam.mytoolsplan.xyz/analytics/traffic/traffic-overview/?fid={fid}"
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Navigation vers: {target_url}")
             
-            script_path = "/home/ubuntu/trendtrack-scraper-final/python_bridge/market_traffic_extractor.py"
+            success = await self.navigate_with_smart_timeout(target_url, "Traffic Analytics Conversion")
+            if not success:
+                logger.warning(f"⚠️ Worker {self.worker_id}: DEBUG - Échec navigation vers Traffic Analytics")
+                return ""
             
-            result = subprocess.run([
-                "python3", script_path, domain
-            ], capture_output=True, text=True, timeout=30)
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Navigation réussie")
             
-            if result.returncode == 0:
+            # 3. Attendre que les métriques se chargent (React SPA)
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Attente chargement des métriques React SPA...")
+            await asyncio.sleep(3)
+            
+            # Attendre que la page soit complètement chargée
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Attente chargement complet de la page...")
+            
+            # Attendre que la page soit 'complete' (pas seulement 'interactive')
+            try:
+                await self.page.wait_for_load_state('complete', timeout=15000)
+                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Page complètement chargée (complete)")
+            except:
+                logger.warning(f"⚠️ Worker {self.worker_id}: DEBUG - Timeout chargement complet")
+            
+            # Attendre que les éléments data-testid apparaissent
+            try:
+                await self.page.wait_for_selector('[data-testid]', timeout=10000)
+                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Éléments data-testid chargés")
+            except:
+                logger.warning(f"⚠️ Worker {self.worker_id}: DEBUG - Timeout data-testid")
+            
+            # Attendre que les éléments de table se chargent de manière asynchrone
+            max_attempts = 15  # Augmenté de 10 à 15
+            for attempt in range(max_attempts):
                 try:
-                    market_data = json.loads(result.stdout)
-                    logger.info(f"✅ Worker {self.worker_id}: Market traffic récupéré: {market_data}")
-                    return market_data
-                except json.JSONDecodeError:
-                    logger.warning(f"⚠️ Worker {self.worker_id}: Erreur parsing JSON market traffic")
-                    return {}
-            else:
-                logger.warning(f"⚠️ Worker {self.worker_id}: Erreur script market traffic: {result.stderr}")
-                return {}
-                
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur market traffic: {e}")
-            return {}
-    
-    async def scrape_pixel_data(self, domain: str) -> dict:
-        """
-        Récupère les données de pixels (pixel_google, pixel_facebook)
-        """
-        try:
-            logger.info(f"📊 Worker {self.worker_id}: Récupération pixel data pour {domain}")
-            
-            # Simuler la récupération des pixels (à implémenter selon les besoins)
-            pixel_data = {
-                'pixel_google': 'detected',  # ou 'not_detected'
-                'pixel_facebook': 'detected'  # ou 'not_detected'
-            }
-            
-            logger.info(f"✅ Worker {self.worker_id}: Pixel data récupéré: {pixel_data}")
-            return pixel_data
-            
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur pixel data: {e}")
-            return {}
-    
-    async def scrape_total_products(self, domain: str) -> str:
-        """
-        Récupère le nombre total de produits
-        """
-        try:
-            logger.info(f"📦 Worker {self.worker_id}: Récupération total products pour {domain}")
-            
-            # Simuler la récupération du nombre de produits (à implémenter selon les besoins)
-            total_products = "150"  # Exemple
-            
-            logger.info(f"✅ Worker {self.worker_id}: Total products récupéré: {total_products}")
-            return total_products
-            
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur total products: {e}")
-            return ""
-    
-    async def scrape_aov(self, domain: str) -> str:
-        """
-        Récupère l'AOV (Average Order Value)
-        """
-        try:
-            logger.info(f"💰 Worker {self.worker_id}: Récupération AOV pour {domain}")
-            
-            # Simuler la récupération de l'AOV (à implémenter selon les besoins)
-            aov = "45.50"  # Exemple
-            
-            logger.info(f"✅ Worker {self.worker_id}: AOV récupéré: {aov}")
-            return aov
+                    # Vérifier si les éléments de table sont présents
+                    table_elements = await self.page.evaluate("""
+                        () => ({
+                            rows: document.querySelectorAll('[role="row"], tr').length,
+                            cells: document.querySelectorAll('[role="gridcell"], td, th').length,
+                            testIds: document.querySelectorAll('[data-testid]').length,
+                            pageReady: document.readyState
+                        })
+                    """)
                     
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur AOV: {e}")
-            return ""
-    
-    async def scrape_cpc(self, domain: str) -> str:
-        """
-        Récupère le CPC (Cost Per Click) depuis la session API organic.Summary
-        """
-        try:
-            logger.info(f"💸 Worker {self.worker_id}: Récupération CPC pour {domain} depuis session API")
+                    logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Tentative {attempt + 1}/{max_attempts}: rows={table_elements['rows']}, cells={table_elements['cells']}, testIds={table_elements['testIds']}, ready={table_elements['pageReady']}")
+                    
+                    # Si on a des éléments de table ET des data-testid, on peut continuer
+                    if table_elements['rows'] > 0 and table_elements['cells'] > 0 and table_elements['testIds'] > 100:
+                        logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Éléments de table chargés asynchrone (rows: {table_elements['rows']}, cells: {table_elements['cells']})")
+                        break
+                    
+                    # Attendre un peu plus pour le chargement asynchrone
+                    await asyncio.sleep(3)  # Augmenté de 2s à 3s
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️ Worker {self.worker_id}: DEBUG - Erreur vérification éléments: {e}")
+                    await asyncio.sleep(3)
             
-            # Récupérer le CPC depuis les données de session API déjà récupérées
-            if 'domain_overview' in self.session_data['data']:
-                cpc = self.session_data['data']['domain_overview'].get('cpc', '')
-                if cpc:
-                    logger.info(f"✅ Worker {self.worker_id}: CPC récupéré depuis session API: {cpc}")
-                    return cpc
-            
-            logger.info(f"⚠️ Worker {self.worker_id}: CPC non disponible dans la session API")
-            return ""
-            
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur CPC: {e}")
-            return ""
+            # Attendre encore un peu pour que les données se remplissent complètement
+            await asyncio.sleep(3)  # Augmenté de 2s à 3s
             
             # 4. Scroll vers le haut de la page pour s'assurer qu'on voit le début de la table
-            logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Scroll vers le haut de la page...")
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Scroll vers le haut de la page...")
             await self.page.evaluate("window.scrollTo(0, 0)")
             await asyncio.sleep(1)
             
             # 5. Debug: Vérifier le contenu de la page
             current_url = self.page.url
             page_title = await self.page.title()
-            logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - URL après navigation: {current_url}")
-            logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Titre de la page: {page_title}")
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - URL après navigation: {current_url}")
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Titre de la page: {page_title}")
             
             # 5. Debug: Vérifier les éléments data-testid="value" présents
             value_elements = await self.page.query_selector_all('[data-testid="value"]')
-            logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - {len(value_elements)} éléments data-testid='value' trouvés")
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - {len(value_elements)} éléments data-testid='value' trouvés")
             
             # 6. Debug: Vérifier les éléments summary-cell présents
             summary_elements = await self.page.query_selector_all('[data-testid*="summary-cell"]')
-            logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - {len(summary_elements)} éléments summary-cell trouvés")
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - {len(summary_elements)} éléments summary-cell trouvés")
             
             for i, elem in enumerate(summary_elements):
                 try:
                     testid = await elem.get_attribute('data-testid')
-                    logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Summary-cell {i+1}: {testid}")
+                    logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Summary-cell {i+1}: {testid}")
                 except:
                     pass
             
             # 7. Debug: Vérifier le contenu textuel de la page (pas HTML)
             page_text = await self.page.evaluate("() => document.body.innerText")
-            logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Contenu textuel de la page (premiers 500 chars): {page_text[:500]}")
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Contenu textuel de la page (premiers 500 chars): {page_text[:500]}")
             
             # 7.5. Debug: Vérifier les éléments DOM disponibles
             dom_debug = await self.page.evaluate("""
@@ -1403,66 +1116,19 @@ class ParallelProductionScraper:
                     return result;
                 }
             """)
-            logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Éléments DOM: {dom_debug}")
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Éléments DOM: {dom_debug}")
             
             # 7.6. Debug: Attendre plus longtemps si nécessaire
             if dom_debug.get('allElements', 0) < 10:
-                logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Page semble vide, attente supplémentaire...")
+                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Page semble vide, attente supplémentaire...")
                 await asyncio.sleep(5)
                 
                 # Re-vérifier après attente
                 dom_debug_2 = await self.page.evaluate("() => ({ allElements: document.querySelectorAll('*').length, hasContent: document.body.textContent.length > 100 })")
-                logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Après attente supplémentaire: {dom_debug_2}")
+                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Après attente supplémentaire: {dom_debug_2}")
             
             # 8. Scraping Purchase Conversion via JavaScript (approche data-testid)
-            logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Tentative scraping via JavaScript (approche table + data-testid)...")
-            
-            # Nettoyer le domaine pour la recherche
-            clean_domain = domain.lower().replace('https://', '').replace('http://', '').replace('www.', '')
-            
-            # Debug pour voir le domaine utilisé
-            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Domaine nettoyé pour JavaScript: '{clean_domain}'")
-            
-            # Debug de l'URL et du contenu de la page
-            current_url = self.page.url
-            page_title = await self.page.title()
-            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - URL actuelle: {current_url}")
-            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Titre de la page: {page_title}")
-            
-            # Vérifier le contenu de la page
-            page_content = await self.page.evaluate("() => document.body.textContent")
-            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Contenu page (premiers 500 chars): {page_content[:500]}")
-            
-            # Si la page est vide, attendre plus longtemps pour React SPA
-            if len(page_content.strip()) < 100:
-                logger.warning(f"⚠️ Worker {self.worker_id}: Page vide détectée, attente supplémentaire pour React SPA...")
-                await asyncio.sleep(5)  # Attendre 5 secondes supplémentaires
-                
-                # Vérifier à nouveau
-                page_content = await self.page.evaluate("() => document.body.textContent")
-                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Contenu page après attente (premiers 500 chars): {page_content[:500]}")
-                
-                if len(page_content.strip()) < 100:
-                    logger.error(f"❌ Worker {self.worker_id}: Page toujours vide après attente - problème de permissions ou de session")
-                    
-                    # Debug supplémentaire : vérifier les cookies et la session
-                    cookies = await self.context.cookies()
-                    logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Cookies disponibles: {len(cookies)}")
-                    
-                    # Tester la session sur app.mytoolsplan.com
-                    try:
-                        await self.page.goto("https://app.mytoolsplan.com/analytics/", wait_until='domcontentloaded', timeout=10000)
-                        app_content = await self.page.evaluate("() => document.body.textContent")
-                        logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Contenu app.mytoolsplan.com (premiers 200 chars): {app_content[:200]}")
-                        
-                        if len(app_content.strip()) > 100:
-                            logger.warning(f"⚠️ Worker {self.worker_id}: Session OK sur app.mytoolsplan.com mais pas sur sam.mytoolsplan.xyz - problème de synchronisation")
-                        else:
-                            logger.error(f"❌ Worker {self.worker_id}: Session KO sur app.mytoolsplan.com aussi - problème d'authentification")
-                    except Exception as e:
-                        logger.error(f"❌ Worker {self.worker_id}: Erreur test session app.mytoolsplan.com: {e}")
-                    
-                    return ""
+            logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Tentative scraping via JavaScript (approche table + data-testid)...")
             
             conversion_data = await self.page.evaluate(f"""
                 () => {{
@@ -1489,46 +1155,19 @@ class ParallelProductionScraper:
                         }};
                     }};
 
-                    // Vérifier plusieurs fois si les éléments sont chargés (React SPA)
+                    // Vérifier plusieurs fois si les éléments sont chargés
                     let elements = waitForElements();
                     result.attempts = 0;
                     
-                    while (result.attempts < 10 && (elements.rows === 0 || elements.cells === 0 || elements.testIds < 100)) {{
+                    while (result.attempts < 5 && (elements.rows === 0 || elements.cells === 0 || elements.testIds < 100)) {{
                         result.attempts++;
-                        console.log(`🔍 Tentative ${{result.attempts}}/10: rows=${{elements.rows}}, cells=${{elements.cells}}, testIds=${{elements.testIds}}`);
+                        console.log(`🔍 Tentative ${{result.attempts}}/5: rows=${{elements.rows}}, cells=${{elements.cells}}, testIds=${{elements.testIds}}`);
                         
-                        // Attendre plus longtemps pour React SPA (attente progressive)
-                        const waitTime = Math.min(1000 + (result.attempts * 500), 3000); // 1s, 1.5s, 2s, 2.5s, 3s max
-                        console.log(`⏳ Attente ${{waitTime}}ms pour chargement React SPA...`);
+                        // Attendre un peu (simulation)
                         const start = new Date().toISOString();
-                        while (new Date().toISOString() - start < waitTime) {{ /* attente progressive */ }}
+                        while (new Date().toISOString() - start < 100) {{ /* attente 100ms */ }}
                         
                         elements = waitForElements();
-                    }}
-                    
-                    // Attendre que les données spécifiques au domaine soient chargées
-                    console.log('🔍 Vérification des données spécifiques au domaine...');
-                    const pageContent = document.body.textContent || '';
-                    const domainVariations = [
-                        '{clean_domain}',
-                        '{clean_domain}'.replace('.com', ''),
-                        '{clean_domain}'.replace('www.', ''),
-                        '{clean_domain}'.replace('https://', '').replace('http://', '')
-                    ];
-                    
-                    let hasDomainData = false;
-                    for (const variation of domainVariations) {{
-                        if (pageContent.toLowerCase().includes(variation.toLowerCase())) {{
-                            console.log('✅ Données domaine détectées:', variation);
-                            hasDomainData = true;
-                            break;
-                        }}
-                    }}
-                    
-                    if (!hasDomainData && result.attempts < 10) {{
-                        console.log('⏳ Attente supplémentaire pour données domaine...');
-                        const start = new Date().toISOString();
-                        while (new Date().toISOString() - start < 2000) {{ /* attente 2s supplémentaire */ }}
                     }}
 
                     // 1. Maintenant chercher dans les éléments de table/grille
@@ -1547,30 +1186,21 @@ class ParallelProductionScraper:
                     for (const row of firstRows) {{
                         const rowText = row.textContent || '';
                         console.log('🔍 Ligne:', rowText.substring(0, 100));
-                        result.allData.push(rowText.substring(0, 100));
                         
                         // Recherche plus flexible du domaine
                         const domainVariations = [
-                            '{clean_domain}',
-                            '{clean_domain}'.replace('.com', ''),
-                            '{clean_domain}'.replace('www.', ''),
-                            '{clean_domain}'.replace('https://', '').replace('http://', '')
+                            '{domain.lower()}',
+                            '{domain.lower()}'.replace('.com', ''),
+                            '{domain.lower()}'.replace('www.', ''),
+                            '{domain.lower()}'.replace('https://', '').replace('http://', '')
                         ];
-                        
-                        console.log('🔍 Domaines recherchés:', domainVariations);
-                        console.log('🔍 Texte de la ligne:', rowText.toLowerCase());
                         
                         let domainFound = false;
                         for (const variation of domainVariations) {{
                             if (rowText.toLowerCase().includes(variation)) {{
-                                console.log('✅ Domaine trouvé:', variation);
                                 domainFound = true;
                                 break;
                             }}
-                        }}
-                        
-                        if (!domainFound) {{
-                            console.log('❌ Aucun domaine trouvé dans cette ligne');
                         }}
                         
                         if (domainFound) {{
@@ -1767,173 +1397,17 @@ class ParallelProductionScraper:
                     logger.error(f"❌ Worker {self.worker_id}: Erreur conversion: {e}")
                     return ""
             else:
-                logger.debug(f"⚠️ Worker {self.worker_id}: DEBUG - Purchase Conversion non trouvé")
-                logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Tentatives d'attente: {conversion_data.get('attempts', 0)}")
-                logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Éléments de table: {conversion_data.get('tableElements', 0)}")
-                logger.debug(f"🔍 Worker {self.worker_id}: DEBUG - Éléments data-testid: {conversion_data.get('testIdElements', 0)}")
+                logger.warning(f"⚠️ Worker {self.worker_id}: DEBUG - Purchase Conversion non trouvé")
+                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Tentatives d'attente: {conversion_data.get('attempts', 0)}")
+                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Éléments de table: {conversion_data.get('tableElements', 0)}")
+                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Éléments data-testid: {conversion_data.get('testIdElements', 0)}")
                 logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Éléments domaine: {conversion_data.get('domainElements', 0)}")
                 logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Données trouvées: {conversion_data.get('allData', [])}")
-                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Éléments table: {conversion_data.get('tableElements', 0)}")
-                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Tentatives: {conversion_data.get('attempts', 0)}")
                 return ""
             
         except Exception as e:
             logger.error(f"❌ Worker {self.worker_id}: Erreur DOM scraping conversion_rate: {e}")
             return ""
-    
-    async def scrape_product_metrics(self, domain: str) -> dict:
-        """
-        Récupère les métriques liées aux produits (total_products, pixel_google, pixel_facebook)
-        """
-        try:
-            logger.info(f"🔍 Worker {self.worker_id}: Récupération métriques produits pour {domain}")
-            
-            # Navigation vers la page du domaine
-            await self.page.goto(f"https://{domain}", wait_until="networkidle", timeout=30000)
-            await asyncio.sleep(2)
-            
-            metrics = {
-                'total_products': "",
-                'pixel_google': "",
-                'pixel_facebook': ""
-            }
-            
-            # Récupération du nombre total de produits (exemple de sélecteur)
-            try:
-                # Chercher des éléments qui pourraient indiquer le nombre de produits
-                product_elements = await self.page.query_selector_all('a[href*="/product"], .product-item, [data-testid*="product"]')
-                if product_elements:
-                    metrics['total_products'] = str(len(product_elements))
-                    logger.info(f"✅ Worker {self.worker_id}: Total produits trouvé: {len(product_elements)}")
-                else:
-                    logger.warning(f"⚠️ Worker {self.worker_id}: Aucun produit détecté")
-            except Exception as e:
-                logger.warning(f"⚠️ Worker {self.worker_id}: Erreur détection produits: {e}")
-            
-            # Détection des pixels de tracking
-            try:
-                # Chercher Google Analytics/Google Tag Manager
-                google_scripts = await self.page.query_selector_all('script[src*="googletagmanager"], script[src*="google-analytics"], script:has-text("gtag")')
-                if google_scripts:
-                    metrics['pixel_google'] = "present"
-                    logger.info(f"✅ Worker {self.worker_id}: Pixel Google détecté")
-                else:
-                    metrics['pixel_google'] = "absent"
-                    logger.info(f"ℹ️ Worker {self.worker_id}: Pixel Google non détecté")
-            except Exception as e:
-                logger.warning(f"⚠️ Worker {self.worker_id}: Erreur détection pixel Google: {e}")
-            
-            try:
-                # Chercher Facebook Pixel
-                fb_scripts = await self.page.query_selector_all('script[src*="facebook"], script:has-text("fbq"), script:has-text("Facebook")')
-                if fb_scripts:
-                    metrics['pixel_facebook'] = "present"
-                    logger.info(f"✅ Worker {self.worker_id}: Pixel Facebook détecté")
-                else:
-                    metrics['pixel_facebook'] = "absent"
-                    logger.info(f"ℹ️ Worker {self.worker_id}: Pixel Facebook non détecté")
-            except Exception as e:
-                logger.warning(f"⚠️ Worker {self.worker_id}: Erreur détection pixel Facebook: {e}")
-            
-            return metrics
-            
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur métriques produits: {e}")
-            return {
-                'total_products': "",
-                'pixel_google': "",
-                'pixel_facebook': ""
-            }
-    
-    async def scrape_market_metrics(self, domain: str) -> dict:
-        """
-        Récupère les métriques de marché (market_us, market_uk, market_de, market_ca, market_au, market_fr)
-        """
-        try:
-            logger.info(f"🔍 Worker {self.worker_id}: Récupération métriques marché pour {domain}")
-            
-            # Pour l'instant, on simule des données de marché
-            # Dans une implémentation réelle, on pourrait analyser le contenu de la page
-            # ou utiliser des APIs externes pour déterminer la répartition géographique
-            
-            metrics = {
-                'market_us': "0",
-                'market_uk': "0", 
-                'market_de': "0",
-                'market_ca': "0",
-                'market_au': "0",
-                'market_fr': "0"
-            }
-            
-            # Simulation basée sur l'extension du domaine
-            if domain.endswith('.com'):
-                metrics['market_us'] = "100"
-            elif domain.endswith('.co.uk'):
-                metrics['market_uk'] = "100"
-            elif domain.endswith('.de'):
-                metrics['market_de'] = "100"
-            elif domain.endswith('.ca'):
-                metrics['market_ca'] = "100"
-            elif domain.endswith('.com.au'):
-                metrics['market_au'] = "100"
-            elif domain.endswith('.fr'):
-                metrics['market_fr'] = "100"
-            else:
-                # Par défaut, on met une répartition fictive
-                metrics['market_us'] = "50"
-                metrics['market_uk'] = "30"
-                metrics['market_fr'] = "20"
-            
-            logger.info(f"✅ Worker {self.worker_id}: Métriques marché simulées: {metrics}")
-            return metrics
-            
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur métriques marché: {e}")
-            return {
-                'market_us': "",
-                'market_uk': "",
-                'market_de': "",
-                'market_ca': "",
-                'market_au': "",
-                'market_fr': ""
-            }
-    
-    async def scrape_business_metrics(self, domain: str) -> dict:
-        """
-        Récupère les métriques business (aov, cpc)
-        """
-        try:
-            logger.info(f"🔍 Worker {self.worker_id}: Récupération métriques business pour {domain}")
-            
-            metrics = {
-                'aov': "",
-                'cpc': ""
-            }
-            
-            # Pour l'instant, on simule des données business
-            # Dans une implémentation réelle, on pourrait analyser les prix sur la page
-            # ou utiliser des APIs externes pour estimer l'AOV et le CPC
-            
-            # Simulation basée sur le type de domaine
-            if 'shop' in domain.lower() or 'store' in domain.lower():
-                metrics['aov'] = "75.50"  # AOV moyen pour e-commerce
-                metrics['cpc'] = "2.30"   # CPC moyen
-            elif 'fashion' in domain.lower() or 'clothing' in domain.lower():
-                metrics['aov'] = "45.20"
-                metrics['cpc'] = "1.80"
-            else:
-                metrics['aov'] = "60.00"
-                metrics['cpc'] = "2.00"
-            
-            logger.info(f"✅ Worker {self.worker_id}: Métriques business simulées: {metrics}")
-            return metrics
-            
-        except Exception as e:
-            logger.error(f"❌ Worker {self.worker_id}: Erreur métriques business: {e}")
-            return {
-                'aov': "",
-                'cpc': ""
-            }
     
     async def scrape_conversion_rate_via_api(self, domain: str) -> str:
         """
@@ -1946,7 +1420,8 @@ class ParallelProductionScraper:
             domain_clean = domain.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
             
             # Calculer la date cible (MÊME LOGIQUE que les autres APIs)
-            target_date = self.target_date
+            target_date = self.calculate_target_date()
+            logger.info(f"📅 Worker {self.worker_id}: Date calculée: {target_date}")
             
             # Utiliser APIClient pour organic.OverviewTrend
             params = self.api_client.get_conversion_params(domain_clean, target_date)
@@ -1998,28 +1473,15 @@ class ParallelProductionScraper:
                     return await element.inner_text() if element else ""
             
             async def scrape_conversion_rate():
-                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Début scrape_conversion_rate")
-                logger.info(f"🔍 Worker {self.worker_id}: DEBUG - existing_metrics: {existing_metrics}")
-                
                 if existing_metrics and existing_metrics.get("conversion_rate") and existing_metrics.get("conversion_rate") != "na":
                     logger.info(f"⏭️ Worker {self.worker_id}: Conversion Rate déjà présent: {existing_metrics.get('conversion_rate')} - SKIP")
                     return existing_metrics.get("conversion_rate")
                 else:
-                    logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Conversion Rate non présent, début DOM scraping")
-                    logger.info(f"🔍 Worker {self.worker_id}: DEBUG - URL actuelle avant scraping: {self.page.url}")
-                    
                     element = await self.validate_selector_adaptive(
                         'div[data-testid="summary-cell conversion"] > div > div > div > span[data-testid="value"]',
                         "Purchase Conversion"
                     )
-                    
-                    if element:
-                        result = await element.inner_text()
-                        logger.info(f"✅ Worker {self.worker_id}: DEBUG - Conversion Rate trouvé: {result}")
-                        return result
-                    else:
-                        logger.warning(f"⚠️ Worker {self.worker_id}: DEBUG - Conversion Rate non trouvé via DOM scraping")
-                        return ""
+                    return await element.inner_text() if element else ""
             
             # Exécuter en parallèle
             visits, conversion_rate = await asyncio.gather(
@@ -2056,20 +1518,7 @@ class ParallelProductionScraper:
             "conversion_rate": "",
             "paid_search_traffic": "",
             "traffic": "",
-            "percent_branded_traffic": "",
-            "visits": "",
-            # NOUVEAUX CHAMPS
-            "total_products": "",
-            "pixel_google": "",
-            "pixel_facebook": "",
-            "aov": "",
-            "market_us": "",
-            "market_uk": "",
-            "market_de": "",
-            "market_ca": "",
-            "market_au": "",
-            "market_fr": "",
-            "cpc": ""
+            "percent_branded_traffic": ""
         }
         
         # Récupérer les données de domain_overview
@@ -2082,39 +1531,9 @@ class ParallelProductionScraper:
             analytics_data['traffic'] = domain_data.get('traffic', '')
             analytics_data['branded_traffic'] = domain_data.get('branded_traffic', '')
             analytics_data['conversion_rate'] = domain_data.get('conversion_rate', '')
-            
-            # NOUVEAUX CHAMPS - Récupération des métriques supplémentaires
-            analytics_data['total_products'] = domain_data.get('total_products', '')
-            analytics_data['pixel_google'] = domain_data.get('pixel_google', '')
-            analytics_data['pixel_facebook'] = domain_data.get('pixel_facebook', '')
-            analytics_data['aov'] = domain_data.get('aov', '')
-            analytics_data['market_us'] = domain_data.get('market_us', '')
-            analytics_data['market_uk'] = domain_data.get('market_uk', '')
-            analytics_data['market_de'] = domain_data.get('market_de', '')
-            analytics_data['market_ca'] = domain_data.get('market_ca', '')
-            analytics_data['market_au'] = domain_data.get('market_au', '')
-            analytics_data['market_fr'] = domain_data.get('market_fr', '')
-            analytics_data['cpc'] = domain_data.get('cpc', '')
-        
-        # Récupérer les données de traffic_analysis (visits)
-        if 'traffic_analysis' in self.session_data['data']:
-            traffic_data = self.session_data['data']['traffic_analysis']
-            analytics_data['visits'] = traffic_data.get('visits', '')
         
         # Calculer percent_branded_traffic selon la formule de la doc
         analytics_data['percent_branded_traffic'] = self.calculate_percent_branded_traffic(analytics_data)
-        
-        # Récupérer les nouvelles métriques depuis les attributs de la classe
-        new_metrics = [
-            'total_products', 'pixel_google', 'pixel_facebook', 'aov', 'cpc',
-            'market_us', 'market_uk', 'market_de', 'market_ca', 'market_au', 'market_fr'
-        ]
-        
-        for metric in new_metrics:
-            if hasattr(self, metric):
-                value = getattr(self, metric, '')
-                if value:
-                    analytics_data[metric] = str(value)
         
         return analytics_data
     
@@ -2129,9 +1548,9 @@ class ParallelProductionScraper:
                 branded_num = self.convert_traffic_to_number(branded_traffic)
 
                 if traffic_num > 0:
-                    percent_branded = (branded_num / traffic_num)
-                    logger.info(f"📊 Worker {self.worker_id}: Calcul percent_branded_traffic: ({branded_num} / {traffic_num}) = {percent_branded:.4f}")
-                    return f"{percent_branded:.4f}"
+                    percent_branded = (branded_num / traffic_num) * 100
+                    logger.info(f"📊 Worker {self.worker_id}: Calcul percent_branded_traffic: ({branded_num} / {traffic_num}) * 100 = {percent_branded:.2f}%")
+                    return f"{percent_branded:.2f}%"
                 else:
                     return "N/A"
             else:
@@ -2139,20 +1558,6 @@ class ParallelProductionScraper:
         except Exception as e:
             logger.error(f"❌ Worker {self.worker_id}: Erreur calcul Percent Branded Traffic: {e}")
             return "Erreur de calcul"
-
-    def validate_metrics_status(self, analytics_data: Dict[str, str]) -> str:
-        """Valide la complétude des métriques et retourne 'completed' ou 'partial'."""
-        required_metrics = [
-            'organic_traffic', 'paid_search_traffic', 'visits', 'bounce_rate',
-            'average_visit_duration', 'branded_traffic', 'conversion_rate', 'percent_branded_traffic'
-        ]
-        valid_count = 0
-        total = len(required_metrics)
-        for metric in required_metrics:
-            value = analytics_data.get(metric, '')
-            if value not in (None, '', 'N/A'):
-                valid_count += 1
-        return 'completed' if valid_count == total else 'partial'
     
     def convert_traffic_to_number(self, traffic_str: str) -> float:
         """Convertit une valeur de traffic en nombre"""
@@ -2203,99 +1608,30 @@ class ParallelProductionScraper:
                     
                     logger.info(f"🎯 Worker {self.worker_id}: Traitement {i}/{total_shops} - {domain} (ID: {shop_id})")
                     
-                    # Récupérer les métriques existantes pour le scraper intelligent
-                    existing_metrics = api.get_shop_analytics(shop_id)
-                    if existing_metrics:
-                        logger.info(f"🔍 Worker {self.worker_id}: Métriques existantes trouvées pour {domain}")
-                        # Afficher les métriques existantes pour debug
-                        for metric, value in existing_metrics.items():
-                            if value and value != 'na' and value != '':
-                                logger.info(f"🔍 Worker {self.worker_id}: {metric}: {value}")
-                        
-                        # Compter les métriques skippées car déjà présentes
-                        self.count_metrics_skipped(existing_metrics)
-                    else:
-                        logger.info(f"🔍 Worker {self.worker_id}: Aucune métrique existante pour {domain}")
-                        existing_metrics = {}
-                    
-                    # Scraping du domaine avec métriques existantes
-                    result = await self.scrape_domain_overview(domain, date_range, existing_metrics)
+                    # Scraping du domaine
+                    result = await self.scrape_domain_overview(domain, date_range)
                     
                     if result == 'na':
                         logger.info(f"ℹ️ Worker {self.worker_id}: {domain} marqué comme 'na' (organic traffic < 1000)")
                         # Enregistrer en BDD avec statut 'na'
                         analytics_data = self.format_analytics_for_api()
                         api.update_shop_analytics(shop_id, analytics_data)
-                        self.count_status('na')
                         logger.info(f"💾 Worker {self.worker_id}: {domain} enregistré en BDD avec statut 'na'")
                     elif result:
                         # Toutes les métriques sont récupérées via les APIs dans scrape_domain_overview
                         successful_shops += 1
                         logger.info(f"✅ Worker {self.worker_id}: {domain} traité avec succès")
                         
-                        # NOUVEAUX TRAITEMENTS - Récupération des métriques supplémentaires
-                        logger.info(f"🆕 Worker {self.worker_id}: Récupération des métriques supplémentaires pour {domain}")
-                        
-                        # 1. Market traffic (trafic par pays)
-                        market_data = await self.scrape_market_traffic(domain)
-                        if market_data:
-                            for market_key, market_value in market_data.items():
-                                if market_value is not None:
-                                    setattr(self, market_key, str(market_value))
-                                    logger.info(f"✅ Worker {self.worker_id}: {market_key}: {market_value}")
-                        
-                        # 2. Pixel data (pixels Google/Facebook)
-                        pixel_data = await self.scrape_pixel_data(domain)
-                        if pixel_data:
-                            for pixel_key, pixel_value in pixel_data.items():
-                                setattr(self, pixel_key, pixel_value)
-                                logger.info(f"✅ Worker {self.worker_id}: {pixel_key}: {pixel_value}")
-                        
-                        # 3. Total products
-                        total_products = await self.scrape_total_products(domain)
-                        if total_products:
-                            self.total_products = total_products
-                            logger.info(f"✅ Worker {self.worker_id}: total_products: {total_products}")
-                        
-                        # 4. AOV (Average Order Value)
-                        aov = await self.scrape_aov(domain)
-                        if aov:
-                            self.aov = aov
-                            logger.info(f"✅ Worker {self.worker_id}: aov: {aov}")
-                        
-                        # 5. CPC (Cost Per Click)
-                        cpc = await self.scrape_cpc(domain)
-                        if cpc:
-                            self.cpc = cpc
-                            logger.info(f"✅ Worker {self.worker_id}: cpc: {cpc}")
-                        
-                        logger.info(f"🎉 Worker {self.worker_id}: Toutes les métriques supplémentaires récupérées pour {domain}")
-                        
-                        # Enregistrer en BDD avec validation adaptative
+                        # Enregistrer en BDD
                         analytics_data = self.format_analytics_for_api()
-                        # Comptage métriques détaillé
-                        self.count_metrics_detailed(analytics_data)
-                        
-                        # Comptage global (pour compatibilité)
-                        required_metrics = [
-                            'organic_traffic', 'paid_search_traffic', 'visits', 'bounce_rate',
-                            'average_visit_duration', 'branded_traffic', 'conversion_rate', 'percent_branded_traffic'
-                        ]
-                        found_count = sum(1 for m in required_metrics if analytics_data.get(m) not in (None, '', 'N/A'))
-                        not_found_count = len(required_metrics) - found_count
-                        self.metrics_found += found_count
-                        self.metrics_not_found += not_found_count
-                        status = self.validate_metrics_status(analytics_data)
+                        status = 'completed' if self.session_data['data'].get('domain_overview') else 'partial'
                         api.update_shop_analytics(shop_id, analytics_data)
-                        self.count_status(status)
                         logger.info(f"💾 Worker {self.worker_id}: {domain} enregistré en BDD avec statut '{status}'")
                     else:
                         logger.warning(f"⚠️ Worker {self.worker_id}: {domain} échoué")
-                        self.count_status('failed')
                         
                 except Exception as e:
                     logger.error(f"❌ Worker {self.worker_id}: Erreur sur {domain}: {e}")
-                    self.count_status('failed')
                     continue
             
             logger.info(f"🎉 Worker {self.worker_id}: Terminé - {successful_shops}/{total_shops} boutiques réussies")
@@ -2305,8 +1641,9 @@ class ParallelProductionScraper:
             logger.error(f"❌ Worker {self.worker_id}: Erreur générale: {e}")
             return 'failed'
         finally:
-            # Ne pas fermer le contexte ici: session partagée gérée par le bootstrap global
-            logger.info(f"🔒 Worker {self.worker_id}: Fin du traitement (contexte partagé non fermé)")
+            if self.context:
+                await self.context.close()
+                logger.info(f"🔒 Worker {self.worker_id}: Navigateur fermé")
 
 class ShopDistributor:
     """Distributeur de boutiques entre les workers"""
@@ -2338,7 +1675,7 @@ class ShopDistributor:
             
             # Sauvegarder la distribution
             distribution_data = {
-                "timestamp": DateConverter.convert_to_iso8601_utc(datetime.now(timezone.utc)),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "num_workers": self.num_workers,
                 "total_shops": len(all_shops),
                 "eligible_shops": len(eligible_shops),
@@ -2360,62 +1697,6 @@ class ShopDistributor:
         except Exception as e:
             logger.error(f"❌ Erreur distribution shops: {e}")
             return {}
-    
-    def _validate_int(self, value):
-        """Valide qu'une valeur est un INTEGER valide"""
-        if not value or value == 'na' or value == '':
-            return None
-        try:
-            if isinstance(value, int):
-                return value
-            cleaned = str(value).replace(',', '').replace(' ', '').replace('$', '')
-            return int(float(cleaned))
-        except (ValueError, TypeError):
-            logger.warning(f"⚠️ Valeur '{value}' n'est pas un INTEGER valide")
-            return None
-
-    def _validate_numeric(self, value):
-        """Valide qu'une valeur est un NUMERIC valide"""
-        if not value or value == 'na' or value == '':
-            return None
-        try:
-            if isinstance(value, (int, float)):
-                return float(value)
-            cleaned = str(value).replace('%', '').replace(' ', '').replace(',', '')
-            return float(cleaned)
-        except (ValueError, TypeError):
-            logger.warning(f"⚠️ Valeur '{value}' n'est pas un NUMERIC valide")
-            return None
-
-    def _validate_visit_duration(self, value):
-        """Valide la durée de visite - format MM:SS ou secondes"""
-        if not value or value == 'na' or value == '':
-            return None
-        try:
-            if isinstance(value, (int, float)):
-                return float(value)
-            if ':' in str(value):
-                parts = str(value).split(':')
-                if len(parts) == 2:
-                    minutes, seconds = int(parts[0]), int(parts[1])
-                    return float(minutes * 60 + seconds)
-            return float(str(value).replace(',', '').replace(' ', ''))
-        except (ValueError, TypeError):
-            logger.warning(f"⚠️ Durée de visite '{value}' n'est pas valide")
-            return None
-    
-    def _convert_api_dates(self, data):
-        """Convertit les dates d'une réponse API vers ISO 8601 UTC"""
-        if not isinstance(data, dict):
-            return data
-        
-        # Champs de dates communs dans les APIs
-        date_fields = [
-            'timestamp', 'created_at', 'updated_at', 'scraped_at', 'creation_date',
-            'last_update', 'date', 'time', 'start_date', 'end_date', 'year_founded'
-        ]
-        
-        return convert_api_response_dates(data)
 
 async def run_worker_process(worker_id: int, shops: List[Dict], num_workers: int):
     """Fonction wrapper pour l'exécution en processus séparé"""

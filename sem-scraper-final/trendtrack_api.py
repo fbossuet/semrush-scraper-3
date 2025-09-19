@@ -20,8 +20,11 @@ class TrendTrackAPI:
     def __init__(self, db_path: str = None):
         """Initialise l'API avec le chemin de la base de données"""
         if db_path is None:
-            # Chemin par défaut sur le VPS
-            self.db_path = "/home/ubuntu/trendtrack-scraper-final/data/trendtrack.db"
+            # Chemin par défaut basé sur le répertoire de travail actuel
+            import os
+            # Utiliser le répertoire de travail actuel comme base
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) if "__file__" in globals() else os.getcwd()
+            self.db_path = os.path.join(base_dir, "trendtrack-scraper-final", "data", "trendtrack.db")
         else:
             self.db_path = db_path
             
@@ -236,7 +239,9 @@ class TrendTrackAPI:
             cursor.execute("""
                 SELECT id, shop_name, shop_url, scraping_status, scraping_last_update,
                        creation_date, monthly_visits, monthly_revenue, live_ads,
-                       page_number, scraped_at, project_source, external_id, metadata, updated_at
+                       page_number, scraped_at, project_source, external_id, metadata, updated_at,
+                       year_founded, total_products, aov, pixel_google, pixel_facebook,
+                       market_us, market_uk, market_de, market_ca, market_au, market_fr, category
                 FROM shops
                 ORDER BY id
             """)
@@ -374,8 +379,8 @@ class TrendTrackAPI:
         except Exception as e:
             return True
 
-# Instance globale de l'API
-api = TrendTrackAPI()
+# Instance globale de l'API (commentée pour éviter l'initialisation automatique)
+# api = TrendTrackAPI()
 
 # Fonction de test pour validation
 def test_api_functionality():

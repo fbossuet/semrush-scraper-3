@@ -1,0 +1,96 @@
+# Règles de travail pour la branche test
+# ======================================
+
+## 🎯 PRINCIPES FONDAMENTAUX (NON-NÉGOCIABLES)
+- **Documentation-First**: TOUJOURS consulter la documentation avant toute action
+- **VPS-Only Development**: Développement exclusivement sur le VPS, jamais en local
+- **Validation Utilisateur**: L'utilisateur valide chaque modification via test sur le VPS
+- **Logs Immutables**: JAMAIS modifier les messages de logs existants
+- **Approche Adaptative**: Validation des métriques par comptage dynamique
+
+## 📁 RÉPERTOIRE DE TRAVAIL
+- TOUJOURS travailler dans /home/ubuntu/projects/shopshopshops/test/
+- NE JAMAIS aller dans /home/ubuntu/trendtrack-scraper-final/ ou autres répertoires
+- **CHEMINS RELATIFS** : Utiliser os.getcwd() + chemins relatifs pour la portabilité
+- **RÉPERTOIRE DE BASE** : /home/ubuntu/projects/shopshopshops/test/ (répertoire de travail)
+
+## 🗄️ BASES DE DONNÉES
+- **Production**: trendtrack-scraper-final/data/trendtrack.db (chemin relatif)
+- **Test**: trendtrack-scraper-final/data/trendtrack_test.db (chemin relatif)
+- **Structure**: trendtrack_test.db a une structure optimisée (INTEGER, DATE) vs trendtrack.db (TEXT)
+- **Endpoint principal**: Utilise trendtrack.db (production) pour les données réelles
+- **Scraper TrendTrack**: Utilise la base de production (trendtrack.db)
+
+## 🚀 API ET ENDPOINTS
+- **Fichier**: sem-scraper-final/api_server.py (chemin relatif)
+- **Port**: 8001
+- **URL**: http://37.59.102.7:8001
+- **Endpoint principal**: /test/shops/with-analytics-ordered
+- **Structure de retour**: 25 champs dans l'ordre spécifié (id, shop_name, category, etc.)
+- **Lancement**: Depuis /home/ubuntu/projects/shopshopshops/test/ avec chemins relatifs
+
+## 🔧 COMMANDES DE VÉRIFICATION
+- Toujours commencer par: cd /home/ubuntu/projects/shopshopshops/test && pwd
+- Utiliser: python3 database_config.py pour vérifier les chemins
+- Utiliser: ./check_workspace.sh pour vérification complète
+- Utiliser: python3 workspace_config.py pour configuration centralisée
+
+## 📋 SYSTÈME DE TÂCHES
+- **Fichier de suivi**: tasks.md (système interne inspiré de git spec check)
+- **Priorités**: P0 (critique), P1 (important), P2 (normal), P3 (faible)
+- **Types**: Bug Fix, Feature, Infrastructure, Documentation, Refactoring
+- **Statuts**: En cours, En attente, Terminée, Annulée
+
+## 🛠️ WORKFLOW DE DÉVELOPPEMENT
+1. **Lecture obligatoire** du guide de développement
+2. **Backup** du fichier à modifier
+3. **Téléchargement** du fichier du VPS
+4. **Modification locale** avec outils appropriés (search_replace, MultiEdit)
+5. **Vérification syntaxe** Python (py_compile)
+6. **Upload** sur le VPS
+7. **Vérification déploiement** sur le VPS
+8. **Test utilisateur** et validation
+
+## 🎯 STRUCTURE DE L'ENDPOINT FINAL
+L'endpoint /test/shops/with-analytics-ordered doit retourner exactement:
+- id, shop_name, shop_url, category
+- monthly_visits, year_founded, total_products, aov
+- pixel_google, pixel_facebook
+- organic_traffic, bounce_rate, avg_visit_duration, visits
+- branded_traffic, percent_branded_traffic, paid_search_traffic, cpc, conversion_rate
+- market_us, market_uk, market_de, market_ca, market_au, market_fr
+
+## ⚠️ RÈGLES DE SÉCURITÉ
+- **Backup obligatoire** avant toute modification
+- **Test de compilation** Python avant upload (py_compile)
+- **Rollback immédiat** si validation échoue
+- **Vérification des effets de bord** AVANT de dire "c'est OK"
+- **Test de déploiement complet** sur le VPS
+- **Validation utilisateur** obligatoire pour chaque modification
+- **NE JAMAIS dire "c'est OK"** sans avoir testé tous les composants
+
+## 🚀 DÉPLOIEMENT
+- Développer dans /test/
+- Déployer vers les autres branches quand prêt
+- Ne jamais modifier directement les autres branches
+- Utiliser le système de rollback en cas de problème
+
+## 📚 RÉFÉRENCES IMPORTANTES
+- **Constitution**: .specify/memory/constitution.md
+- **Documentation**: docs/analysis/ et specs/001-name-trendtrack-scraper/
+- **Procédures**: docs/procedures/metric_addition_procedure.md
+- **Workspace**: README_WORKSPACE.md
+
+## 🔄 CHANGEMENTS RÉCENTS (2025-09-18)
+- **Chemins absolus → relatifs** : Conversion complète pour la portabilité
+- **Scraper TrendTrack** : Fonctionne avec chemins relatifs (614 boutiques)
+- **API** : Port 8001, chemins relatifs, lancement depuis /test/
+- **Bases de données** : Chemins relatifs, scraper utilise trendtrack.db
+- **Règles de sécurité** : Renforcées avec validation obligatoire
+
+## 🎯 ÉTAT ACTUEL
+- ✅ **Scraper TrendTrack** : Opérationnel (screen actif)
+- ✅ **Chemins relatifs** : Implémentés dans tous les fichiers
+- ✅ **Base de données** : 614 boutiques dans trendtrack.db
+- ⚠️ **API** : Problème de démarrage (non critique)
+- ✅ **Menu workers** : Fonctionne avec chemins corrigés

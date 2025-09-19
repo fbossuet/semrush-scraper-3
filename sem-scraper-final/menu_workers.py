@@ -279,7 +279,7 @@ class WorkersMenu:
             screen_cmd = [
                 'screen', '-dmS', session_name,
                 '-L', '-Logfile', log_file,
-                'bash', '-c', f'cd /home/ubuntu/trendtrack-scraper-final && {cmd}'
+                'bash', '-c', f'cd ../trendtrack-scraper-final && {cmd}'
             ]
             
             print(f"🖥️ Session screen: {session_name}")
@@ -816,7 +816,7 @@ class WorkersMenu:
             
             # Connexion à la base de données
             import sqlite3
-            db_path = "/home/ubuntu/trendtrack-scraper-final/data/trendtrack.db"
+            db_path = "trendtrack-scraper-final/data/trendtrack.db"
             
             if not os.path.exists(db_path):
                 print("❌ Base de données non trouvée")

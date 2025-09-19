@@ -1,0 +1,16 @@
+{
+  "timestamp": "2025-09-18T17:50:28.771091+00:00",
+  "num_workers": 2,
+  "total_shops": 1,
+  "eligible_shops": 1,
+  "distribution": {
+    "0": [
+      {
+        "id": 1654,
+        "name": "Test Shop",
+        "url": "https://test-shop.com"
+      }
+    ],
+    "1": []
+  }
+}

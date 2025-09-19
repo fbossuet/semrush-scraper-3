@@ -58,7 +58,7 @@ class MarketTrafficExtractor:
             ).first
             
             # Récupérer les lignes de pays
-            rows = card.locator("div.flex.gap-2.w-full.items-center")
+            rows = page.locator("div.flex.gap-2.w-full.items-center")
             count = await rows.count()
             
             observed = {}  # ex: {"us": 175942, "au": 18555284}
@@ -76,7 +76,7 @@ class MarketTrafficExtractor:
                     continue
                 
                 # Valeur (le premier <p> avant le %)
-                value_text = await row.locator("div.flex.justify-between div.items-center > p").first.text_content()
+                value_text = await row.locator("div.flex.justify-between div.flex.items-center.gap-1 p").first.text_content()
                 value = self.parse_int(value_text)
                 
                 # Enregistrer uniquement si une valeur numérique est présente
@@ -113,7 +113,21 @@ class MarketTrafficExtractor:
                 browser = await p.chromium.launch(headless=True)
                 page = await browser.new_page()
                 
-                await page.goto(shop_url, wait_until='domcontentloaded', timeout=30000)
+                # Construire l'URL TrendTrack pour la page détail de cette boutique
+                # Format: https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/shop/[shop_id]
+                # IMPORTANT: shop_url contient l'ID de la boutique, pas l'URL du site
+                # Exemple: shop_url = "5c1f6e07-41d0-4607-a48c-386098e20e9d"
+                if shop_url.startswith('http'):
+                    # Si c'est une URL complète, extraire l'ID depuis l'URL
+                    logger.warning(f"⚠️ URL complète reçue au lieu d'ID: {shop_url}")
+                    # Pour l'instant, utiliser une page générique
+                    trendtrack_url = f"https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops"
+                else:
+                    # C'est un ID de boutique
+                    trendtrack_url = f"https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/shop/{shop_url}"
+                
+                logger.info(f"🌐 Navigation vers page détail TrendTrack: {trendtrack_url}")
+                await page.goto(trendtrack_url, wait_until='domcontentloaded', timeout=30000)
                 await page.wait_for_timeout(2000)  # Pause humaine
                 
                 market_data = await self.scrape_market_traffic(page, targets)

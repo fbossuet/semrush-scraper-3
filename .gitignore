@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+session-profile-shared/
+*.session
+*.log
+*.cache
+*.backup
+*backup*.*

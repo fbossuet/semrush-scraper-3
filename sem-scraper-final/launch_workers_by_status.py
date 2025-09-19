@@ -12,6 +12,10 @@ import sys
 import subprocess
 import shutil
 import time
+sys.path.append(os.path.join(os.getcwd(), "sem-scraper-final"))
+import sys
+import os
+sys.path.append(os.path.join(os.getcwd(), "trendtrack-scraper-final", "utils"))
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional

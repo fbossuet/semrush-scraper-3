@@ -4,15 +4,13 @@ API REST pour les données TrendTrack
 Permet de récupérer les données avec des filtres via HTTP
 """
 
-from fastapi import FastAPI, Query, HTTPException, Body
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 import uvicorn
-from datetime import datetime, timezone
+from datetime import datetime
 import logging
-import subprocess
-import asyncio
 
 # Import de notre API
 from trendtrack_api import TrendTrackAPI
@@ -101,7 +99,7 @@ class AdaptiveTimeoutRequest(BaseModel):
     base_timeout: Optional[int] = Field(30000, description="Timeout de base en millisecondes", ge=1000, le=300000)
 
 # Initialiser l'API TrendTrack
-api = TrendTrackAPI("../trendtrack-scraper-final/data/trendtrack.db")
+api = TrendTrackAPI()
 
 @app.get("/")
 async def root():
@@ -245,7 +243,7 @@ async def get_filtered_shops(
                         from_date = datetime.strptime(date_from, '%Y-%m-%d')
                         if update_date < from_date:
                             continue
-                    except:
+                    except Exception:
                         pass
             
             if date_to:
@@ -256,7 +254,7 @@ async def get_filtered_shops(
                         to_date = datetime.strptime(date_to, '%Y-%m-%d')
                         if update_date > to_date:
                             continue
-                    except:
+                    except Exception:
                         pass
             
             # Ajouter les analytics si demandé
@@ -514,6 +512,144 @@ async def get_stats():
         logger.error(f"❌ Erreur calcul statistiques: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+def transform_shop_data(shop_data):
+    """
+    Transforme les données d'une boutique pour l'API selon la structure finale demandée
+    Applique les transformations * 100 pour les champs de pourcentage
+    """
+    if not shop_data:
+        return shop_data
+    
+    # Champs à multiplier par 100 (pourcentages stockés en décimales)
+    percentage_fields = ['conversion_rate', 'percent_branded_traffic', 'bounce_rate']
+    
+    # Créer la structure finale avec les champs dans l'ordre demandé
+    final_data = {
+        'id': shop_data.get('id'),
+        'shop_name': shop_data.get('shop_name'),
+        'shop_url': shop_data.get('shop_url'),
+        'category': shop_data.get('category', 'peu importe'),  # Valeur par défaut si manquante
+        'monthly_visits': shop_data.get('monthly_visits'),
+        'year_founded': shop_data.get('year_founded'),
+        'total_products': shop_data.get('total_products'),
+        'aov': shop_data.get('aov'),
+        'pixel_google': shop_data.get('pixel_google'),
+        'pixel_facebook': shop_data.get('pixel_facebook'),
+        'organic_traffic': shop_data.get('organic_traffic'),
+        'bounce_rate': shop_data.get('bounce_rate'),
+        'avg_visit_duration': shop_data.get('average_visit_duration'),  # Utiliser average_visit_duration
+        'visits': shop_data.get('visits'),
+        'branded_traffic': shop_data.get('branded_traffic'),
+        'percent_branded_traffic': shop_data.get('percent_branded_traffic'),
+        'paid_search_traffic': shop_data.get('paid_search_traffic'),
+        'cpc': shop_data.get('cpc'),
+        'conversion_rate': shop_data.get('conversion_rate'),
+        'market_us': shop_data.get('market_us'),
+        'market_uk': shop_data.get('market_uk'),
+        'market_de': shop_data.get('market_de'),
+        'market_ca': shop_data.get('market_ca'),
+        'market_au': shop_data.get('market_au'),
+                'market_fr': shop_data.get('market_fr'),
+        "live_ads": shop_data.get("live_ads")  # Champ ajouté à la fin
+    
+    }
+    # Appliquer les transformations * 100 pour les champs de pourcentage
+    for field in percentage_fields:
+        if field in final_data and final_data[field] is not None:
+            try:
+                # Convertir en float, multiplier par 100, et arrondir à 2 décimales
+                original_value = float(final_data[field])
+                transformed_value = round(original_value * 100, 2)
+                final_data[field] = transformed_value
+            except (ValueError, TypeError):
+                # Si la conversion échoue, garder la valeur originale
+                pass
+    
+    return final_data
+
+@app.get('/test/shops/with-analytics-ordered')
+async def get_test_shops_with_analytics_ordered(since: Optional[str] = Query(None, description="Date de début (ISO 8601)")):
+    """
+    Endpoint de TEST - Récupère toutes les boutiques avec leurs métriques analytics depuis la base de production
+    Triées par qualité des données (completed > partial > na > failed)
+    
+    Structure de retour :
+    - id, shop_name, shop_url, category
+    - monthly_visits, year_founded, total_products, aov
+    - pixel_google, pixel_facebook
+    - organic_traffic, bounce_rate, avg_visit_duration, visits
+    - branded_traffic, percent_branded_traffic, paid_search_traffic, cpc, conversion_rate
+    - market_us, market_uk, market_de, market_ca, market_au, market_fr',
+    """
+    try:
+        # Utiliser la base de production
+        test_api = TrendTrackAPI()
+        shops = test_api.get_all_shops()
+        
+        # Filtrer par date si spécifiée
+        if since:
+            try:
+                from datetime import datetime
+                since_date = datetime.fromisoformat(since.replace('Z', '+00:00'))
+                filtered_shops = []
+                for shop in shops:
+                    last_update = shop.get('scraping_last_update')
+                    if last_update:
+                        try:
+                            update_date = datetime.fromisoformat(last_update.replace('Z', '+00:00'))
+                            if update_date >= since_date:
+                                filtered_shops.append(shop)
+                        except Exception:
+                            # Si la date n'est pas valide, inclure la boutique
+                            filtered_shops.append(shop)
+                    else:
+                        # Si pas de date, inclure la boutique
+                        filtered_shops.append(shop)
+                shops = filtered_shops
+            except Exception as e:
+                # Si erreur de parsing de date, ignorer le filtre
+                pass
+        
+        # Récupérer les analytics pour chaque boutique
+        shops_with_analytics = []
+        for shop in shops:
+            shop_with_analytics = shop.copy()
+            analytics = test_api.get_shop_analytics(shop.get('id'))
+            if analytics:
+                shop_with_analytics.update(analytics)
+            
+            # Appliquer les transformations de données
+            shop_with_analytics = transform_shop_data(shop_with_analytics)
+            shops_with_analytics.append(shop_with_analytics)
+        
+        # Trier par qualité des données (completed > partial > na > failed)
+        def sort_key(shop):
+            status = shop.get('scraping_status', '')
+            if status == 'completed':
+                return 0
+            elif status == 'partial':
+                return 1
+            elif status == 'na':
+                return 2
+            elif status == 'failed':
+                return 3
+            else:
+                return 4
+        
+        shops_with_analytics.sort(key=sort_key)
+        
+        return {
+            'success': True,
+            'environment': 'PRODUCTION',
+            'database': 'trendtrack.db',
+            'count': len(shops_with_analytics),
+            'since': since,
+            'data': shops_with_analytics
+        }
+    except Exception as e:
+        logger.error(f"❌ Erreur endpoint test: {e}")
+        return {'success': False, 'error': str(e), 'environment': 'PRODUCTION'}
+
 @app.get("/export/csv")
 async def export_to_csv(
     status: Optional[str] = Query(None, description="Filtrer par status"),
@@ -540,7 +676,7 @@ async def export_to_csv(
                         from_date = datetime.strptime(date_from, '%Y-%m-%d')
                         if update_date < from_date:
                             continue
-                    except:
+                    except Exception:
                         pass
             filtered_shops.append(shop)
         
@@ -666,10 +802,12 @@ async def get_all_shops_with_analytics_direct():
     """Récupérer toutes les boutiques avec analytics - ACCÈS DIRECT À LA BASE"""
     try:
         import sqlite3
-        from datetime import datetime, timezone
+        from datetime import datetime
         
         # Connexion directe à la base
-        db_path = '/home/ubuntu/trendtrack-scraper-final/data/trendtrack.db'
+        import os
+        base_dir = os.getcwd()
+        db_path = os.path.join(base_dir, "trendtrack-scraper-final", "data", "trendtrack.db")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
@@ -759,7 +897,7 @@ async def get_all_shops_with_analytics_direct():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
 
 
 
@@ -831,10 +969,12 @@ async def get_all_shops_with_analytics_direct():
     """Récupérer toutes les boutiques avec analytics - ACCÈS DIRECT À LA BASE"""
     try:
         import sqlite3
-        from datetime import datetime, timezone
+        from datetime import datetime
         
         # Connexion directe à la base
-        db_path = '/home/ubuntu/trendtrack-scraper-final/data/trendtrack.db'
+        import os
+        base_dir = os.getcwd()
+        db_path = os.path.join(base_dir, "trendtrack-scraper-final", "data", "trendtrack.db")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
@@ -925,7 +1065,7 @@ async def get_all_shops_with_analytics_direct():
 
 if __name__ == "__main__":
     logger.info("🚀 Démarrage de l'API TrendTrack")
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8001) 
 @app.get("/shops/completed")
 async def get_completed_shops(
     page: int = Query(1, ge=1, description="Numéro de page"),
@@ -1334,10 +1474,12 @@ async def get_all_shops_with_analytics_direct():
     """Récupérer toutes les boutiques avec analytics - ACCÈS DIRECT À LA BASE"""
     try:
         import sqlite3
-        from datetime import datetime, timezone
+        from datetime import datetime
         
         # Connexion directe à la base
-        db_path = '/home/ubuntu/trendtrack-scraper-final/data/trendtrack.db'
+        import os
+        base_dir = os.getcwd()
+        db_path = os.path.join(base_dir, "trendtrack-scraper-final", "data", "trendtrack.db")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
@@ -1427,7 +1569,7 @@ async def get_all_shops_with_analytics_direct():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
 
 
 
@@ -1499,10 +1641,12 @@ async def get_all_shops_with_analytics_direct():
     """Récupérer toutes les boutiques avec analytics - ACCÈS DIRECT À LA BASE"""
     try:
         import sqlite3
-        from datetime import datetime, timezone
+        from datetime import datetime
         
         # Connexion directe à la base
-        db_path = '/home/ubuntu/trendtrack-scraper-final/data/trendtrack.db'
+        import os
+        base_dir = os.getcwd()
+        db_path = os.path.join(base_dir, "trendtrack-scraper-final", "data", "trendtrack.db")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
@@ -1593,7 +1737,7 @@ async def get_all_shops_with_analytics_direct():
 
 if __name__ == "__main__":
     logger.info("🚀 Démarrage de l'API TrendTrack")
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8001) 
 @app.get("/shops/completed")
 async def get_completed_shops(
     page: int = Query(1, ge=1, description="Numéro de page"),
@@ -1810,10 +1954,12 @@ async def get_all_shops_with_analytics_direct():
     """Récupérer toutes les boutiques avec analytics - ACCÈS DIRECT À LA BASE"""
     try:
         import sqlite3
-        from datetime import datetime, timezone
+        from datetime import datetime
         
         # Connexion directe à la base
-        db_path = '/home/ubuntu/trendtrack-scraper-final/data/trendtrack.db'
+        import os
+        base_dir = os.getcwd()
+        db_path = os.path.join(base_dir, "trendtrack-scraper-final", "data", "trendtrack.db")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
@@ -1903,7 +2049,7 @@ async def get_all_shops_with_analytics_direct():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
 
 
 
@@ -1975,10 +2121,12 @@ async def get_all_shops_with_analytics_direct():
     """Récupérer toutes les boutiques avec analytics - ACCÈS DIRECT À LA BASE"""
     try:
         import sqlite3
-        from datetime import datetime, timezone
+        from datetime import datetime
         
         # Connexion directe à la base
-        db_path = '/home/ubuntu/trendtrack-scraper-final/data/trendtrack.db'
+        import os
+        base_dir = os.getcwd()
+        db_path = os.path.join(base_dir, "trendtrack-scraper-final", "data", "trendtrack.db")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         
@@ -2069,7 +2217,7 @@ async def get_all_shops_with_analytics_direct():
 
 if __name__ == "__main__":
     logger.info("🚀 Démarrage de l'API TrendTrack")
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    uvicorn.run(app, host="0.0.0.0", port=8001) 
 
 @app.get("/shops/complete")
 async def get_all_shops_complete():
@@ -2226,7 +2374,7 @@ async def get_test_shops_with_analytics():
     """
     try:
         # Utiliser la base de test
-        test_api = TrendTrackAPI("../trendtrack-scraper-final/data/trendtrack_test.db")
+        test_api = TrendTrackAPI("trendtrack-scraper-final/data/trendtrack_test.db")
         shops = test_api.get_all_shops()
         analytics = test_api.get_all_analytics()
         
@@ -2263,7 +2411,7 @@ async def get_test_stats():
     Endpoint de TEST - Statistiques sur la base de test
     """
     try:
-        test_api = TrendTrackAPI("../trendtrack-scraper-final/data/trendtrack_test.db")
+        test_api = TrendTrackAPI("trendtrack-scraper-final/data/trendtrack_test.db")
         shops = test_api.get_all_shops()
         analytics = test_api.get_all_analytics()
         

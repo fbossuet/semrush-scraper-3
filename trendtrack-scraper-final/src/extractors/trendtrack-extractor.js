@@ -4,18 +4,20 @@
  */
 
 import { BaseExtractor } from './base-extractor.js';
-import { MarketTrafficExtractor } from './market-traffic-extractor.js';
-import { MarketTrafficPythonBridge } from './market-traffic-python-bridge.js';
+// import { MarketTrafficExtractor } from './market-traffic-extractor.js';
+// import { MarketTrafficPythonBridge } from './market-traffic-python-bridge.js';
+// import { AdditionalMetricsPythonBridge } from './additional-metrics-python-bridge.js';
 
 export class TrendTrackExtractor extends BaseExtractor {
   constructor(page, errorHandler) {
     super(page, errorHandler);
     
     // Initialiser l'extracteur de trafic par pays (JavaScript)
-    this.marketTrafficExtractor = new MarketTrafficExtractor(page);
+    // this.marketTrafficExtractor = new MarketTrafficExtractor(page);
     
     // Initialiser le pont Python pour les nouvelles fonctionnalités
-    this.marketTrafficPythonBridge = new MarketTrafficPythonBridge();
+    // this.marketTrafficPythonBridge = new MarketTrafficPythonBridge();
+    // this.additionalMetricsBridge = new AdditionalMetricsPythonBridge();
     
     // Sélecteurs spécifiques à TrendTrack basés sur l'analyse HTML
     this.selectors = {
@@ -100,11 +102,11 @@ export class TrendTrackExtractor extends BaseExtractor {
       // Navigation vers la page de connexion
       await this.page.goto('https://app.trendtrack.io/en/login', {
         waitUntil: 'domcontentloaded',
-        timeout: 30000
+        timeout: 60000
       });
       
       // Attendre que le formulaire soit chargé
-      await this.page.waitForSelector('input[type="email"][name="email"]', { timeout: 30000 });
+      await this.page.waitForSelector('input[type="email"][name="email"]', { timeout: 60000 });
       
       // Attendre 3 secondes comme dans le test visuel
       await this.page.waitForTimeout(3000);
@@ -124,7 +126,7 @@ export class TrendTrackExtractor extends BaseExtractor {
       
       // Vérifier que la connexion a réussi en cherchant un élément de la page d'accueil
       try {
-        await this.page.waitForSelector('a[href*="trending-shops"]', { timeout: 30000 });
+        await this.page.waitForSelector('a[href*="trending-shops"]', { timeout: 60000 });
         console.log('✅ Connexion réussie - Page d\'accueil détectée');
         return true;
       } catch (error) {
@@ -159,12 +161,27 @@ export class TrendTrackExtractor extends BaseExtractor {
   async navigateToTrendingShops(page = 1) {
     console.log(`📊 Navigation vers les boutiques tendances (page ${page})...`);
     try {
-      // URL complète avec tous les paramètres (corrigée)
-      // Ancienne URL (commentée)
-      // let url = 'https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops?minTraffic=10000&creationCountry=US&include=true&languages=en&currencies=USD&orderBy=liveAds&growth=1m=100=greater&minGrowth=100';
+      // Vérifier qu'on est bien connecté et sur la page d'accueil
+      const currentUrl = this.page.url();
+      console.log(`🔍 URL actuelle: ${currentUrl}`);
       
-                  // Nouvelle URL avec paramètres mis à jour
-            let url = 'https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops?include=true&tab=websites&minTraffic=500000&languages=en&currencies=USD&creationCountry=US=include&orderBy=liveAds';
+      if (currentUrl.includes('/login')) {
+        console.log('❌ Pas connecté - Redirection vers login détectée');
+        return false;
+      }
+      
+      // Si on n'est pas sur la page d'accueil, y aller d'abord
+      if (!currentUrl.includes('workspace') && !currentUrl.includes('trending-shops')) {
+        console.log('🔄 Navigation vers la page d\'accueil...');
+        await this.page.goto('https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st', {
+          waitUntil: 'domcontentloaded',
+          timeout: 60000
+        });
+        await this.page.waitForTimeout(2000);
+      }
+      
+      // URL complète avec tous les paramètres
+      let url = 'https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops?include=true&tab=websites&minTraffic=500000&languages=en&currencies=USD&creationCountry=US&orderBy=liveAds';
       
       // Ajouter le paramètre de page si nécessaire
       if (page > 1) {
@@ -173,15 +190,24 @@ export class TrendTrackExtractor extends BaseExtractor {
       
       console.log(`🌐 URL complète de navigation: ${url}`);
       
-      // Navigation avec plus de détails de debug
+      // Navigation en maintenant la session
       console.log(`🔄 Chargement de la page...`);
       await this.page.goto(url, {
         waitUntil: 'domcontentloaded',
-        timeout: 30000
+        timeout: 60000
       });
       
       // Attendre un peu pour que la page se charge complètement
       await this.page.waitForTimeout(3000);
+      
+      // Vérifier qu'on n'a pas été redirigé vers login
+      const finalUrl = this.page.url();
+      console.log(`🔍 URL finale: ${finalUrl}`);
+      
+      if (finalUrl.includes('/login')) {
+        console.log('❌ Redirection vers login détectée - Session perdue');
+        return false;
+      }
       
       console.log(`🔍 Recherche du tableau...`);
       // Attendre que le tableau soit chargé
@@ -218,7 +244,7 @@ export class TrendTrackExtractor extends BaseExtractor {
     
     try {
       // Attendre que l'en-tête soit chargé
-      await this.page.waitForSelector('th div.flex.items-center.gap-1', { timeout: 30000 });
+      await this.page.waitForSelector('th div.flex.items-center.gap-1', { timeout: 60000 });
       
       // Trouver l'en-tête "Live Ads" et cliquer dessus
       const liveAdsHeader = await this.page.$('th div.flex.items-center.gap-1:has-text("Live Ads")');
@@ -250,6 +276,13 @@ export class TrendTrackExtractor extends BaseExtractor {
   async extractShopData(row, includeMarketData = false) {
     try {
       const shopData = {};
+      
+      // 🆕 Extraire l'ID de la boutique depuis l'attribut id de la ligne (via outerHTML pour éviter les timeouts)
+      const rowHtml = await row.evaluate(el => el.outerHTML);
+      const rowIdMatch = rowHtml.match(/<tr[^>]*id=["']([^"']+)["']/);
+      const rowId = rowIdMatch ? rowIdMatch[1] : null;
+      shopData.shopId = rowId;
+      
       const cells = await row.locator('td').all();
       if (cells.length < 8) {
         return null;
@@ -283,11 +316,30 @@ export class TrendTrackExtractor extends BaseExtractor {
       const liveAdsP = await liveAdsDiv.locator('p').first();
       shopData.liveAds = liveAdsP ? (await liveAdsP.textContent()).trim() : '';
 
+      // 🆕 Extraction directe du nombre de produits (colonne 2)
+      try {
+        const productsCell = cells[2];
+        const productsP = productsCell.locator("p:has(> span:has-text(\"products\"))");
+        const productsText = await productsP.textContent();
+        if (productsText) {
+          const match = productsText.match(/\d[\d\s.,]*/);
+          shopData.totalProducts = match ? Number(match[0].replace(/[^\d]/g, "")) : null;
+          console.log(`📦 Produits extraits pour ${shopData.shopName}: ${shopData.totalProducts}`);
+        } else {
+          shopData.totalProducts = null;
+        }
+      } catch (error) {
+        console.error(`⚠️ Erreur extraction produits pour ${shopData.shopName}:`, error.message);
+        shopData.totalProducts = null;
+      }
+
+
+
       // Ajouter les données de trafic par pays si demandé
       if (includeMarketData && shopData.shopUrl) {
         try {
           console.log(`🌍 Extraction trafic par pays pour: ${shopData.shopName}`);
-          const marketData = await this.extractMarketTrafficForShop(shopData.shopUrl);
+          const marketData = await this.extractMarketTrafficForShop(shopData.shopId || shopData.shopUrl);
           if (marketData) {
             Object.assign(shopData, marketData);
           }
@@ -300,6 +352,29 @@ export class TrendTrackExtractor extends BaseExtractor {
           shopData.market_ca = null;
           shopData.market_au = null;
           shopData.market_fr = null;
+        }
+      }
+
+      // 🆕 Récupération des métriques supplémentaires via Python
+      if (shopData.shopUrl) {
+        try {
+          console.log(`🔍 Extraction métriques supplémentaires pour: ${shopData.shopName}`);
+          
+          // Extraire les métriques supplémentaires (total_products, pixel_google, pixel_facebook, aov)
+          const pixelData = await this.extractPixelsForShopJS(shopData.shopId);
+            
+            shopData.pixel_google = pixelData.pixel_google;
+            shopData.pixel_facebook = pixelData.pixel_facebook;
+            
+            console.log(`✅ Métriques supplémentaires extraites pour ${shopData.shopName}`);
+          
+        } catch (error) {
+          console.error(`⚠️ Erreur extraction métriques supplémentaires pour ${shopData.shopName}:`, error.message);
+          // Ajouter des valeurs null pour les champs en cas d'erreur
+          shopData.totalProducts = null;
+          shopData.pixel_google = "non";
+          shopData.pixel_facebook = "non";
+          
         }
       }
 
@@ -320,7 +395,27 @@ export class TrendTrackExtractor extends BaseExtractor {
     
     try {
       // Attendre que le tableau soit chargé
-      await this.page.waitForSelector('tbody tr', { timeout: 30000 });
+      console.log('🔍 Debug: Recherche du sélecteur tbody tr...');
+      
+      // Debug: capturer le contenu de la page
+      const pageContent = await this.page.content();
+      console.log(`🔍 Debug: Taille du contenu de la page: ${pageContent.length} caractères`);
+      
+      // Debug: vérifier les éléments disponibles
+      const hasTable = await this.page.locator('table').count();
+      const hasTbody = await this.page.locator('tbody').count();
+      const hasTr = await this.page.locator('tr').count();
+      console.log(`🔍 Debug: Éléments trouvés - table: ${hasTable}, tbody: ${hasTbody}, tr: ${hasTr}`);
+      
+      // Debug: URL actuelle
+      const currentUrl = await this.page.url();
+      console.log(`🔍 Debug: URL actuelle: ${currentUrl}`);
+      
+      // Debug: titre de la page
+      const pageTitle = await this.page.title();
+      console.log(`🔍 Debug: Titre de la page: ${pageTitle}`);
+      
+      await this.page.waitForSelector('tbody tr', { timeout: 60000 });
       
       // Récupérer toutes les lignes du tableau
       const rows = await this.page.locator('tbody tr').all();
@@ -331,7 +426,7 @@ export class TrendTrackExtractor extends BaseExtractor {
       for (let i = 0; i < rows.length; i++) {
         console.log(`🔍 Extraction ligne ${i + 1}/${rows.length}...`);
         
-        const shopData = await this.extractShopData(rows[i], includeMarketData);
+        const shopData = await this.extractShopData(rows[i], true); // Toujours activer l'extraction des métriques avancées
         if (shopData) {
           shopsData.push({
             ...shopData,
@@ -463,13 +558,11 @@ export class TrendTrackExtractor extends BaseExtractor {
     const allShopsData = [];
     
     // Naviguer vers la première page pour s'assurer qu'on est au bon endroit
-    if (maxPages > 1) {
-      console.log('🔄 Navigation vers la page 1...');
-      const navSuccess = await this.navigateToTrendingShops(1);
-      if (!navSuccess) {
-        console.log('❌ Échec navigation vers la page 1');
-        return [];
-      }
+    console.log('🔄 Navigation vers la page 1...');
+    const navSuccess = await this.navigateToTrendingShops(1);
+    if (!navSuccess) {
+      console.log('❌ Échec navigation vers la page 1');
+      return [];
     }
     
     for (let page = 1; page <= maxPages; page++) {
@@ -489,24 +582,7 @@ export class TrendTrackExtractor extends BaseExtractor {
       console.log(`✅ Page ${page}: ${pageData.length} boutiques extraites`);
       
       // Vérifier s'il y a une page suivante
-      if (page < maxPages) {
-        const paginationInfo = await this.getPaginationInfo();
-        
-        if (paginationInfo.hasNextPage && page < paginationInfo.totalPages) {
-          // Aller à la page suivante
-          const success = await this.goToNextPage();
-          if (!success) {
-            console.log('⚠️ Impossible d\'aller à la page suivante, arrêt du scraping');
-            break;
-          }
-          
-          // Attendre un peu entre les pages (plus longtemps si on inclut les données de trafic)
-          await this.sleep(includeMarketData ? 5000 : 2000);
-        } else {
-          console.log('⚠️ Plus de pages disponibles');
-          break;
-        }
-      }
+// Naviguer vers la page suivante si ce n'est pas la dernière      if (page < maxPages) {        console.log(`🔄 Navigation vers la page ${page + 1}...`);        const nextPageSuccess = await this.navigateToTrendingShops(page + 1);          console.log(`❌ Échec navigation vers la page ${page + 1}`);          break;        }                // Attendre un peu entre les pages        await this.page.waitForTimeout(2000);      }
     }
     
     console.log(`\n✅ Scraping terminé: ${allShopsData.length} boutiques au total`);
@@ -580,7 +656,7 @@ export class TrendTrackExtractor extends BaseExtractor {
     
     try {
       // Utiliser le pont Python pour les nouvelles fonctionnalités
-      const marketData = await this.marketTrafficPythonBridge.extractMarketTraffic(shopUrl, targets);
+      const marketData = await this.extractMarketTrafficForShopJS(shopUrl, targets);
       return marketData;
     } catch (error) {
       console.error(`❌ Erreur extraction trafic pour ${shopUrl}:`, error.message);
@@ -598,8 +674,7 @@ export class TrendTrackExtractor extends BaseExtractor {
     console.log(`🌍 Extraction trafic par pays pour ${shopUrls.length} boutiques...`);
     
     try {
-      const marketData = await this.marketTrafficExtractor.extractMarketTrafficForMultipleShops(shopUrls, targets);
-      return marketData;
+// Extraction markets en JS pur pour plusieurs boutiques      const results = [];      for (const shopUrl of shopUrls) {        const marketData = await this.extractMarketTrafficForShopJS(shopUrl, targets);        results.push(marketData);      }      return results;
     } catch (error) {
       console.error('❌ Erreur extraction trafic multiple:', error.message);
       return [];
@@ -643,6 +718,117 @@ export class TrendTrackExtractor extends BaseExtractor {
         error: error.message
       };
     }
+  }
+
+  /**
+   * Extraction pixels en JavaScript pur
+   */
+  async extractPixelsForShopJS(shopId) {
+    console.log(`📊 Extraction pixels (JS) pour: ${shopId}`);
+    const pixelData = { pixel_google: "non", pixel_facebook: "non" };
+    try {
+      const detailUrl = `https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/shop/${shopId}`;
+      await this.page.goto(detailUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await this.page.waitForTimeout(2000);
+
+      const facebookPixel = await this.page.locator('img[alt="facebook"][src*="meta-icon.svg"]').isVisible();
+      const googlePixel = await this.page.locator('img[alt="google"][src*="google-icon.svg"]').isVisible();
+
+      if (facebookPixel) {
+        pixelData.pixel_facebook = "oui";
+      }
+      if (googlePixel) {
+        pixelData.pixel_google = "oui";
+      }
+      console.log(`✅ Pixels extraits pour ${shopId}: Google=${pixelData.pixel_google}, Facebook=${pixelData.pixel_facebook}`);
+      return pixelData;
+    } catch (error) {
+      console.error(`❌ Erreur extraction pixels pour ${shopId}:`, error.message);
+      return pixelData;
+    }
+  }
+
+  async extractMarketTrafficForShopJS(shopId, targets = ["us", "uk", "de", "ca", "au", "fr"]) {
+    console.log(`🌍 Extraction trafic par pays (JS) pour: ${shopId}`);
+    const extractedMarkets = { ...targets.reduce((acc, t) => ({ ...acc, [`market_${t}`]: null }), {}) };
+
+    try {
+      const detailUrl = `https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/shop/${shopId}`;
+      await this.page.goto(detailUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await this.page.waitForTimeout(2000);
+
+      await this.page.waitForSelector('h3:has-text("Trafic par pays")', { state: "visible", timeout: 15000 });
+
+      const card = this.page.locator('h3:has-text("Trafic par pays")').locator('xpath=ancestor::div[contains(@class,"bg-card")]').first();
+      const rows = card.locator("div.flex.gap-2.w-full.items-center");
+      const count = await rows.count();
+
+      const observedMarkets = {};
+
+      for (let i = 0; i < count; i++) {
+        const row = rows.nth(i);
+        let codeElement = await row.locator("img[alt]").first().getAttribute("alt");
+        if (!codeElement) {
+          codeElement = await row.locator("div.flex.justify-between > p").first().textContent();
+        }
+
+        const code = this.canonicalizeCountryCode(codeElement);
+        if (!code) continue;
+
+        const valueText = await row.locator("div.flex.justify-between div.items-center > p").first().textContent();
+        const value = this.parseTrafficValue(valueText);
+
+        if (value !== null) {
+          observedMarkets[code] = value;
+        }
+      }
+
+      let foundAnyTargetMarket = false;
+      for (const target_code of targets) {
+        if (target_code in observedMarkets) {
+          extractedMarkets[`market_${target_code}`] = observedMarkets[target_code];
+          foundAnyTargetMarket = true;
+        } else {
+          extractedMarkets[`market_${target_code}`] = 0;
+        }
+      }
+
+      if (!foundAnyTargetMarket && Object.keys(observedMarkets).length > 0) {
+        for (const target_code of targets) {
+          extractedMarkets[`market_${target_code}`] = 0;
+        }
+      } else if (Object.keys(observedMarkets).length === 0) {
+        for (const target_code of targets) {
+          extractedMarkets[`market_${target_code}`] = null;
+        }
+      }
+
+      console.log(`✅ Trafic par pays extrait pour ${shopId}:`, extractedMarkets);
+      return extractedMarkets;
+
+    } catch (error) {
+      console.error(`❌ Erreur lors de l'extraction du trafic par pays pour ${shopId}:`, error.message);
+      return extractedMarkets;
+    }
+  }
+
+  canonicalizeCountryCode(codeElement) {
+    if (!codeElement) return null;
+    const code = codeElement.toLowerCase();
+    if (code === "us" || code === "united states") return "us";
+    if (code === "uk" || code === "gb" || code === "united kingdom") return "uk";
+    if (code === "de" || code === "germany") return "de";
+    if (code === "ca" || code === "canada") return "ca";
+    if (code === "au" || code === "australia") return "au";
+    if (code === "fr" || code === "france") return "fr";
+    return null;
+  }
+
+  parseTrafficValue(valueText) {
+    if (!valueText) return null;
+    const cleanText = valueText.replace(/[^\d.]/g, '');
+    const value = parseFloat(cleanText);
+    return isNaN(value) ? null : value;
   }
 
   /**

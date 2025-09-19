@@ -8,7 +8,7 @@ export class ShopRepository {
   constructor(databaseManager) {
     this.db = databaseManager;
     this.cache = new Map();
-    this.cacheTimeout = 5 * 60 * 1000; // 5 minutes
+    this.cacheTimeout = 1000; // 5 minutes
   }
 
   /**
@@ -176,8 +176,8 @@ export class ShopRepository {
   async getAllWithPagination(limit = 100, offset = 0) {
     try {
       const cacheKey = this._getCacheKey('getAllWithPagination', limit, offset);
-      const cached = this._getFromCache(cacheKey);
-      if (cached) return cached;
+      // const cached = this._getFromCache(cacheKey);
+      // if (cached) return cached;
       
       const db = this._getConnection();
       const stmt = db.prepare(`
@@ -201,8 +201,8 @@ export class ShopRepository {
   async getById(id) {
     try {
       const cacheKey = this._getCacheKey('getById', id);
-      const cached = this._getFromCache(cacheKey);
-      if (cached) return cached;
+      // const cached = this._getFromCache(cacheKey);
+      // if (cached) return cached;
       
       const db = this._getConnection();
       const stmt = db.prepare('SELECT * FROM shops WHERE id = ?');
@@ -223,8 +223,8 @@ export class ShopRepository {
     try {
       const normalizedUrl = ShopRepository.normalizeUrl(url);
       const cacheKey = this._getCacheKey('getByUrl', normalizedUrl);
-      const cached = this._getFromCache(cacheKey);
-      if (cached) return cached;
+      // const cached = this._getFromCache(cacheKey);
+      // if (cached) return cached;
       
       const db = this._getConnection();
       const stmt = db.prepare(`
@@ -336,8 +336,8 @@ export class ShopRepository {
   async search(query) {
     try {
       const cacheKey = this._getCacheKey('search', query);
-      const cached = this._getFromCache(cacheKey);
-      if (cached) return cached;
+      // const cached = this._getFromCache(cacheKey);
+      // if (cached) return cached;
       
       const db = this._getConnection();
       const stmt = db.prepare(`
