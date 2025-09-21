@@ -15,18 +15,16 @@ import multiprocessing
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-import sys
-import os
-sys.path.append(os.getcwd())
 from typing import Dict, List, Optional
 import sqlite3
+from api_credentials import get_credentials_dict
 
 # Imports pour la refactorisation
 from api_client import APIClient
 
 import config
 from playwright.async_api import async_playwright
-from trendtrack_api import TrendTrackAPI as api
+from trendtrack_api_vps_adapted import api
 
 # Configuration du logging
 logger = logging.getLogger(__name__)
@@ -212,10 +210,7 @@ class ParallelProductionScraper:
             """, {
                 'domain': clean_domain,
                 'target_date': target_date,
-                'credentials': {
-                    'userId': 26931056,
-                    'apiKey': "943cfac719badc2ca14126e08b8fe44f"
-                }
+                'credentials': get_credentials_dict()
             })
             
             if result.get('error'):
@@ -334,40 +329,34 @@ class ParallelProductionScraper:
     async def get_overview_trend_metrics_via_api(self, domain: str) -> Optional[Dict[str, str]]:
         """
         Récupère les métriques manquantes via l'API organic.OverviewTrend.
-        Récupère: traffic (total), branded_traffic
+        Récupère: traffic (total), branded_traffic, CPC
         """
         try:
             target_date = self.calculate_target_date()
             clean_domain = domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
             
-            # Appel API organic.OverviewTrend
-            result = await self.api_client.call_organic_overview_trend_api(self.page, clean_domain, self.worker_id, target_date)
+            # Utiliser get_all_metrics_via_api pour récupérer toutes les métriques incluant CPC
+            all_metrics = await self.api_client.get_all_metrics_via_api(clean_domain, target_date)
             
-            if not result:
+            if not all_metrics:
                 return None
             
-            # CORRECTION: Traiter la réponse de l'API avec le bon chemin
-            if result.get('data') and result['data'].get('result'):
-                overview_data = result['data']['result']
-                if overview_data and len(overview_data) > 0:
-                    # Prendre la dernière entrée (comme dans les fichiers qui fonctionnent)
-                    latest_data = overview_data[-1]
-                    
-                    # Extraire les métriques selon la documentation
-                    traffic_raw = latest_data.get('traffic', 0)
-                    branded_traffic_raw = latest_data.get('trafficBranded', 0)
-                    
-                    logger.info(f"✅ Worker {self.worker_id}: OverviewTrend - Traffic: {traffic_raw}, Branded: {branded_traffic_raw}")
-                    
-                    return {
-                        'traffic': str(traffic_raw),
-                        'branded_traffic': str(branded_traffic_raw),
-                        'traffic_raw': traffic_raw,
-                        'branded_traffic_raw': branded_traffic_raw,
-                        'source': 'organic.OverviewTrend API'
-                    }
+            # Extraire les métriques principales
+            traffic_raw = all_metrics.get('visits', 0)  # visits = traffic total
+            branded_traffic_raw = all_metrics.get('traffic_branded', 0)
+            cpc_raw = all_metrics.get('cpc', 0)
             
-            return None
+            logger.info(f"✅ Worker {self.worker_id}: OverviewTrend - Traffic: {traffic_raw}, Branded: {branded_traffic_raw}, CPC: {cpc_raw}")
+            
+            return {
+                'traffic': str(traffic_raw),
+                'branded_traffic': str(branded_traffic_raw),
+                'cpc': str(cpc_raw),
+                'traffic_raw': traffic_raw,
+                'branded_traffic_raw': branded_traffic_raw,
+                'cpc_raw': cpc_raw,
+                'source': 'organic.OverviewTrend API (all_metrics)'
+            }
             
         except Exception as error:
             logger.error(f"❌ Worker {self.worker_id}: Erreur API organic.OverviewTrend: {error}")
@@ -627,11 +616,13 @@ class ParallelProductionScraper:
             if overview_trend_result:
                 self.session_data['data']['domain_overview']['traffic'] = overview_trend_result.get('traffic', '')
                 self.session_data['data']['domain_overview']['branded_traffic'] = overview_trend_result.get('branded_traffic', '')
-                logger.info(f"✅ Worker {self.worker_id}: Métriques organic.OverviewTrend récupérées")
+                self.session_data['data']['domain_overview']['cpc'] = overview_trend_result.get('cpc', '')
+                logger.info(f"✅ Worker {self.worker_id}: Métriques organic.OverviewTrend récupérées (incluant CPC)")
             else:
                 logger.warning(f"⚠️ Worker {self.worker_id}: Échec API organic.OverviewTrend")
                 self.session_data['data']['domain_overview']['traffic'] = ""
                 self.session_data['data']['domain_overview']['branded_traffic'] = ""
+                self.session_data['data']['domain_overview']['cpc'] = ""
             
             # Récupérer conversion_rate via DOM scraping (SEULE MÉTRIQUE DOM)
             conversion_rate = await self.scrape_purchase_conversion(domain)
@@ -639,7 +630,7 @@ class ParallelProductionScraper:
             
             # AFFICHAGE DES MÉTRIQUES DANS LES LOGS (SANS ENREGISTREMENT BDD)
             metrics = self.session_data['data']['domain_overview']
-            logger.info(f"✅ Worker {self.worker_id}: Domain Overview terminé - Organic: {metrics.get('organic_search_traffic', 'N/A')}, Paid: {metrics.get('paid_search_traffic', 'N/A')}, Traffic: {metrics.get('traffic', 'N/A')}, Branded: {metrics.get('branded_traffic', 'N/A')}, Conversion: {metrics.get('conversion_rate', 'N/A')}")
+            logger.info(f"✅ Worker {self.worker_id}: Domain Overview terminé - Organic: {metrics.get('organic_search_traffic', 'N/A')}, Paid: {metrics.get('paid_search_traffic', 'N/A')}, Traffic: {metrics.get('traffic', 'N/A')}, Branded: {metrics.get('branded_traffic', 'N/A')}, CPC: {metrics.get('cpc', 'N/A')}, Conversion: {metrics.get('conversion_rate', 'N/A')}")
             return True
             
         except Exception as e:
@@ -1518,7 +1509,8 @@ class ParallelProductionScraper:
             "conversion_rate": "",
             "paid_search_traffic": "",
             "traffic": "",
-            "percent_branded_traffic": ""
+            "percent_branded_traffic": "",
+            "cpc": ""
         }
         
         # Récupérer les données de domain_overview
@@ -1531,6 +1523,7 @@ class ParallelProductionScraper:
             analytics_data['traffic'] = domain_data.get('traffic', '')
             analytics_data['branded_traffic'] = domain_data.get('branded_traffic', '')
             analytics_data['conversion_rate'] = domain_data.get('conversion_rate', '')
+            analytics_data['cpc'] = domain_data.get('cpc', '')
         
         # Calculer percent_branded_traffic selon la formule de la doc
         analytics_data['percent_branded_traffic'] = self.calculate_percent_branded_traffic(analytics_data)

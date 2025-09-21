@@ -92,3 +92,4 @@ Le script `cleanup_temp_files.sh` peut être réutilisé pour des nettoyages fut
 L'environnement test est maintenant propre et organisé, avec les fichiers importants préservés et les fichiers temporaires supprimés.
 
 
+

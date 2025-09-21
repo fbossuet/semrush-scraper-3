@@ -9,6 +9,7 @@ import json
 import logging
 from playwright.async_api import async_playwright
 from typing import Dict, Any
+from api_credentials import get_credentials_dict
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -22,23 +23,18 @@ class APIClientRefactored:
     def __init__(self):
         self.browser = None
         self.page = None
-        self.credentials_manager = None
+        self.credentials = get_credentials_dict()
     
     async def initialize(self):
-        """🚀 Initialisation du navigateur et des credentials"""
+        """🚀 Initialisation du navigateur"""
         try:
-            # Import dynamique pour éviter les erreurs
-            from credentials_manager import CredentialsManager
-            
-            self.credentials_manager = CredentialsManager()
-            await self.credentials_manager.initialize()
-            
             # Lancement du navigateur
             playwright = await async_playwright().start()
             self.browser = await playwright.chromium.launch(headless=True)
             self.page = await self.browser.new_page()
             
             logger.info("✅ APIClientRefactored initialisé")
+            logger.info(f"✅ Credentials chargés: User ID {self.credentials['userId']}, API Key {self.credentials['apiKey'][:8]}...")
             
         except Exception as e:
             logger.error(f"❌ Erreur initialisation APIClientRefactored: {e}")
@@ -86,8 +82,8 @@ class APIClientRefactored:
         await self.page.goto("https://sam.mytoolsplan.xyz/analytics/", wait_until='domcontentloaded', timeout=30000)
         await asyncio.sleep(2)
         
-        # Récupération des credentials
-        credentials = await self.credentials_manager.get_credentials()
+        # Utilisation des credentials centralisés
+        credentials = self.credentials
         
         # Structure d'appel identique au code existant avec headers corrects
         result = await self.page.evaluate("""
@@ -192,6 +188,14 @@ class APIClientRefactored:
                     metrics['organic_traffic_cost'] = latest_data.get('organicTrafficCost', 0)
                     metrics['paid_traffic_cost'] = latest_data.get('adwordsTrafficCost', 0)
                     metrics['total_traffic_cost'] = latest_data.get('trafficCost', 0)
+                    
+                    # Calcul du CPC (Cost Per Click)
+                    paid_traffic = latest_data.get('adwordsTraffic', 0)
+                    paid_traffic_cost = latest_data.get('adwordsTrafficCost', 0)
+                    if paid_traffic > 0 and paid_traffic_cost > 0:
+                        metrics['cpc'] = round(paid_traffic_cost / paid_traffic, 4)
+                    else:
+                        metrics['cpc'] = 0
                     
                     # Métriques SERP Features
                     metrics['serp_features_positions'] = latest_data.get('serpFeaturesPositions', 0)

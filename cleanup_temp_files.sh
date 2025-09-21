@@ -156,3 +156,4 @@ echo "Fichiers temporaires restants:"
 find . -name "*.log" -o -name "*.tmp" -o -name "*.temp" -o -name "*debug*" -o -name "*test*" -o -name "*audit*" -o -name "*backup*" -o -name "*.bak" | grep -v ".git" | grep -v "node_modules" | wc -l
 
 
+

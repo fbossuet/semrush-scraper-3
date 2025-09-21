@@ -96,8 +96,8 @@ export class ShopRepository {
         'metadata': shopData.metadata ? JSON.stringify(shopData.metadata) : null,
         'year_founded': shopData.yearFounded || null,
         'total_products': shopData.totalProducts || null,
-        'pixel_google': shopData.pixelGoogle || null,
-        'pixel_facebook': shopData.pixelFacebook || null,
+        'pixel_google': shopData.pixelGoogle || "non",
+        'pixel_facebook': shopData.pixelFacebook || "non",
         'aov': shopData.aov || null,
         'market_us': shopData.marketUs || null,
         'market_uk': shopData.marketUk || null,
@@ -250,12 +250,13 @@ export class ShopRepository {
     try {
       const normalizedUrl = ShopRepository.normalizeUrl(shopData.shop_url || shopData.shopUrl);
       
-      const query = `
+      const db = this._getConnection();
+      const stmt = db.prepare(`
         INSERT INTO shops (
           shop_name, shop_url, category, monthly_visits, monthly_revenue,
           total_products, live_ads_7d, live_ads_30d, scraping_status, last_updated
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `;
+      `);
       
       const params = [
         shopData.shop_name || shopData.shopName,
@@ -270,11 +271,11 @@ export class ShopRepository {
         new Date().toISOString()
       ];
       
-      const result = await this.db.run(query, params);
+      const result = stmt.run(params);
       this._clearCache();
       
-      console.log(`✅ Boutique insérée avec ID: ${result.lastID}`);
-      return result.lastID;
+      console.log(`✅ Boutique insérée avec ID: ${result.lastInsertRowid}`);
+      return result.lastInsertRowid;
       
     } catch (error) {
       console.error('❌ Erreur insertion données tableau:', error.message);
@@ -292,13 +293,14 @@ export class ShopRepository {
     try {
       const normalizedUrl = ShopRepository.normalizeUrl(shopData.shop_url || shopData.shopUrl);
       
-      const query = `
+      const db = this._getConnection();
+      const stmt = db.prepare(`
         UPDATE shops SET
           shop_name = ?, shop_url = ?, category = ?, monthly_visits = ?,
           monthly_revenue = ?, total_products = ?, live_ads_7d = ?, live_ads_30d = ?,
           scraping_status = ?, last_updated = ?
         WHERE id = ?
-      `;
+      `);
       
       const params = [
         shopData.shop_name || shopData.shopName,
@@ -314,7 +316,7 @@ export class ShopRepository {
         id
       ];
       
-      const result = await this.db.run(query, params);
+      const result = stmt.run(params);
       this._clearCache();
       
       console.log(`✅ Données tableau mises à jour pour ID: ${id}`);
@@ -334,42 +336,79 @@ export class ShopRepository {
    */
   async updateDetailMetrics(id, detailData) {
     try {
-      const query = `
-        UPDATE shops SET
-          bounce_rate = ?, avg_visit_duration = ?, conversion_rate = ?,
-          market_us = ?, market_uk = ?, market_de = ?, market_ca = ?, market_au = ?, market_fr = ?,
-          pixel_google = ?, pixel_facebook = ?, year_founded = ?, aov = ?,
-          paid_search_traffic = ?, cpc = ?, organic_traffic = ?,
-          branded_traffic = ?, percent_branded_traffic = ?,
-          scraping_status = ?, last_updated = ?
-        WHERE id = ?
-      `;
+      const db = this._getConnection();
       
-      const params = [
+      // Vérifier si c'est un échec critique
+      if (detailData.scraping_status === 'failed') {
+        console.log(`❌ Échec critique détecté pour ID: ${id} - marquage comme failed`);
+        
+        // Mettre à jour le statut à 'failed' dans la table shops
+        const failedStmt = db.prepare(`
+          UPDATE shops SET
+            scraping_status = ?, updated_at = ?
+          WHERE id = ?
+        `);
+        
+        failedStmt.run(['failed', new Date().toISOString(), id]);
+        this._clearCache();
+        
+        console.log(`❌ Boutique ID: ${id} marquée comme failed`);
+        return false;
+      }
+      
+      // 1. Mettre à jour les métriques dans la table analytics
+      const analyticsStmt = db.prepare(`
+        INSERT OR REPLACE INTO analytics (
+          shop_id, organic_traffic, bounce_rate, avg_visit_duration, 
+          branded_traffic, conversion_rate, scraping_status, updated_at,
+          visits, traffic, paid_search_traffic, percent_branded_traffic, cpc
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      
+      const analyticsParams = [
+        id,
+        detailData.organic_traffic || null,
         detailData.bounce_rate || null,
         detailData.avg_visit_duration || null,
+        detailData.branded_traffic || null,
         detailData.conversion_rate || null,
+        detailData.scraping_status || 'details_extracted',
+        new Date().toISOString(),
+        detailData.visits || null,
+        detailData.traffic || null,
+        detailData.paid_search_traffic || null,
+        detailData.percent_branded_traffic || null,
+        detailData.cpc || null
+      ];
+      
+      analyticsStmt.run(analyticsParams);
+      
+      // 2. Mettre à jour les métriques de marché et autres dans la table shops
+      const shopsStmt = db.prepare(`
+        UPDATE shops SET
+          market_us = ?, market_uk = ?, market_de = ?, market_ca = ?, market_au = ?, market_fr = ?,
+          pixel_google = ?, pixel_facebook = ?, year_founded = ?, aov = ?,
+          scraping_status = ?, updated_at = ?
+        WHERE id = ?
+      `);
+      
+      const shopsParams = [
         detailData.market_us || 0,
         detailData.market_uk || 0,
         detailData.market_de || 0,
         detailData.market_ca || 0,
         detailData.market_au || 0,
         detailData.market_fr || 0,
-        detailData.pixel_google ? 1 : 0,
-        detailData.pixel_facebook ? 1 : 0,
+        detailData.pixel_google || "non",
+        detailData.pixel_facebook || "non",
         detailData.year_founded || null,
         detailData.aov || null,
-        detailData.paid_search_traffic || 0,
-        detailData.cpc || null,
-        detailData.organic_traffic || 0,
-        detailData.branded_traffic || 0,
-        detailData.percent_branded_traffic || null,
-        'details_extracted',
+        detailData.scraping_status || 'details_extracted',
         new Date().toISOString(),
         id
       ];
       
-      const result = await this.db.run(query, params);
+      const result = shopsStmt.run(shopsParams);
       this._clearCache();
       
       console.log(`✅ Métriques de détail mises à jour pour ID: ${id}`);
@@ -377,6 +416,22 @@ export class ShopRepository {
       
     } catch (error) {
       console.error('❌ Erreur mise à jour métriques détail:', error.message);
+      
+      // En cas d'erreur critique, marquer comme failed
+      try {
+        const db = this._getConnection();
+        const failedStmt = db.prepare(`
+          UPDATE shops SET
+            scraping_status = ?, updated_at = ?
+          WHERE id = ?
+        `);
+        
+        failedStmt.run(['failed', new Date().toISOString(), id]);
+        console.log(`❌ Boutique ID: ${id} marquée comme failed suite à une erreur`);
+      } catch (updateError) {
+        console.error('❌ Erreur lors du marquage failed:', updateError.message);
+      }
+      
       throw error;
     }
   }
@@ -391,7 +446,7 @@ export class ShopRepository {
         UPDATE shops 
         SET shop_name = ?, shop_url = ?, creation_date = ?, category = ?, 
             monthly_visits = ?, monthly_revenue = ?, live_ads = ?, 
-            updated_at = datetime.now(timezone.utc).isoformat()
+            updated_at = ?
         WHERE id = ?
       `);
 
@@ -403,6 +458,7 @@ export class ShopRepository {
         shopData.monthlyVisits || '',
         shopData.monthlyRevenue || '',
         parseInt(shopData.liveAds) || 0,
+        new Date().toISOString(),
         id
       ]);
 
@@ -414,6 +470,38 @@ export class ShopRepository {
     } catch (error) {
       console.error('❌ Erreur mise à jour boutique:', error.message);
       return false;
+    }
+  }
+
+  /**
+   * Trouve les boutiques par statut de scraping
+   */
+  async findByStatus(status) {
+    try {
+      const db = this._getConnection();
+      const stmt = db.prepare('SELECT * FROM shops WHERE scraping_status = ?');
+      const shops = stmt.all(status);
+      
+      // Mapper les noms de colonnes de la base vers les noms attendus par le code
+      const mappedShops = shops.map(shop => ({
+        id: shop.id,
+        shopName: shop.shop_name,
+        shopUrl: shop.shop_url,
+        category: shop.category,
+        monthlyVisits: shop.monthly_visits,
+        monthlyRevenue: shop.monthly_revenue,
+        totalProducts: shop.total_products,
+        liveAds: shop.live_ads,
+        creationDate: shop.creation_date,
+        scraping_status: shop.scraping_status,
+        last_updated: shop.last_updated
+      }));
+      
+      console.log(`🔍 Trouvé ${mappedShops.length} boutiques avec statut: ${status}`);
+      return mappedShops;
+    } catch (error) {
+      console.error('❌ Erreur recherche par statut:', error.message);
+      return [];
     }
   }
 

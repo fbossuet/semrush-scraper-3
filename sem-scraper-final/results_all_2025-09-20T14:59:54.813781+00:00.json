@@ -1,0 +1,50 @@
+{
+  "timestamp": "2025-09-20T14:59:50.947856+00:00",
+  "status": "all",
+  "num_workers": 2,
+  "results": {
+    "worker_0": {
+      "worker_id": 0,
+      "shops_count": 2,
+      "success": "failed",
+      "metrics_found": 0,
+      "metrics_not_found": 0,
+      "metrics_count": {},
+      "statuses": {},
+      "shops": [
+        {
+          "id": 2595,
+          "name": "burga.com",
+          "url": "https://burga.com"
+        },
+        {
+          "id": 2597,
+          "name": "ryzesuperfoods.com",
+          "url": "https://ryzesuperfoods.com"
+        }
+      ]
+    },
+    "worker_1": {
+      "worker_id": 1,
+      "shops_count": 2,
+      "success": "failed",
+      "metrics_found": 0,
+      "metrics_not_found": 0,
+      "metrics_count": {},
+      "statuses": {},
+      "shops": [
+        {
+          "id": 2596,
+          "name": "us.burga.com",
+          "url": "https://us.burga.com"
+        },
+        {
+          "id": 2598,
+          "name": "meshki.us",
+          "url": "https://meshki.us"
+        }
+      ]
+    }
+  },
+  "overall_success": true
+}

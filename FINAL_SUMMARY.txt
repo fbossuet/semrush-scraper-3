@@ -1,0 +1,10 @@
+=== RÉSUMÉ FINAL ===
+Date: Fri Sep 19 15:29:53 UTC 2025
+Branche: test
+Commits: 2
+Fichiers de transfert créés:
+-rw-rw-r-- 1 ubuntu ubuntu    2433 Sep 19 15:27 INSTRUCTIONS_APPLICATION_BUNDLE.md
+-rw-rw-r-- 1 ubuntu ubuntu    3199 Sep 19 15:29 RESUME_MISE_A_JOUR_TEST.md
+-rw-rw-r-- 1 ubuntu ubuntu  837082 Sep 19 15:26 test-branch-update.bundle
+-rw-rw-r-- 1 ubuntu ubuntu 1160204 Sep 19 15:28 test-branch-update.patch
+-rwxrwxr-x 1 ubuntu ubuntu    1443 Sep 19 15:29 update-test-branch.sh

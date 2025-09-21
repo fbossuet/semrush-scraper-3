@@ -32,6 +32,7 @@ app = FastAPI(
     - `/shops/{shop_id}` - Récupérer une boutique par ID
     - `/analytics/{shop_id}` - Récupérer les analytics d'une boutique
     - `/stats` - Statistiques générales
+    - `/albert` - Endpoint principal pour les boutiques avec analytics (remplace /test/shops/with-analytics-ordered)
     
     ## Endpoints POST (Écriture - SEM-Scraper)
     - `/update-shop-analytics` - Met à jour les analytics d'une boutique
@@ -567,10 +568,10 @@ def transform_shop_data(shop_data):
     
     return final_data
 
-@app.get('/test/shops/with-analytics-ordered')
-async def get_test_shops_with_analytics_ordered(since: Optional[str] = Query(None, description="Date de début (ISO 8601)")):
+@app.get('/albert')
+async def get_albert_shops_with_analytics_ordered(since: Optional[str] = Query(None, description="Date de début (ISO 8601)")):
     """
-    Endpoint de TEST - Récupère toutes les boutiques avec leurs métriques analytics depuis la base de production
+    Endpoint ALBERT - Récupère toutes les boutiques avec leurs métriques analytics depuis la base de production
     Triées par qualité des données (completed > partial > na > failed)
     
     Structure de retour :

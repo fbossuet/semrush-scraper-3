@@ -208,7 +208,7 @@ class WorkersMenu:
             screen_cmd = [
                 'screen', '-dmS', session_name,
                 '-L', '-Logfile', log_file,
-                'bash', '-c', f'cd /home/ubuntu/sem-scraper-final && {cmd}'
+                'bash', '-c', f'cd /home/ubuntu/projects/shopshopshops/test/sem-scraper-final && {cmd}'
             ]
             
             print(f"🖥️ Session screen: {session_name}")
@@ -272,14 +272,14 @@ class WorkersMenu:
             timestamp = datetime.now(timezone.utc).isoformat()
             log_file = f"logs/trendtrack-scraper-{timestamp}.log"
             
-            # Construire la commande pour le scraper TrendTrack
+            # Construire la commande pour le scraper TrendTrack avec architecture parallèle
             cmd = "node update-database.js"
             
             # Lancer dans un screen
             screen_cmd = [
                 'screen', '-dmS', session_name,
                 '-L', '-Logfile', log_file,
-                'bash', '-c', f'cd ../trendtrack-scraper-final && {cmd}'
+                'bash', '-c', f'cd /home/ubuntu/projects/shopshopshops/test/trendtrack-scraper-final && {cmd}'
             ]
             
             print(f"🖥️ Session screen: {session_name}")
@@ -688,7 +688,7 @@ class WorkersMenu:
             import os
             from pathlib import Path
             
-            logs_dir = Path("/home/ubuntu/sem-scraper-final/logs")
+            logs_dir = Path("/home/ubuntu/projects/shopshopshops/test/sem-scraper-final/logs")
             if not logs_dir.exists():
                 return None
             
@@ -816,7 +816,7 @@ class WorkersMenu:
             
             # Connexion à la base de données
             import sqlite3
-            db_path = "trendtrack-scraper-final/data/trendtrack.db"
+            db_path = "/home/ubuntu/projects/shopshopshops/test/trendtrack-scraper-final/data/trendtrack.db"
             
             if not os.path.exists(db_path):
                 print("❌ Base de données non trouvée")
@@ -902,7 +902,7 @@ class WorkersMenu:
         print()
         print("🎯 TYPES DE SCRAPERS:")
         print("   🚀 Workers SEM - Scraping parallèle des métriques MyToolsPlan")
-        print("   🎯 TrendTrack - Scraping des boutiques depuis trendtrack.io")
+        print("   🎯 TrendTrack - Scraping des boutiques depuis trendtrack.io (Architecture parallèle)")
         print()
         print("🎯 STATUTS DISPONIBLES (Workers SEM):")
         print("   🆕 Empty   - Boutiques sans statut ou statut vide")
@@ -951,10 +951,12 @@ class WorkersMenu:
                             await self.launch_workers(status, num_workers, max_per_worker)
                 
                 elif choice == 2:  # Lancer le scraper TrendTrack
-                    print("\n🎯 LANCEMENT DU SCRAPER TRENDTRACK")
+                    print("\n🎯 LANCEMENT DU SCRAPER TRENDTRACK - ARCHITECTURE PARALLÈLE")
                     print("=" * 50)
-                    print("⚠️ ATTENTION: Ce scraper va traiter les boutiques TrendTrack")
-                    print("📊 Il utilisera la base de données vide récemment créée")
+                    print("✅ NOUVEAU: Architecture parallèle qui résout le problème de session")
+                    print("📊 Phase 1: Extraction du tableau (sans navigation vers détails)")
+                    print("💾 Phase 2: Sauvegarde immédiate en base de données")
+                    print("🔄 Phase 3: Extraction des détails en parallèle")
                     print("🔧 Le scraper s'exécutera en arrière-plan dans un screen")
                     print()
                     

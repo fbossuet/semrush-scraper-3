@@ -29,7 +29,7 @@
 - **Fichier**: sem-scraper-final/api_server.py (chemin relatif)
 - **Port**: 8001
 - **URL**: http://37.59.102.7:8001
-- **Endpoint principal**: /test/shops/with-analytics-ordered
+- **Endpoint principal**: /albert
 - **Structure de retour**: 25 champs dans l'ordre spécifié (id, shop_name, category, etc.)
 - **Lancement**: Depuis /home/ubuntu/projects/shopshopshops/test/ avec chemins relatifs
 
@@ -56,7 +56,7 @@
 8. **Test utilisateur** et validation
 
 ## 🎯 STRUCTURE DE L'ENDPOINT FINAL
-L'endpoint /test/shops/with-analytics-ordered doit retourner exactement:
+L'endpoint /albert doit retourner exactement:
 - id, shop_name, shop_url, category
 - monthly_visits, year_founded, total_products, aov
 - pixel_google, pixel_facebook

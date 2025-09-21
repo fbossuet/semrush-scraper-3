@@ -1,0 +1,76 @@
+{
+  "timestamp": "2025-09-20T19:03:18.504416+00:00",
+  "status": "all",
+  "num_workers": 4,
+  "total_shops": 12,
+  "distribution": {
+    "0": [
+      {
+        "id": 2745,
+        "name": "us.burga.com",
+        "url": "https://us.burga.com"
+      },
+      {
+        "id": 2749,
+        "name": "store.betterme.world",
+        "url": "https://store.betterme.world"
+      },
+      {
+        "id": 2753,
+        "name": "MAMMOTION",
+        "url": "https://mammotion.com"
+      }
+    ],
+    "1": [
+      {
+        "id": 2746,
+        "name": "burga.com",
+        "url": "https://burga.com"
+      },
+      {
+        "id": 2750,
+        "name": "jwpei.com",
+        "url": "https://jwpei.com"
+      },
+      {
+        "id": 2754,
+        "name": "loveinfaith.life",
+        "url": "https://loveinfaith.life"
+      }
+    ],
+    "2": [
+      {
+        "id": 2747,
+        "name": "ryzesuperfoods.com",
+        "url": "https://ryzesuperfoods.com"
+      },
+      {
+        "id": 2751,
+        "name": "baskandlatherco.com",
+        "url": "https://baskandlatherco.com"
+      },
+      {
+        "id": 2755,
+        "name": "PrimePrometics\u2122",
+        "url": "https://primeprometics.com"
+      }
+    ],
+    "3": [
+      {
+        "id": 2748,
+        "name": "meshki.us",
+        "url": "https://meshki.us"
+      },
+      {
+        "id": 2752,
+        "name": "Loop United States",
+        "url": "https://us.loopearplugs.com"
+      },
+      {
+        "id": 2756,
+        "name": "iliabeauty.com",
+        "url": "https://iliabeauty.com"
+      }
+    ]
+  }
+}

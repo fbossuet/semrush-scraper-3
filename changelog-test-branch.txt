@@ -1,0 +1,5 @@
+485a8ba 🚀 Mise à jour complète - Architecture parallèle TrendTrack
+5d46222 📋 RAPPORT DE LA MORT - TrendTrack Scraper Architecture Parallèle
+cb57eb9 chore: maj code + suppression des fichiers *15sept et autres
+68715f7 feat: corrections et améliorations récentes
+c951c21 feat: clean initial commit

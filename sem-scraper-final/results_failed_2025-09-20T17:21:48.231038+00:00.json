@@ -1,0 +1,45 @@
+{
+  "timestamp": "2025-09-20T17:20:03.099012+00:00",
+  "status": "failed",
+  "num_workers": 2,
+  "results": {
+    "worker_0": {
+      "worker_id": 0,
+      "shops_count": 2,
+      "success": "completed",
+      "metrics_found": 0,
+      "metrics_not_found": 0,
+      "metrics_count": {},
+      "statuses": {},
+      "shops": [
+        {
+          "id": 2766,
+          "name": "aloyoga.com",
+          "url": "https://aloyoga.com"
+        },
+        {
+          "id": 2788,
+          "name": "enroutejewelry.com",
+          "url": "https://enroutejewelry.com"
+        }
+      ]
+    },
+    "worker_1": {
+      "worker_id": 1,
+      "shops_count": 1,
+      "success": "completed",
+      "metrics_found": 0,
+      "metrics_not_found": 0,
+      "metrics_count": {},
+      "statuses": {},
+      "shops": [
+        {
+          "id": 2784,
+          "name": "drmtlgy.com",
+          "url": "https://drmtlgy.com"
+        }
+      ]
+    }
+  },
+  "overall_success": true
+}

@@ -630,8 +630,15 @@ export class TrendTrackExtractor extends BaseExtractor {
     console.log(`🔍 Navigation vers la page de détail: ${shopUrl}`);
     
     try {
-      // Navigation directe vers l'URL de la boutique
-      await this.page.goto(shopUrl, { 
+      // Construire l'URL de la page de détail TrendTrack
+      // Format: https://app.trendtrack.io/en/workspace/.../shop-detail?url=SHOP_URL
+      const baseUrl = 'https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st';
+      const detailUrl = `${baseUrl}/shop-detail?url=${encodeURIComponent(shopUrl)}`;
+      
+      console.log(`🔍 URL de détail TrendTrack: ${detailUrl}`);
+      
+      // Navigation vers la page de détail TrendTrack
+      await this.page.goto(detailUrl, { 
         waitUntil: 'networkidle',
         timeout: 30000 
       });
@@ -659,27 +666,43 @@ export class TrendTrackExtractor extends BaseExtractor {
    * Extrait les détails d'une boutique depuis sa page
    * @returns {Promise<Object>} - Données de détail de la boutique
    */
-  async extractShopDetails() {
-    console.log('🔍 Extraction des détails de la boutique...');
+  async extractShopDetails(shopId = null) {
+    console.log(`🔍 Extraction des détails de la boutique (ID: ${shopId})...`);
     
     try {
+      // Vérifier que la page est bien chargée - CORRECTION du sélecteur
+      try {
+        await this.page.waitForSelector('body', { timeout: 10000 });
+        console.log('✅ Page de détail chargée');
+      } catch (error) {
+        console.log('⚠️ Timeout sur le chargement de la page');
+      }
+      
+      // 🚀 NOUVELLE MÉTHODE : Extraction des pixels via API TrendTrack
+      console.log('🔍 Extraction des pixels via API TrendTrack...');
+      const pixelData = await this.extractPixelsForShopJS(shopId || 'current_shop'); // Utiliser l'ID de la boutique
+      
+      // 🚀 NOUVELLE MÉTHODE : Extraction des données de marché via API TrendTrack
+      console.log('🌍 Extraction des données de marché via API TrendTrack...');
+      const marketData = await this.getGeoDataViaAPI(shopId || 'current_shop'); // Utiliser l'ID de la boutique
+      
       const detailData = {
         // Métriques de performance
         bounce_rate: await this.extractMetric('Bounce Rate'),
         avg_visit_duration: await this.extractMetric('Avg. Visit Duration'),
         conversion_rate: await this.extractMetric('Conversion Rate'),
         
-        // Trafic par pays
-        market_us: await this.extractCountryTraffic('US'),
-        market_uk: await this.extractCountryTraffic('UK'),
-        market_de: await this.extractCountryTraffic('DE'),
-        market_ca: await this.extractCountryTraffic('CA'),
-        market_au: await this.extractCountryTraffic('AU'),
-        market_fr: await this.extractCountryTraffic('FR'),
+        // Trafic par pays - MÉTHODE API OPTIMISÉE
+        market_us: marketData.market_us,
+        market_uk: marketData.market_uk,
+        market_de: marketData.market_de,
+        market_ca: marketData.market_ca,
+        market_au: marketData.market_au,
+        market_fr: marketData.market_fr,
         
-        // Pixels
-        pixel_google: await this.extractPixel('Google'),
-        pixel_facebook: await this.extractPixel('Facebook'),
+        // Pixels - MÉTHODE API OPTIMISÉE
+        pixel_google: pixelData.pixel_google,
+        pixel_facebook: pixelData.pixel_facebook,
         
         // Année de fondation
         year_founded: await this.extractYearFounded(),
@@ -702,12 +725,30 @@ export class TrendTrackExtractor extends BaseExtractor {
         last_updated: new Date().toISOString()
       };
       
+      // Vérifier si au moins une métrique a été extraite
+      const hasData = Object.values(detailData).some(value => 
+        value !== null && value !== undefined && value !== '' && value !== 0
+      );
+      
+      if (!hasData) {
+        console.log('⚠️ Aucune métrique extraite - marquage comme failed');
+        return {
+          scraping_status: 'failed',
+          last_updated: new Date().toISOString(),
+          error: 'No metrics extracted'
+        };
+      }
+      
       console.log('✅ Détails de la boutique extraits');
       return detailData;
       
     } catch (error) {
       console.error(`❌ Erreur extraction détails: ${error.message}`);
-      return null;
+      return {
+        scraping_status: 'failed',
+        last_updated: new Date().toISOString(),
+        error: error.message
+      };
     }
   }
 
@@ -1227,75 +1268,226 @@ export class TrendTrackExtractor extends BaseExtractor {
   }
 
   /**
-   * Extraction pixels en JavaScript pur
+   * Extraction pixels via API TrendTrack avec cookies - MÉTHODE OPTIMISÉE
    */
   async extractPixelsForShopJS(shopId) {
-    console.log(`📊 Extraction pixels (JS) pour: ${shopId}`);
+    console.log(`📊 Extraction pixels (API) pour: ${shopId}`);
     const pixelData = { pixel_google: "non", pixel_facebook: "non" };
+    
     try {
-      const detailUrl = `https://app.trendtrack.io/fr/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops/${shopId}`;
-      await this.page.goto(detailUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await this.page.waitForTimeout(2000);
-
-      // Détection améliorée des pixels Facebook
-      const facebookSelectors = [
-        'img[alt="facebook"][src*="meta-icon.svg"]',
-        'img[alt="facebook"]',
-        'img[src*="facebook"]',
-        'img[src*="meta-icon"]',
-        '[class*="facebook"]',
-        'script[src*="facebook"]',
-        'script[src*="fbevents"]'
-      ];
-      
-      let facebookPixel = false;
-      for (const selector of facebookSelectors) {
+      // 🚀 NOUVELLE MÉTHODE : Requête directe à l'API TrendTrack avec cookies
+      const result = await this.page.evaluate(async ({ shopId, workspace }) => {
         try {
-          if (await this.page.locator(selector).isVisible()) {
-            facebookPixel = true;
-            break;
+          const response = await fetch(`https://app.trendtrack.io/en/workspace/${workspace}/trending-shops/${shopId}`, {
+            headers: {
+              'RSC': '1', 
+              'Accept': 'text/x-component',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }, 
+            credentials: 'include'
+          });
+          
+          if (!response.ok) {
+            return { error: `HTTP ${response.status}: ${response.statusText}` };
           }
-        } catch (e) {
-          // Ignorer les erreurs de sélecteur
+          
+          const text = await response.text();
+          
+          // Recherche des technologies dans le contenu de l'API
+          const hasGoogleAnalytics = text.includes('Google Analytics') || text.includes('gtag') || text.includes('google-analytics');
+          const hasFacebookPixel = text.includes('Facebook Pixel') || text.includes('fbq') || text.includes('fbevents');
+          
+          return { 
+            hasGoogleAnalytics,
+            hasFacebookPixel,
+            responseLength: text.length
+          };
+          
+        } catch (error) {
+          return { error: error.message };
         }
+      }, { shopId, workspace: 'w-al-yakoobs-workspace-x0Qg9st' });
+      
+      if (result.error) {
+        console.error(`❌ Erreur API pour ${shopId}:`, result.error);
+        return pixelData;
       }
       
-      // Détection améliorée des pixels Google
-      const googleSelectors = [
-        'img[alt="google"][src*="google-icon.svg"]',
-        'img[alt="google"]',
-        'img[src*="google"]',
-        'img[src*="google-icon"]',
-        '[class*="google"]',
-        'script[src*="google-analytics"]',
-        'script[src*="gtag"]',
-        'script[src*="googletagmanager"]'
-      ];
-      
-      let googlePixel = false;
-      for (const selector of googleSelectors) {
-        try {
-          if (await this.page.locator(selector).isVisible()) {
-            googlePixel = true;
-            break;
-          }
-        } catch (e) {
-          // Ignorer les erreurs de sélecteur
-        }
-      }
-
-      if (facebookPixel) {
-        pixelData.pixel_facebook = "oui";
-      }
-      if (googlePixel) {
+      // Mettre à jour les résultats
+      if (result.hasGoogleAnalytics) {
         pixelData.pixel_google = "oui";
+        console.log("✅ Pixel Google détecté via API");
       }
-      console.log(`✅ Pixels extraits pour ${shopId}: Google=${pixelData.pixel_google}, Facebook=${pixelData.pixel_facebook}`);
+      
+      if (result.hasFacebookPixel) {
+        pixelData.pixel_facebook = "oui";
+        console.log("✅ Pixel Facebook détecté via API");
+      }
+      
+      console.log(`✅ Pixels extraits pour ${shopId}: Google=${pixelData.pixel_google}, Facebook=${pixelData.pixel_facebook} (${result.responseLength} chars)`);
       return pixelData;
+      
     } catch (error) {
       console.error(`❌ Erreur extraction pixels pour ${shopId}:`, error.message);
       return pixelData;
     }
+  }
+
+  /**
+   * 🌍 ANALYSE GEO POUR PLUSIEURS SITES - MÉTHODE API OPTIMISÉE
+   */
+  async analyzeMultipleGeoData(siteIds, delayMs = 1000) {
+    console.log(`🌍 Analyse géo pour ${siteIds.length} sites...`);
+    const results = [];
+    
+    for (let i = 0; i < siteIds.length; i++) {
+      const siteId = siteIds[i];
+      
+      try {
+        console.log(`🔍 Analyse géo ${i+1}/${siteIds.length}: ${siteId}`);
+        
+        const geoData = await this.getGeoDataViaAPI(siteId);
+        
+        results.push({
+          siteId,
+          ...geoData,
+          timestamp: new Date().toISOString()
+        });
+        
+        // ⏱️ Pause entre requêtes
+        if (i < siteIds.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+        
+      } catch (error) {
+        console.error(`❌ Erreur pour ${siteId}:`, error.message);
+        results.push({
+          siteId,
+          error: error.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+    
+    return results;
+  }
+
+  /**
+   * 📊 RÉCUPÉRATION DES DONNÉES GÉO VIA API TRENDTRACK AVEC COOKIES AUTOMATIQUES
+   */
+  async getGeoDataViaAPI(siteId) {
+    console.log(`🌍 Récupération données géo (API) pour: ${siteId}`);
+    
+    try {
+      // Utiliser l'ID passé en paramètre directement
+      let actualSiteId = siteId;
+      if (siteId === 'current_shop') {
+        console.log('⚠️ ID générique utilisé, les données peuvent être incorrectes');
+      } else {
+        console.log(`🔍 Utilisation de l'ID TrendTrack: ${actualSiteId}`);
+      }
+      
+      // 🍪 Utilisation des cookies automatiques depuis le navigateur
+      const result = await this.page.evaluate(async ({ siteId, workspace }) => {
+        try {
+          // Récupération automatique des cookies du navigateur
+          const cookies = await document.cookie;
+          const cookieString = cookies;
+          
+          const response = await fetch(`https://app.trendtrack.io/en/workspace/${workspace}/trending-shops/${siteId}`, {
+            headers: {
+              'RSC': '1', 
+              'Accept': 'text/x-component',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }, 
+            credentials: 'include'
+          });
+          
+          if (!response.ok) {
+            return { error: `HTTP ${response.status}: ${response.statusText}` };
+          }
+          
+          const text = await response.text();
+          
+          // 🎯 Extraction des données géographiques depuis la réponse RSC
+          const marketData = {
+            market_us: 0, market_uk: 0, market_de: 0, market_ca: 0, market_au: 0, market_fr: 0, 
+            countries: []
+          };
+          
+          // Rechercher les données géographiques dans la réponse RSC
+          // Pattern pour les données géographiques : "visitsShare":0.7463570938382258,"countryUrlCode":"united-states","countryAlpha2Code":"US"
+          const geoPattern = /"visitsShare":([0-9.]+),"countryUrlCode":"[^"]+","countryAlpha2Code":"([^"]+)"/g;
+          let match;
+          
+          while ((match = geoPattern.exec(text)) !== null) {
+            const visitsShare = parseFloat(match[1]);
+            const countryCode = match[2].toLowerCase();
+            
+            marketData.countries.push({
+              countryCode: countryCode,
+              visitsShare: visitsShare,
+              visitsSharePercent: Math.round(visitsShare * 100 * 100) / 100,
+              countryName: match[0].match(/"countryUrlCode":"([^"]+)"/)[1]
+            });
+            
+            switch (countryCode) {
+              case 'us': marketData.market_us = visitsShare; break;
+              case 'gb': marketData.market_uk = visitsShare; break;
+              case 'de': marketData.market_de = visitsShare; break;
+              case 'ca': marketData.market_ca = visitsShare; break;
+              case 'au': marketData.market_au = visitsShare; break;
+              case 'fr': marketData.market_fr = visitsShare; break;
+            }
+          }
+          
+          return { 
+            ...marketData,
+            countriesFound: marketData.countries.length,
+            responseLength: text.length,
+            cookieUsed: cookieString ? 'Oui' : 'Non'
+          };
+          
+    } catch (error) {
+          return { error: error.message };
+        }
+      }, { siteId: actualSiteId, workspace: 'w-al-yakoobs-workspace-x0Qg9st' });
+      
+      if (result.error) {
+        console.error(`❌ Erreur API géo pour ${siteId}:`, result.error);
+        return { market_us: 0, market_uk: 0, market_de: 0, market_ca: 0, market_au: 0, market_fr: 0 };
+      }
+      
+      console.log(`✅ Données géo extraites pour ${siteId}: ${result.countriesFound} pays (${result.responseLength} chars, cookies: ${result.cookieUsed})`);
+      return result;
+      
+    } catch (error) {
+      console.error(`❌ Erreur extraction géo pour ${siteId}:`, error.message);
+      return { market_us: 0, market_uk: 0, market_de: 0, market_ca: 0, market_au: 0, market_fr: 0 };
+    }
+  }
+
+  /**
+   * 📊 FORMATAGE SIMPLE POUR EXPORT
+   */
+  formatGeoDataForExport(results) {
+    const formatted = [];
+    
+    results.forEach(result => {
+      if (!result.error && result.countries) {
+        result.countries.forEach(country => {
+          formatted.push({
+            site_id: result.siteId,
+            country_code: country.countryCode,
+            visits_share: country.visitsShare,
+            visits_share_percent: country.visitsSharePercent,
+            country_name: country.countryName
+          });
+        });
+      }
+    });
+    
+    return formatted;
   }
 
 

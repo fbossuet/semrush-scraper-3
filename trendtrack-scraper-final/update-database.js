@@ -1,6 +1,7 @@
 /**
- * Script de mise à jour de la base de données
+ * Script de mise à jour de la base de données - ARCHITECTURE PARALLÈLE
  * Extrait les nouvelles données de TrendTrack et les sauvegarde
+ * Résout le problème de perte de session avec une architecture en 3 phases
  */
 
 import { WebScraper } from './src/scraper.js';
@@ -23,65 +24,294 @@ function logProgress(msg) {
 // Nettoie le fichier de log au début
 fs.writeFileSync(LOG_PROGRESS_FILE, '');
 
-/**
- * Traite les données en lot pour optimiser les performances
- */
-async function processBatch(shopRepo, shopsData, batchSize = 10) {
-  const results = {
-    updated: 0,
-    inserted: 0,
-    errors: 0,
-    skipped: 0
-  };
-
-  for (let i = 0; i < shopsData.length; i += batchSize) {
-    const batch = shopsData.slice(i, i + batchSize);
+// PHASE 1: Extraction des données du tableau uniquement
+async function extractTableDataOnly(extractor, pageCount = 5) {
+  logProgress(`📋 PHASE 1: Extraction de ${pageCount} pages (méthode existante)...`);
+  
+  const allTableData = [];
+  
+  for (let page = 1; page <= pageCount; page++) {
+    logProgress(`➡️  Extraction page ${page}/${pageCount}...`);
     
-    // Traitement parallèle du lot
-    const batchPromises = batch.map(async (shopData) => {
-      try {
-        // Vérifier si le shop existe déjà
-        const existingShop = await shopRepo.getByUrl(shopData.shopUrl || shopData.shop_url);
-        if (existingShop) {
-          console.log(`⏭️ Shop déjà existant: ${shopData.shopName || shopData.shop_name} - Ignoré`);
-          return { success: true, shopId: existingShop.id, skipped: true };
-        }
-
-        // Shop n'existe pas, on l'ajoute
-        const shopId = await shopRepo.upsert(shopData);
-        if (shopId) {
-          return { success: true, shopId };
-        } else {
-          return { success: false, error: 'Échec upsert' };
-        }
-      } catch (error) {
-        return { success: false, error: error.message };
+    try {
+      // Navigation vers la page
+      const navSuccess = await extractor.navigateToTrendingShops(page);
+      if (!navSuccess) {
+        logProgress(`❌ Navigation échouée pour la page ${page}`);
+        continue;
       }
-    });
+      
+      // Attendre que le tableau soit chargé
+      await extractor.page.waitForSelector('tbody tr', { timeout: 60000 });
+      
+      // Récupérer toutes les lignes du tableau
+      const rows = await extractor.page.locator('tbody tr').all();
+      logProgress(`📊 ${rows.length} lignes trouvées dans le tableau`);
+      
+      let pageShops = 0;
+      
+      // Extraire chaque ligne avec les SÉLECTEURS QUI FONCTIONNENT
+      for (let i = 0; i < rows.length; i++) {
+        try {
+          const row = rows[i];
+          const cells = await row.locator('td').all();
+          if (cells.length < 8) {
+            continue;
+          }
 
-    const batchResults = await Promise.all(batchPromises);
-    
-    batchResults.forEach(result => {
-      if (result.success) {
-        if (result.skipped) {
-          results.skipped = (results.skipped || 0) + 1;
-        } else {
-          results.updated++;
+          const shopData = {};
+          
+          // 1. EXTRACTION INFO BOUTIQUE (cellule 1) - SÉLECTEURS QUI FONCTIONNENT
+          try {
+            const shopInfoHtml = await cells[1].innerHTML();
+            const shopNameMatch = shopInfoHtml.match(/<p class=\"text-sm font-semibold\">([^<]+)<\/p>/);
+            shopData.shopName = shopNameMatch ? shopNameMatch[1].trim() : '';
+            const shopUrlMatch = shopInfoHtml.match(/href=["']([^"']+)["']/);
+            shopData.shopUrl = shopUrlMatch ? shopUrlMatch[1] : '';
+            const dateMatch = shopInfoHtml.match(/(\d{2}\/\d{2}\/\d{4})/);
+            shopData.creationDate = dateMatch ? dateMatch[1] : '';
+          } catch (error) {
+            shopData.shopName = '';
+            shopData.shopUrl = '';
+            shopData.creationDate = '';
+          }
+          
+          // 2. EXTRACTION NOMBRE DE PRODUITS (cellule 2) - SÉLECTEURS QUI FONCTIONNENT
+          try {
+            const productsCell = cells[2];
+            const productsP = productsCell.locator("p:has(> span:has-text(\"products\"))");
+            const productsText = await productsP.textContent();
+            if (productsText) {
+              const match = productsText.match(/\d[\d\s.,]*/);
+              shopData.totalProducts = match ? Number(match[0].replace(/[^\d]/g, "")) : null;
+            } else {
+              shopData.totalProducts = null;
+            }
+          } catch (error) {
+            shopData.totalProducts = null;
+          }
+          
+          // 3. EXTRACTION MÉTRIQUES DE BASE (cellules 3, 4, 5) - SÉLECTEURS QUI FONCTIONNENT
+          try {
+            shopData.category = (await cells[3].textContent()).trim();
+            shopData.monthlyVisits = (await cells[4].textContent()).trim();
+            shopData.monthlyRevenue = (await cells[5].textContent()).trim();
+          } catch (error) {
+            shopData.category = '';
+            shopData.monthlyVisits = '';
+            shopData.monthlyRevenue = '';
+          }
+          
+          // 4. EXTRACTION LIVE ADS (cellule 7) - SÉLECTEURS QUI FONCTIONNENT
+          try {
+            const liveAdsDiv = await cells[7].locator('div.flex.items-center.justify-center.font-semibold');
+            const liveAdsP = await liveAdsDiv.locator('p').first();
+            shopData.liveAds = liveAdsP ? (await liveAdsP.textContent()).trim() : '';
+          } catch (error) {
+            shopData.liveAds = '';
+          }
+
+          // Ajouter les métadonnées
+          shopData.scraping_status = 'table_extracted';
+          shopData.last_updated = new Date().toISOString();
+
+          // Vérifier qu'on a au moins le nom et l'URL
+          if (!shopData.shopName || !shopData.shopUrl) {
+            continue;
+          }
+
+          allTableData.push(shopData);
+          pageShops++;
+          
+        } catch (error) {
+          continue;
         }
-      } else {
-        results.errors++;
-        logProgress(`❌ Erreur traitement: ${result.error}`);
+        
+        // Pause minimale entre les extractions
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
-    });
-
-    logProgress(`📦 Lot ${Math.floor(i / batchSize) + 1}/${Math.ceil(shopsData.length / batchSize)} traité`);
+      
+      logProgress(`✅ Page ${page}: ${pageShops} boutiques extraites du tableau`);
+      
+    } catch (error) {
+      logProgress(`❌ Erreur page ${page}: ${error.message}`);
+    }
   }
-
-  return results;
+  
+  logProgress(`✅ PHASE 1 TERMINÉE: ${allTableData.length} boutiques extraites du tableau`);
+  return allTableData;
 }
 
+// PHASE 2: Sauvegarde immédiate et préparation pour l'extraction des détails
+async function saveTableDataAndPrepareDetails(shopRepo, allTableData) {
+  logProgress(`💾 PHASE 2: Sauvegarde immédiate des données du tableau...`);
+  
+  const shopsToProcess = [];
+  let savedCount = 0;
+  
+  for (const shopData of allTableData) {
+      try {
+        // Vérifier si le shop existe déjà
+      const existingShop = await shopRepo.getByUrl(shopData.shopUrl);
+        if (existingShop) {
+        logProgress(`⏭️ Shop existant: ${shopData.shopName} - Mise à jour`);
+        // Mettre à jour avec upsert (méthode qui fonctionne)
+        const shopDataWithStatus = { ...shopData, scrapingStatus: 'table_extracted' };
+        const shopId = await shopRepo.upsert(shopDataWithStatus);
+        if (shopId) {
+          shopsToProcess.push({ id: shopId, ...shopData });
+        }
+      } else {
+        // Shop n'existe pas, on l'ajoute avec upsert (méthode qui fonctionne)
+        const shopDataWithStatus = { ...shopData, scrapingStatus: 'table_extracted' };
+        const shopId = await shopRepo.upsert(shopDataWithStatus);
+        if (shopId) {
+          shopsToProcess.push({ id: shopId, ...shopData });
+          savedCount++;
+        }
+      }
+    } catch (error) {
+      logProgress(`❌ Erreur sauvegarde: ${error.message}`);
+    }
+  }
+  
+  logProgress(`📦 Lot 1/1 sauvegardé`);
+  logProgress(`✅ PHASE 2 TERMINÉE: ${savedCount} boutiques sauvegardées en base`);
+  
+  return shopsToProcess;
+}
+
+// PHASE 3: Extraction des détails depuis la page de liste (CORRIGÉE)
+async function extractAndSaveDetailsInParallel(extractor, shopRepo, shopsToProcess, scraper) {
+  logProgress(`🔄 PHASE 3: Extraction des détails depuis la page de liste...`);
+  
+  try {
+    // Traiter les boutiques par petits lots pour éviter les blocages anti-bot
+    logProgress(`📋 Traitement par petits lots pour éviter les blocages...`);
+    
+    const batchSize = 1; // Traiter 1 boutique à la fois pour éviter la détection
+    const totalBatches = Math.ceil(shopsToProcess.length / batchSize);
+    
+    let processedCount = 0;
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      const startIndex = batchIndex * batchSize;
+      const endIndex = Math.min(startIndex + batchSize, shopsToProcess.length);
+      const batch = shopsToProcess.slice(startIndex, endIndex);
+      
+      logProgress(`🔄 Lot ${batchIndex + 1}/${totalBatches}: ${batch.length} boutiques`);
+      
+      for (const shop of batch) {
+        try {
+          logProgress(`🔍 Extraction détails: ${shop.shopName}`);
+          
+          // Rotation User-Agent et rechargement de session pour chaque requête
+          if (extractor.scraper && extractor.scraper.page) {
+            const newUserAgent = extractor.scraper.getRandomUserAgent();
+            await extractor.scraper.page.setExtraHTTPHeaders({
+              'User-Agent': newUserAgent
+            });
+            logProgress(`🔄 User-Agent changé pour ${shop.shopName}`);
+            
+            // Recharger la page pour éviter la détection de session
+            await extractor.scraper.page.reload({ waitUntil: 'networkidle' });
+            logProgress(`🔄 Page rechargée pour ${shop.shopName}`);
+          }
+          
+          // Naviguer vers la page de détail de la boutique
+          const navSuccess = await extractor.navigateToShopDetail(shop.shopUrl);
+          if (!navSuccess) {
+            logProgress(`⚠️ Impossible de naviguer vers ${shop.shopName}`);
+            errorCount++;
+            continue;
+          }
+          
+          // Extraire les détails de la boutique
+          logProgress(`🔍 Extraction des détails de la boutique (ID TrendTrack: ${shop.shopId})...`);
+          const shopDetails = await extractor.extractShopDetails(shop.shopId);
+          
+          if (shopDetails) {
+            await shopRepo.updateDetailMetrics(shop.id, shopDetails);
+            logProgress(`✅ Métriques de détail mises à jour pour ID: ${shop.id}`);
+            logProgress(`✅ Détails extraits: ${shop.shopName}`);
+            successCount++;
+        } else {
+            logProgress(`⚠️ Aucun détail extrait pour ${shop.shopName}`);
+            errorCount++;
+          }
+          
+          processedCount++;
+          
+          // Pause aléatoire entre les boutiques pour éviter les blocages
+          const randomDelay = Math.floor(Math.random() * 5000) + 3000; // 3-8 secondes
+          logProgress(`⏸️ Pause de ${Math.round(randomDelay/1000)} secondes...`);
+          await new Promise(resolve => setTimeout(resolve, randomDelay));
+          
+        } catch (error) {
+          logProgress(`❌ Erreur extraction détails ${shop.shopName}: ${error.message}`);
+          errorCount++;
+        }
+      }
+      
+      logProgress(`📊 Lot ${batchIndex + 1} terminé: ${successCount} succès, ${errorCount} erreurs`);
+      
+      // Pause plus longue entre les lots
+      if (batchIndex < totalBatches - 1) {
+        const lotDelay = Math.floor(Math.random() * 10000) + 5000; // 5-15 secondes
+        logProgress(`⏸️ Pause de ${Math.round(lotDelay/1000)} secondes avant le lot suivant...`);
+        await new Promise(resolve => setTimeout(resolve, lotDelay));
+        
+        // Rotation d'IP avec NordVPN après chaque lot
+        if (batchIndex % 2 === 1) { // Tous les 2 lots
+          logProgress(`🔄 Rotation d'IP avec NordVPN...`);
+          try {
+            await scraper.close();
+            logProgress(`🔚 Ancienne session fermée`);
+            
+            // Rotation d'IP via namespace VPN
+            const namespaceIndex = (batchIndex % 6) + 1; // Rotation entre 6 namespaces
+            const namespace = `vpn${namespaceIndex}`;
+            
+            logProgress(`🌐 Changement vers namespace: ${namespace}`);
+            
+            // Pause pour éviter la détection
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            
+            // Nouvelle session avec namespace VPN
+            scraper = new WebScraper();
+            await scraper.init();
+            extractor = new TrendTrackExtractor(scraper.page, scraper.errorHandler);
+            
+            // Reconnexion à TrendTrack
+            const loginSuccess = await extractor.login('seif.alyakoob@gmail.com', 'Toulouse31!');
+            if (loginSuccess) {
+              logProgress(`✅ Nouvelle session créée avec IP ${namespace}`);
+      } else {
+              logProgress(`❌ Échec de la reconnexion`);
+              break;
+            }
+          } catch (error) {
+            logProgress(`❌ Erreur rotation IP: ${error.message}`);
+            break;
+          }
+        }
+      }
+    }
+    
+    logProgress(`✅ PHASE 3 TERMINÉE: ${processedCount} boutiques traitées`);
+    logProgress(`📊 Résultats: ${successCount} succès, ${errorCount} erreurs`);
+    
+  } catch (error) {
+    logProgress(`❌ Erreur Phase 3: ${error.message}`);
+  }
+}
+
+// FONCTION PRINCIPALE
 async function updateDatabase() {
-  logProgress('🔄 Mise à jour de la base de données...');
+  logProgress('🚀 DÉMARRAGE - Architecture parallèle COMPLÈTE TrendTrack');
+  logProgress('==================================================');
 
   let scraper = null;
   let extractor = null;
@@ -116,63 +346,58 @@ async function updateDatabase() {
       return;
     }
 
-    // Extraction de toutes les données sur 1 page via la méthode scrapeMultiplePages
-    logProgress('📋 Extraction de 5 pages via scrapeMultiplePages...');
-    const onlineData = await extractor.scrapeMultiplePages(5);
-
-    // Export debug JSON
-    fs.writeFileSync('export-debug.json', JSON.stringify(onlineData, null, 2));
-
-    if (!onlineData || onlineData.length === 0) {
-      logProgress('❌ Aucune donnée extraite');
+    // Vérifier s'il y a des boutiques qui ont besoin de la Phase 3
+    const existingShops = await shopRepo.findByStatus('table_extracted');
+    
+    if (existingShops.length > 0) {
+      logProgress(`🔍 Détection de ${existingShops.length} boutiques avec données de base (Phase 3 requise)`);
+      
+      // PHASE 3: Extraction parallèle des détails pour les boutiques existantes
+      await extractAndSaveDetailsInParallel(extractor, shopRepo, existingShops, scraper);
+      
+      logProgress('✅ Phase 3 terminée pour les boutiques existantes');
       return;
     }
 
-    logProgress(`✅ ${onlineData.length} boutiques extraites en ligne`);
+    // PHASE 1: Extraction des données du tableau (nouveau scraping)
+    logProgress('🆕 Nouveau scraping - Phase 1: Extraction du tableau');
+    const allTableData = await extractTableDataOnly(extractor, 5);
+    
+    if (allTableData.length === 0) {
+      logProgress('❌ Aucune boutique extraite');
+      return;
+    }
 
-    // Récupérer les données existantes pour comparaison
-    logProgress('📊 Récupération des données existantes...');
-    const existingShops = await shopRepo.getAllWithPagination(1000, 0);
-    const existingCount = existingShops.length;
-
-    logProgress(`📊 ${existingCount} boutiques existantes en base`);
-
-    // Traitement optimisé en lot
-    logProgress('🔄 Traitement des données en lot...');
-    const startTime = new Date().toISOString();
-    const batchResults = await processBatch(shopRepo, onlineData, 10);
-    const endTime = new Date().toISOString();
-
-    logProgress(`⏱️  Temps de traitement: ${endTime - startTime}ms`);
-
-    // Statistiques finales
-    logProgress('\n📊 STATISTIQUES FINALES:');
-    logProgress('==================================================');
-    logProgress(`📈 Boutiques en ligne: ${onlineData.length}`);
-    logProgress(`💾 Boutiques en base: ${existingCount + batchResults.inserted}`);
-    logProgress(`🆕 Nouvelles boutiques ajoutées: ${batchResults.inserted}`);
-    logProgress(`🔄 Boutiques mises à jour: ${batchResults.updated}`);
-    logProgress(`⏭️ Boutiques ignorées (déjà existantes): ${batchResults.skipped}`);
-    logProgress(`🔄 Boutiques déjà existantes: ${existingCount}`);
-    logProgress(`❌ Erreurs: ${batchResults.errors}`);
-    logProgress('✅ Mise à jour de la base de données terminée !');
-
-        } catch (error) {
-    if (error.code === 'LOCK_UNAVAILABLE') {
-      logProgress('❌ Base de données verrouillée par un autre processus');
+    // PHASE 2: Sauvegarde immédiate des données du tableau
+    const shopsToProcess = await saveTableDataAndPrepareDetails(shopRepo, allTableData);
+    
+    if (shopsToProcess.length === 0) {
+      logProgress('❌ Aucune boutique sauvegardée');
       return;
     }
     
-    logProgress(`❌ Erreur: ${error.message}`);
+    // PHASE 3: Extraction parallèle des détails pour les nouvelles boutiques
+    await extractAndSaveDetailsInParallel(extractor, shopRepo, shopsToProcess, scraper);
+
+    // Statistiques finales
+    logProgress('\n📊 STATISTIQUES FINALES - ARCHITECTURE PARALLÈLE COMPLÈTE:');
+    logProgress('==================================================');
+    logProgress(`📈 Boutiques extraites du tableau: ${allTableData.length}`);
+    logProgress(`💾 Boutiques sauvegardées en base: ${shopsToProcess.length}`);
+    logProgress(`🔄 Boutiques traitées en parallèle: ${shopsToProcess.length}`);
+    logProgress('✅ Architecture parallèle complète terminée !');
+
+        } catch (error) {
+    logProgress(`❌ Erreur fatale: ${error.message}`);
     console.error('❌ Erreur détaillée:', error);
   } finally {
     // Libérer le lock
     if (lockAcquired) {
       try {
         // await releaseLock(LOCK_FILE); // Temporairement désactivé
-        logProgress('🔓 Lock fichier libéré.');
+        logProgress('🔓 Lock libéré');
         } catch (error) {
-        logProgress(`⚠️  Erreur libération lock: ${error.message}`);
+        logProgress(`⚠️ Erreur libération lock: ${error.message}`);
       }
     }
 
@@ -181,7 +406,6 @@ async function updateDatabase() {
       try {
         await scraper.close();
         logProgress('🔚 Fermeture du scraper...');
-        logProgress('✅ Scraper fermé');
       } catch (error) {
         logProgress(`⚠️  Erreur fermeture scraper: ${error.message}`);
       }

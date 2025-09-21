@@ -1,0 +1,13 @@
+# Configuration des credentials API MyToolsPlan
+# Copiez ce fichier vers .env et remplissez vos vraies valeurs
+
+# Credentials SAM/MyToolsPlan API
+SAM_USER_ID=26931056
+SAM_API_KEY=943cfac719badc2ca14126e08b8fe44f
+
+# Alternative (si vous préférez ces noms)
+# MYTOOLSPLAN_USER_ID=26931056
+# MYTOOLSPLAN_API_KEY=943cfac719badc2ca14126e08b8fe44f
+
+# Note: Si ces variables ne sont pas définies, le système utilisera
+# automatiquement les credentials par défaut du scraper

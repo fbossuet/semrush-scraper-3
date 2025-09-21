@@ -1,0 +1,27 @@
+{
+  "timestamp": "2025-09-20T17:20:10.853125+00:00",
+  "status": "failed",
+  "num_workers": 2,
+  "total_shops": 3,
+  "distribution": {
+    "0": [
+      {
+        "id": 2766,
+        "name": "aloyoga.com",
+        "url": "https://aloyoga.com"
+      },
+      {
+        "id": 2788,
+        "name": "enroutejewelry.com",
+        "url": "https://enroutejewelry.com"
+      }
+    ],
+    "1": [
+      {
+        "id": 2784,
+        "name": "drmtlgy.com",
+        "url": "https://drmtlgy.com"
+      }
+    ]
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "timestamp": "2025-09-20T16:36:38.261024+00:00",
+  "status": "all",
+  "num_workers": 1,
+  "results": {
+    "worker_0": {
+      "worker_id": 0,
+      "shops_count": 1,
+      "success": "completed",
+      "metrics_found": 0,
+      "metrics_not_found": 0,
+      "metrics_count": {},
+      "statuses": {},
+      "shops": [
+        {
+          "id": 2745,
+          "name": "us.burga.com",
+          "url": "https://us.burga.com"
+        }
+      ]
+    }
+  },
+  "overall_success": true
+}

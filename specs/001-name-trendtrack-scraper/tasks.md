@@ -45,6 +45,140 @@
 
 **Résultat**: Correction du timing pour React SPA, détection des problèmes de permissions/session
 
+### ✅ T075-CORRECTION: Résolution des erreurs critiques du scraper (2025-09-20)
+**Date**: 2025-09-20  
+**Problème**: Le scraper présentait plusieurs erreurs critiques empêchant son fonctionnement  
+**Erreurs identifiées**:
+1. `No module named 'date_converter'` dans les workers parallèles
+2. `update_shop_analytics() missing 1 required positional argument: 'analytics_data'`
+3. Import `TrendTrackAPI` incorrect
+4. PYTHONPATH non propagé aux workers
+
+**Solutions appliquées**:
+1. **Création du module `date_converter.py`** avec fallback robuste
+2. **Suppression des vérifications** `if analytics_data:` problématiques
+3. **Correction de l'import** `from trendtrack_api import TrendTrackAPI`
+4. **Configuration du PYTHONPATH** dans `launch_workers_by_status.py`
+5. **Ajout de l'initialisation** `api = TrendTrackAPI()` dans `run_worker`
+
+**Fichiers modifiés**:
+- `date_converter.py`: Nouveau module créé
+- `production_scraper_parallel.py`: Corrections des imports et appels API
+- `launch_workers_by_status.py`: Configuration du PYTHONPATH
+
+**Résultat**: 
+- **Workers lancés** : 1
+- **Workers réussis** : 1 (100.0%)
+- **Workers échoués** : 0
+- **Taux de succès** : 100.0%
+- **Stockage BDD** : ✅ FONCTIONNE !
+
+**Améliorations de robustesse**:
+- Import avec fallback pour `date_converter`
+- Gestion d'erreurs renforcée
+- Vérification des domaines vides
+- Logs détaillés pour le débogage
+- Retry automatique avec délais progressifs
+
+### T076: Implémentation du scraping des pixels TrendTrack avec un seul appel [P3]
+**Type**: Feature  
+**Dependencies**: Aucune  
+**Files**: À créer - `trendtrack_pixel_scraper.py`, `pixel_analyzer.js`  
+**Description**: Implémenter un système de scraping des pixels (Google Analytics, Facebook Pixel, ReConvert) via un seul appel API TrendTrack pour chaque site, avec gestion du rate limiting et analyse sécurisée.
+
+**Objectif**: Récupérer les technologies de tracking (pixels) des sites via l'API TrendTrack de manière efficace et sécurisée, en évitant les appels multiples et en respectant les limites de débit.
+
+**Implémentation**:
+- [ ] Créer le module `trendtrack_pixel_scraper.py` avec la fonction `getTechsFinal`
+- [ ] Implémenter l'analyse multiple avec rate limiting (`analyzeSitesSafely`)
+- [ ] Créer le script JavaScript `pixel_analyzer.js` pour l'exécution côté navigateur
+- [ ] Intégrer la détection des technologies : Google Analytics, Facebook Pixel, ReConvert
+- [ ] Ajouter la gestion des erreurs et retry automatique
+- [ ] Implémenter le système de délais configurables entre les requêtes
+- [ ] Créer un template de configuration pour les sites à analyser
+- [ ] Ajouter les logs détaillés et statistiques globales
+
+**Validation**:
+- [ ] La fonction `getTechsFinal` récupère correctement les technologies
+- [ ] Le rate limiting fonctionne avec des délais configurables
+- [ ] La détection des pixels Google Analytics, Facebook Pixel, ReConvert fonctionne
+- [ ] La gestion d'erreurs capture et reporte les échecs correctement
+- [ ] Les statistiques globales sont calculées et affichées
+- [ ] Le système respecte les limites de l'API TrendTrack
+
+**Critères de succès**:
+- Scraping des pixels fonctionnel avec un seul appel par site
+- Détection fiable des technologies de tracking principales
+- Rate limiting respecté (délais configurables, par défaut 2 secondes)
+- Gestion d'erreurs robuste avec retry automatique
+- Statistiques détaillées (succès/échecs, technologies détectées)
+- Intégration transparente avec le système de scraping existant
+
+**Code de référence**:
+```javascript
+// 🔥 FONCTION DE BASE (garde celle-ci)
+const getTechsFinal = async (siteId, workspace) => {
+    const response = await fetch(`https://app.trendtrack.io/workspace/${workspace}/trending-shops/${siteId}`, {
+        headers: {'RSC': '1', 'Accept': 'text/x-component'}, 
+        credentials: 'include'
+    });
+    
+    const text = await response.text();
+    const techs = [];
+    
+    // Recherche directe des technologies connues
+    if (text.includes('Google Analytics')) techs.push('Google Analytics');
+    if (text.includes('Facebook Pixel')) techs.push('Facebook Pixel');
+    if (text.includes('ReConvert')) techs.push('ReConvert Upsell App & Bundles');
+    
+    return { technologies: techs };
+};
+
+// 🛡️ ANALYSE MULTIPLE AVEC RATE LIMITING
+const analyzeSitesSafely = async (sites, workspace, delayMs = 1000) => {
+    const results = [];
+    
+    for (let i = 0; i < sites.length; i++) {
+        const site = sites[i];
+        
+        try {
+            console.log(`🔍 Analyse ${i+1}/${sites.length}: ${site.name || site.id}`);
+            
+            const data = await getTechsFinal(site.id, workspace);
+            
+            results.push({
+                site_name: site.name || site.id,
+                site_id: site.id,
+                ...data,
+                timestamp: new Date().toISOString()
+            });
+            
+            // ⏱️ Pause entre les requêtes
+            if (i < sites.length - 1) {
+                await delay(delayMs);
+            }
+            
+        } catch (error) {
+            console.error(`❌ Erreur pour ${site.name || site.id}:`, error.message);
+            results.push({
+                site_name: site.name || site.id,
+                site_id: site.id,
+                error: error.message,
+                technologies: []
+            });
+        }
+    }
+    
+    return results;
+};
+```
+
+**Configuration requise**:
+- Workspace TrendTrack : `w-al-yakoobs-workspace-x0Qg9st`
+- Délai par défaut : 2000ms entre les requêtes
+- Technologies détectées : Google Analytics, Facebook Pixel, ReConvert
+- Format de sortie : JSON avec métadonnées et timestamp
+
 ## 🎯 **NOUVELLES TÂCHES - YEAR_FOUNDED**
 
 ### T051: Lancer le scraper TrendTrack pour alimenter la table shops
@@ -922,7 +1056,7 @@ ALTER TABLE analytics ADD COLUMN cpc NUMERIC;
 ### T074: Audit du fonctionnement de l'API endpoint test [P0]
 **Type**: Audit  
 **Dependencies**: Aucune  
-**Files**: `http://37.59.102.7:8001/test/shops/with-analytics-ordered?since=2025-07-10T00:00:00Z`  
+**Files**: `http://37.59.102.7:8001/albert?since=2025-07-10T00:00:00Z`  
 **Description**: Auditer le fonctionnement de l'API endpoint de test pour valider la qualité des données et la performance.
 **Objectif**: S'assurer que l'API de test fonctionne correctement et fournit des données cohérentes pour l'environnement de test.
 
@@ -944,7 +1078,7 @@ ALTER TABLE analytics ADD COLUMN cpc NUMERIC;
 - [ ] La gestion d'erreurs fonctionne pour les cas limites
 
 **Données de référence** (basées sur l'audit initial):
-- **URL**: http://37.59.102.7:8001/test/shops/with-analytics-ordered?since=2025-07-10T00:00:00Z
+- **URL**: http://37.59.102.7:8001/albert?since=2025-07-10T00:00:00Z
 - **Environnement**: TEST
 - **Base de données**: trendtrack_test.db
 - **Nombre de boutiques**: 180

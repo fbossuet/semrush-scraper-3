@@ -1,0 +1,50 @@
+{
+  "timestamp": "2025-09-20T17:34:25.302314+00:00",
+  "status": "partial",
+  "num_workers": 2,
+  "results": {
+    "worker_0": {
+      "worker_id": 0,
+      "shops_count": 2,
+      "success": "completed",
+      "metrics_found": 0,
+      "metrics_not_found": 0,
+      "metrics_count": {},
+      "statuses": {},
+      "shops": [
+        {
+          "id": 2745,
+          "name": "us.burga.com",
+          "url": "https://us.burga.com"
+        },
+        {
+          "id": 2784,
+          "name": "drmtlgy.com",
+          "url": "https://drmtlgy.com"
+        }
+      ]
+    },
+    "worker_1": {
+      "worker_id": 1,
+      "shops_count": 2,
+      "success": "completed",
+      "metrics_found": 0,
+      "metrics_not_found": 0,
+      "metrics_count": {},
+      "statuses": {},
+      "shops": [
+        {
+          "id": 2766,
+          "name": "aloyoga.com",
+          "url": "https://aloyoga.com"
+        },
+        {
+          "id": 2788,
+          "name": "enroutejewelry.com",
+          "url": "https://enroutejewelry.com"
+        }
+      ]
+    }
+  },
+  "overall_success": true
+}
