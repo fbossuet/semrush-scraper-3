@@ -221,3 +221,4 @@ const geoPattern = /"visitsShare":([0-9.]+),"countryUrlCode":"[^"]+","countryAlp
 **Statut de la Recherche** : 🔍 **EN COURS**
 
 La recherche est en cours. L'API des pixels est comprise, mais l'endpoint pour les données géographiques nécessite une investigation plus approfondie.
+
