@@ -49,3 +49,4 @@ signature = inspect.signature(api.update_shop_analytics)
 print(f"Signature: {signature}")
 print(f"Paramètres: {list(signature.parameters.keys())}")
 
+

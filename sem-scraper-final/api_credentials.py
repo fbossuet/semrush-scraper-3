@@ -160,3 +160,4 @@ if __name__ == "__main__":
     print(f"✅ Depuis environnement: {creds.is_from_environment()}")
     
     print("🎉 Tests terminés avec succès!")
+

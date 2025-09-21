@@ -121,3 +121,4 @@ os.system('Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &')
 **Prochaine étape :** Modifier `src/scraper.js` pour ajouter des options stealth avancées.
 
 
+

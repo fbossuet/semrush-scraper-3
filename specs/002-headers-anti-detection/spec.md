@@ -155,3 +155,4 @@ En tant qu'analyste de données, je veux que le système de scraping utilise des
 **Status**: Draft  
 **Input**: User description: "Implémenter un système complet de gestion des headers HTTP pour éviter la détection par les sites distants lors du scraping. Le système doit inclure la rotation automatique des User-Agents, la randomisation des headers de navigation, la gestion des headers de sécurité modernes (Sec-Fetch-*), et l'intégration avec Playwright pour une discrétion maximale."
 
+
