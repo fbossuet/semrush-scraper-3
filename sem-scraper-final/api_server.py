@@ -13,7 +13,7 @@ from datetime import datetime
 import logging
 
 # Import de notre API
-from trendtrack_api import TrendTrackAPI
+from trendtrack_api import TrendTrackAPI, get_database_path
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -100,7 +100,7 @@ class AdaptiveTimeoutRequest(BaseModel):
     base_timeout: Optional[int] = Field(30000, description="Timeout de base en millisecondes", ge=1000, le=300000)
 
 # Initialiser l'API TrendTrack
-api = TrendTrackAPI()
+api = TrendTrackAPI(get_database_path())
 
 @app.get("/")
 async def root():
@@ -584,7 +584,7 @@ async def get_albert_shops_with_analytics_ordered(since: Optional[str] = Query(N
     """
     try:
         # Utiliser la base de production
-        test_api = TrendTrackAPI()
+        test_api = TrendTrackAPI(get_database_path())
         shops = test_api.get_all_shops()
         
         # Filtrer par date si spécifiée
@@ -2312,7 +2312,7 @@ async def get_all_shops_complete():
     Récupère toutes les boutiques avec TOUTES leurs métriques (shops + analytics)
     """
     try:
-        api = TrendTrackAPI()
+        api = TrendTrackAPI(get_database_path())
         shops = api.get_all_shops()
         analytics = api.get_all_analytics()
         
@@ -2346,7 +2346,7 @@ async def get_complete_stats():
     Statistiques sur les boutiques avec métriques complètes
     """
     try:
-        api = TrendTrackAPI()
+        api = TrendTrackAPI(get_database_path())
         shops = api.get_all_shops()
         analytics = api.get_all_analytics()
         

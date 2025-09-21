@@ -80,8 +80,8 @@ class TrendTrackAPI:
                     shop_url TEXT UNIQUE NOT NULL,
                     scraping_status TEXT,
                     scraping_last_update TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
-                    updated_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat()
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
@@ -96,7 +96,7 @@ class TrendTrackAPI:
                     branded_traffic TEXT,
                     conversion_rate TEXT,
                     scraping_status TEXT DEFAULT 'completed',
-                    updated_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (shop_id) REFERENCES shops (id)
                 )
             """)
@@ -107,7 +107,7 @@ class TrendTrackAPI:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     shop_id INTEGER,
                     error_message TEXT,
-                    occurred_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
+                    occurred_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (shop_id) REFERENCES shops (id)
                 )
             """)
@@ -118,7 +118,7 @@ class TrendTrackAPI:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     lock_name TEXT UNIQUE NOT NULL,
                     process_id INTEGER,
-                    acquired_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
+                    acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     expires_at TIMESTAMP
                 )
             """)
@@ -130,7 +130,7 @@ class TrendTrackAPI:
                     selector_name TEXT NOT NULL,
                     success BOOLEAN,
                     response_time_ms INTEGER,
-                    timestamp TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     page_load_time_ms INTEGER
                 )
             """)
@@ -200,7 +200,7 @@ class TrendTrackAPI:
             cursor.execute("DELETE FROM processing_locks WHERE expires_at < ?", (datetime.now(timezone.utc).isoformat(),))
             
             # Essayer d'acquérir le lock
-            expires_at = datetime.now(timezone.utc).isoformat() + timedelta(seconds=timeout)
+            expires_at = (datetime.now(timezone.utc) + timedelta(seconds=timeout)).isoformat()
             cursor.execute("""
                 INSERT INTO processing_locks (lock_name, process_id, acquired_at, expires_at)
                 VALUES (?, ?, ?, ?)
