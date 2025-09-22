@@ -466,15 +466,12 @@ class TrendTrackAPI:
             # Déterminer le statut automatiquement
             scraping_status = analytics_data.get('scraping_status', 'completed')
             
-            # Si un des champs contient "Sélecteur non trouvé", mettre le statut à 'partial'
+            # Si un des champs contient "Sélecteur non trouvé" ou est vide, mettre le statut à 'partial'
             selector_not_found = 'Sélecteur non trouvé'
-            if (organic_traffic == selector_not_found or 
-                branded_traffic == selector_not_found or 
-                bounce_rate == selector_not_found or 
-                avg_visit_duration == selector_not_found or 
-                conversion_rate == selector_not_found or
-                visits == selector_not_found or
-                traffic == selector_not_found):
+            required_fields = [organic_traffic, bounce_rate, avg_visit_duration, branded_traffic, conversion_rate, visits, traffic, percent_branded_traffic]
+            
+            if (any(field == selector_not_found for field in required_fields) or 
+                any(field == '' or field is None for field in required_fields)):
                 scraping_status = 'partial'
             
             # Mettre à jour la table analytics

@@ -335,28 +335,39 @@ class ParallelProductionScraper:
             target_date = self.calculate_target_date()
             clean_domain = domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
             
-            # Utiliser get_all_metrics_via_api pour récupérer toutes les métriques incluant CPC
-            all_metrics = await self.api_client.get_all_metrics_via_api(clean_domain, target_date)
+            # Appel API organic.OverviewTrend
+            result = await self.api_client.call_organic_overview_trend_api(self.page, clean_domain, self.worker_id, target_date)
             
-            if not all_metrics:
+            if not result:
                 return None
             
-            # Extraire les métriques principales
-            traffic_raw = all_metrics.get('visits', 0)  # visits = traffic total
-            branded_traffic_raw = all_metrics.get('traffic_branded', 0)
-            cpc_raw = all_metrics.get('cpc', 0)
+            # CORRECTION: Traiter la réponse de l'API avec le bon chemin
+            if result.get('data') and result['data'].get('result'):
+                overview_data = result['data']['result']
+                if overview_data and len(overview_data) > 0:
+                    # Prendre la dernière entrée (comme dans les fichiers qui fonctionnent)
+                    latest_data = overview_data[-1]
+                    
+                    # Extraire les métriques selon la documentation
+                    traffic_raw = latest_data.get('traffic', 0)
+                    branded_traffic_raw = latest_data.get('trafficBranded', 0)
+                    
+                    # Récupérer CPC depuis l'API (si disponible)
+                    cpc_raw = latest_data.get('cpc', 0)
+                    
+                    logger.info(f"✅ Worker {self.worker_id}: OverviewTrend - Traffic: {traffic_raw}, Branded: {branded_traffic_raw}, CPC: {cpc_raw}")
+                    
+                    return {
+                        'traffic': str(traffic_raw),
+                        'branded_traffic': str(branded_traffic_raw),
+                        'cpc': str(cpc_raw),
+                        'traffic_raw': traffic_raw,
+                        'branded_traffic_raw': branded_traffic_raw,
+                        'cpc_raw': cpc_raw,
+                        'source': 'organic.OverviewTrend API'
+                    }
             
-            logger.info(f"✅ Worker {self.worker_id}: OverviewTrend - Traffic: {traffic_raw}, Branded: {branded_traffic_raw}, CPC: {cpc_raw}")
-            
-            return {
-                'traffic': str(traffic_raw),
-                'branded_traffic': str(branded_traffic_raw),
-                'cpc': str(cpc_raw),
-                'traffic_raw': traffic_raw,
-                'branded_traffic_raw': branded_traffic_raw,
-                'cpc_raw': cpc_raw,
-                'source': 'organic.OverviewTrend API (all_metrics)'
-            }
+            return None
             
         except Exception as error:
             logger.error(f"❌ Worker {self.worker_id}: Erreur API organic.OverviewTrend: {error}")
@@ -1509,8 +1520,7 @@ class ParallelProductionScraper:
             "conversion_rate": "",
             "paid_search_traffic": "",
             "traffic": "",
-            "percent_branded_traffic": "",
-            "cpc": ""
+            "percent_branded_traffic": ""
         }
         
         # Récupérer les données de domain_overview

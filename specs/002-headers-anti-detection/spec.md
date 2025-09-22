@@ -105,6 +105,12 @@ En tant qu'analyste de données, je veux que le système de scraping utilise des
 - **HD-019** : Le système DOIT synchroniser les headers du navigateur avec les headers des requêtes API
 - **HD-020** : Le système DOIT gérer les headers de session persistante pour maintenir l'authentification
 
+#### Configuration Display Virtuel (Xvfb)
+- **HD-025** : Le système DOIT configurer automatiquement Xvfb sur les systèmes Linux pour l'exécution headless
+- **HD-026** : Le système DOIT définir la variable d'environnement DISPLAY sur :99 pour la compatibilité
+- **HD-027** : Le système DOIT gérer les conflits de display existants avec une gestion d'erreur robuste
+- **HD-028** : Le système DOIT configurer la résolution d'écran virtuel (1024x768x24) pour la compatibilité
+
 #### Monitoring et Adaptation
 - **HD-021** : Le système DOIT surveiller les réponses des sites pour détecter les tentatives de blocage
 - **HD-022** : Le système DOIT adapter automatiquement la stratégie de headers en cas de détection
@@ -116,6 +122,7 @@ En tant qu'analyste de données, je veux que le système de scraping utilise des
 - **HeaderRotation** : Représente la logique de rotation et de timing pour les changements de headers
 - **StealthIdentity** : Représente l'identité complète d'un worker (headers + comportement + timing)
 - **HeaderValidation** : Représente la validation et l'adaptation des headers basée sur les réponses des sites
+- **DisplayConfiguration** : Représente la configuration du display virtuel (Xvfb) pour l'exécution headless
 
 ---
 
