@@ -71,7 +71,7 @@ export class ShopRepository {
       // 1. Insérer dans la table shops avec mapping dynamique
       const shopColumns = [
         'shop_name', 'shop_url', 'scraping_status', 'scraping_last_update', 'updated_at',
-        'creation_date', 'monthly_visits', 'monthly_revenue', 'live_ads', 'page_number',
+        'creation_date', 'monthly_visits', 'monthly_revenue', 'live_ads', 'live_ads_7d', 'live_ads_30d', 'page_number',
         'scraped_at', 'project_source', 'external_id', 'metadata', 'year_founded',
         'total_products', 'pixel_google', 'pixel_facebook', 'aov',
         'market_us', 'market_uk', 'market_de', 'market_ca', 'market_au', 'market_fr',
@@ -89,6 +89,8 @@ export class ShopRepository {
         'monthly_visits': shopData.monthlyVisits || null,
         'monthly_revenue': shopData.monthlyRevenue || '',
         'live_ads': shopData.liveAds || '',
+        'live_ads_7d': shopData.liveAds7d || 0,
+        'live_ads_30d': shopData.liveAds30d || 0,
         'page_number': shopData.page || 1,
         'scraped_at': shopData.scrapedAt || null,
         'project_source': shopData.projectSource || 'trendtrack',
