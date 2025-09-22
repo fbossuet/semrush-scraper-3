@@ -495,6 +495,7 @@ export class ShopRepository {
         totalProducts: shop.total_products,
         liveAds: shop.live_ads,
         creationDate: shop.creation_date,
+        external_id: shop.external_id, // Ajout du mapping external_id
         scraping_status: shop.scraping_status,
         last_updated: shop.last_updated
       }));

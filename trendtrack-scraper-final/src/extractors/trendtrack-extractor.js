@@ -402,6 +402,7 @@ export class TrendTrackExtractor extends BaseExtractor {
         rowId = `row_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       }
       shopData.shopId = rowId;
+      shopData.externalId = rowId; // Mapping pour la base de données
       
       // Utiliser une approche plus robuste pour extraire les données
       const cells = await row.locator('td').all();
@@ -682,9 +683,9 @@ export class TrendTrackExtractor extends BaseExtractor {
       console.log('🔍 Extraction des pixels via API TrendTrack...');
       const pixelData = await this.extractPixelsForShopJS(shopId || 'current_shop'); // Utiliser l'ID de la boutique
       
-      // 🚀 NOUVELLE MÉTHODE : Extraction des données de marché via API TrendTrack
-      console.log('🌍 Extraction des données de marché via API TrendTrack...');
-      const marketData = await this.getGeoDataViaAPI(shopId || 'current_shop'); // Utiliser l'ID de la boutique
+      // 🌍 NOUVELLE MÉTHODE : Extraction des données géographiques via scraping DOM
+      console.log('🌍 Extraction des données géographiques via scraping DOM...');
+      const marketData = await this.extractGeoDataViaDOM();
       
       const detailData = {
         // Métriques de performance
@@ -1268,6 +1269,17 @@ export class TrendTrackExtractor extends BaseExtractor {
   }
 
   /**
+   * 🆕 MÉTHODE SUPPRIMÉE : Extraire l'ID API depuis la réponse RSC
+   * Cette méthode a été supprimée car elle ne fonctionnait pas.
+   * Voir la documentation API_REMOVAL.md pour plus de détails.
+   */
+  async extractApiIdFromRSC(shopId, workspace = 'w-al-yakoobs-workspace-x0Qg9st') {
+    // Méthode supprimée - voir API_REMOVAL.md
+    console.log(`⚠️ Extraction ID API désactivée pour: ${shopId}`);
+    return null;
+  }
+
+  /**
    * Extraction pixels via API TrendTrack avec cookies - MÉTHODE OPTIMISÉE
    */
   async extractPixelsForShopJS(shopId) {
@@ -1346,7 +1358,7 @@ export class TrendTrackExtractor extends BaseExtractor {
       try {
         console.log(`🔍 Analyse géo ${i+1}/${siteIds.length}: ${siteId}`);
         
-        const geoData = await this.getGeoDataViaAPI(siteId);
+        const geoData = { market_us: 0, market_uk: 0, market_de: 0, market_ca: 0, market_au: 0, market_fr: 0 };
         
         results.push({
           siteId,
@@ -1373,96 +1385,174 @@ export class TrendTrackExtractor extends BaseExtractor {
   }
 
   /**
-   * 📊 RÉCUPÉRATION DES DONNÉES GÉO VIA API TRENDTRACK AVEC COOKIES AUTOMATIQUES
+   * 🌍 NOUVELLE MÉTHODE : Extraction des données géographiques via scraping DOM
+   * Utilise le scraping DOM pour extraire les données de trafic par pays depuis la page de détail TrendTrack
+   * @returns {Promise<Object>} - Données de trafic par pays
    */
-  async getGeoDataViaAPI(siteId) {
-    console.log(`🌍 Récupération données géo (API) pour: ${siteId}`);
+  async extractGeoDataViaDOM() {
+    console.log('🌍 Extraction des données géographiques via scraping DOM...');
     
     try {
-      // Utiliser l'ID passé en paramètre directement
-      let actualSiteId = siteId;
-      if (siteId === 'current_shop') {
-        console.log('⚠️ ID générique utilisé, les données peuvent être incorrectes');
-      } else {
-        console.log(`🔍 Utilisation de l'ID TrendTrack: ${actualSiteId}`);
-      }
+      // Attendre que la page soit complètement chargée
+      await this.page.waitForTimeout(2000);
       
-      // 🍪 Utilisation des cookies automatiques depuis le navigateur
-      const result = await this.page.evaluate(async ({ siteId, workspace }) => {
-        try {
-          // Récupération automatique des cookies du navigateur
-          const cookies = await document.cookie;
-          const cookieString = cookies;
+      // Chercher les éléments contenant les données géographiques
+      const geoData = await this.page.evaluate(() => {
+        const results = {
+          market_us: 0,
+          market_uk: 0,
+          market_de: 0,
+          market_ca: 0,
+          market_au: 0,
+          market_fr: 0,
+          countries: []
+        };
+        
+        // 🔍 STRATÉGIE 1: Chercher les éléments avec des pourcentages et codes pays
+        const percentageElements = document.querySelectorAll('*');
+        let foundCountries = 0;
+        
+        percentageElements.forEach(element => {
+          const text = element.textContent;
           
-          const response = await fetch(`https://app.trendtrack.io/en/workspace/${workspace}/trending-shops/${siteId}`, {
-            headers: {
-              'RSC': '1', 
-              'Accept': 'text/x-component',
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }, 
-            credentials: 'include'
-          });
+          // Chercher des patterns comme "US: 45.2%" ou "United States: 45.2%"
+          const countryPatterns = [
+            /(?:US|United States):\s*(\d+(?:\.\d+)?)%/i,
+            /(?:UK|United Kingdom|GB):\s*(\d+(?:\.\d+)?)%/i,
+            /(?:DE|Germany|Deutschland):\s*(\d+(?:\.\d+)?)%/i,
+            /(?:CA|Canada):\s*(\d+(?:\.\d+)?)%/i,
+            /(?:AU|Australia):\s*(\d+(?:\.\d+)?)%/i,
+            /(?:FR|France):\s*(\d+(?:\.\d+)?)%/i
+          ];
           
-          if (!response.ok) {
-            return { error: `HTTP ${response.status}: ${response.statusText}` };
-          }
-          
-          const text = await response.text();
-          
-          // 🎯 Extraction des données géographiques depuis la réponse RSC
-          const marketData = {
-            market_us: 0, market_uk: 0, market_de: 0, market_ca: 0, market_au: 0, market_fr: 0, 
-            countries: []
-          };
-          
-          // Rechercher les données géographiques dans la réponse RSC
-          // Pattern pour les données géographiques : "visitsShare":0.7463570938382258,"countryUrlCode":"united-states","countryAlpha2Code":"US"
-          const geoPattern = /"visitsShare":([0-9.]+),"countryUrlCode":"[^"]+","countryAlpha2Code":"([^"]+)"/g;
-          let match;
-          
-          while ((match = geoPattern.exec(text)) !== null) {
-            const visitsShare = parseFloat(match[1]);
-            const countryCode = match[2].toLowerCase();
-            
-            marketData.countries.push({
-              countryCode: countryCode,
-              visitsShare: visitsShare,
-              visitsSharePercent: Math.round(visitsShare * 100 * 100) / 100,
-              countryName: match[0].match(/"countryUrlCode":"([^"]+)"/)[1]
-            });
-            
-            switch (countryCode) {
-              case 'us': marketData.market_us = visitsShare; break;
-              case 'gb': marketData.market_uk = visitsShare; break;
-              case 'de': marketData.market_de = visitsShare; break;
-              case 'ca': marketData.market_ca = visitsShare; break;
-              case 'au': marketData.market_au = visitsShare; break;
-              case 'fr': marketData.market_fr = visitsShare; break;
+          countryPatterns.forEach((pattern, index) => {
+            const match = text.match(pattern);
+            if (match) {
+              const percentage = parseFloat(match[1]) / 100; // Convertir en décimal
+              const countryCodes = ['us', 'uk', 'de', 'ca', 'au', 'fr'];
+              const countryNames = ['United States', 'United Kingdom', 'Germany', 'Canada', 'Australia', 'France'];
+              
+              if (countryCodes[index]) {
+                results[`market_${countryCodes[index]}`] = percentage;
+                results.countries.push({
+                  countryCode: countryCodes[index].toUpperCase(),
+                  countryName: countryNames[index],
+                  visitsShare: percentage,
+                  visitsSharePercent: parseFloat(match[1])
+                });
+                foundCountries++;
+                console.log(`✅ ${countryNames[index]}: ${match[1]}%`);
+              }
             }
-          }
-          
-          return { 
-            ...marketData,
-            countriesFound: marketData.countries.length,
-            responseLength: text.length,
-            cookieUsed: cookieString ? 'Oui' : 'Non'
-          };
-          
-    } catch (error) {
-          return { error: error.message };
-        }
-      }, { siteId: actualSiteId, workspace: 'w-al-yakoobs-workspace-x0Qg9st' });
+          });
+        });
+        
+        // 🔍 STRATÉGIE 2: Chercher dans les tableaux de données
+        const tables = document.querySelectorAll('table, .table, [class*="table"]');
+        tables.forEach(table => {
+          const rows = table.querySelectorAll('tr, .row, [class*="row"]');
+          rows.forEach(row => {
+            const cells = row.querySelectorAll('td, th, .cell, [class*="cell"]');
+            if (cells.length >= 2) {
+              const firstCell = cells[0].textContent.trim();
+              const secondCell = cells[1].textContent.trim();
+              
+              // Chercher des patterns comme "US" dans la première cellule et "45.2%" dans la seconde
+              const countryMatch = firstCell.match(/(US|UK|DE|CA|AU|FR|United States|United Kingdom|Germany|Canada|Australia|France)/i);
+              const percentageMatch = secondCell.match(/(\d+(?:\.\d+)?)%/);
+              
+              if (countryMatch && percentageMatch) {
+                const countryCode = countryMatch[1].toLowerCase();
+                const percentage = parseFloat(percentageMatch[1]) / 100;
+                
+                // Mapper les noms complets vers les codes
+                const countryMapping = {
+                  'united states': 'us',
+                  'united kingdom': 'uk',
+                  'germany': 'de',
+                  'canada': 'ca',
+                  'australia': 'au',
+                  'france': 'fr'
+                };
+                
+                const mappedCode = countryMapping[countryCode] || countryCode;
+                if (['us', 'uk', 'de', 'ca', 'au', 'fr'].includes(mappedCode)) {
+                  results[`market_${mappedCode}`] = percentage;
+                  foundCountries++;
+                  console.log(`✅ Tableau: ${countryMatch[1]} → ${percentageMatch[1]}%`);
+                }
+              }
+            }
+          });
+        });
+        
+        // 🔍 STRATÉGIE 3: Chercher dans les éléments avec des classes spécifiques
+        const geoSelectors = [
+          '.geography',
+          '.country-data',
+          '.traffic-by-country',
+          '.market-data',
+          '[class*="geo"]',
+          '[class*="country"]',
+          '[class*="market"]'
+        ];
+        
+        geoSelectors.forEach(selector => {
+          const elements = document.querySelectorAll(selector);
+          elements.forEach(element => {
+            const text = element.textContent;
+            
+            // Chercher des patterns de pourcentages avec codes pays
+            const patterns = [
+              /US[:\s]*(\d+(?:\.\d+)?)%/gi,
+              /UK[:\s]*(\d+(?:\.\d+)?)%/gi,
+              /DE[:\s]*(\d+(?:\.\d+)?)%/gi,
+              /CA[:\s]*(\d+(?:\.\d+)?)%/gi,
+              /AU[:\s]*(\d+(?:\.\d+)?)%/gi,
+              /FR[:\s]*(\d+(?:\.\d+)?)%/gi
+            ];
+            
+            patterns.forEach((pattern, index) => {
+              const matches = [...text.matchAll(pattern)];
+              matches.forEach(match => {
+                const percentage = parseFloat(match[1]) / 100;
+                const countryCodes = ['us', 'uk', 'de', 'ca', 'au', 'fr'];
+                if (countryCodes[index] && !results[`market_${countryCodes[index]}`]) {
+                  results[`market_${countryCodes[index]}`] = percentage;
+                  foundCountries++;
+                  console.log(`✅ Sélecteur: ${countryCodes[index].toUpperCase()} → ${match[1]}%`);
+                }
+              });
+            });
+          });
+        });
+        
+        console.log(`🌍 Total pays trouvés: ${foundCountries}`);
+        return results;
+      });
       
-      if (result.error) {
-        console.error(`❌ Erreur API géo pour ${siteId}:`, result.error);
-        return { market_us: 0, market_uk: 0, market_de: 0, market_ca: 0, market_au: 0, market_fr: 0 };
+      if (geoData.countries.length > 0) {
+        console.log(`✅ Données géographiques extraites: ${geoData.countries.length} pays`);
+        geoData.countries.forEach(country => {
+          console.log(`   ${country.countryName}: ${country.visitsSharePercent}%`);
+        });
+      } else {
+        console.log('⚠️ Aucune donnée géographique trouvée via scraping DOM');
       }
       
-      console.log(`✅ Données géo extraites pour ${siteId}: ${result.countriesFound} pays (${result.responseLength} chars, cookies: ${result.cookieUsed})`);
-      return result;
+      return geoData;
       
     } catch (error) {
-      console.error(`❌ Erreur extraction géo pour ${siteId}:`, error.message);
+      console.error('❌ Erreur extraction géo DOM:', error.message);
+      
+      // Debug: prendre une capture d'écran en cas d'erreur
+      try {
+        await this.page.screenshot({ path: 'geo-dom-error-screenshot.png' });
+        console.log('📸 Capture d\'écran sauvegardée: geo-dom-error-screenshot.png');
+      } catch (screenshotError) {
+        console.error('❌ Erreur capture d\'écran:', screenshotError);
+      }
+      
       return { market_us: 0, market_uk: 0, market_de: 0, market_ca: 0, market_au: 0, market_fr: 0 };
     }
   }

@@ -61,6 +61,22 @@ async function extractTableDataOnly(extractor, pageCount = 5) {
 
           const shopData = {};
           
+          // 0. EXTRACTION ID DE LA BOUTIQUE - NOUVEAU
+          try {
+            const rowHtml = await row.evaluate(el => el.outerHTML, { timeout: 10000 });
+            const rowIdMatch = rowHtml.match(/<tr[^>]*id=["']([^"']+)["']/);
+            const rowId = rowIdMatch ? rowIdMatch[1] : null;
+            shopData.shopId = rowId;
+            shopData.externalId = rowId; // Mapping pour la base de données
+            if (rowId) {
+              logProgress(`✅ ID extrait: ${rowId} pour ${shopData.shopName || 'boutique'}`);
+            }
+          } catch (error) {
+            logProgress(`⚠️ Erreur extraction ID ligne: ${error.message}`);
+            shopData.shopId = null;
+            shopData.externalId = null;
+          }
+          
           // 1. EXTRACTION INFO BOUTIQUE (cellule 1) - SÉLECTEURS QUI FONCTIONNENT
           try {
             const shopInfoHtml = await cells[1].innerHTML();
@@ -261,8 +277,8 @@ async function extractAndSaveDetailsInParallel(extractor, shopRepo, shopsToProce
           }
           
           // Extraire les détails de la boutique
-          logProgress(`🔍 Extraction des détails de la boutique (ID TrendTrack: ${shop.shopId})...`);
-          const shopDetails = await extractor.extractShopDetails(shop.shopId);
+          logProgress(`🔍 Extraction des détails de la boutique (ID TrendTrack: ${shop.external_id})...`);
+          const shopDetails = await extractor.extractShopDetails(shop.external_id);
           
           if (shopDetails) {
             await shopRepo.updateDetailMetrics(shop.id, shopDetails);
@@ -382,13 +398,20 @@ async function updateDatabase() {
     const existingShops = await shopRepo.findByStatus('table_extracted');
     
     if (existingShops.length > 0) {
-      logProgress(`🔍 Détection de ${existingShops.length} boutiques avec données de base (Phase 3 requise)`);
+      logProgress(`🔍 Détection de ${existingShops.length} boutiques avec données de base`);
       
-      // PHASE 3: Extraction parallèle des détails pour les boutiques existantes
-      await extractAndSaveDetailsInParallel(extractor, shopRepo, existingShops, scraper);
-      
-      logProgress('✅ Phase 3 terminée pour les boutiques existantes');
-      return;
+      // Vérifier si les boutiques ont des IDs
+      const shopsWithIds = existingShops.filter(shop => shop.external_id);
+      if (shopsWithIds.length === 0) {
+        logProgress('⚠️ Aucune boutique n\'a d\'ID externe - Forçage de la Phase 1');
+        // Forcer la phase 1 pour extraire les IDs
+      } else {
+        logProgress(`✅ ${shopsWithIds.length} boutiques ont des IDs - Phase 3 requise`);
+        // PHASE 3: Extraction parallèle des détails pour les boutiques existantes
+        await extractAndSaveDetailsInParallel(extractor, shopRepo, existingShops, scraper);
+        logProgress('✅ Phase 3 terminée pour les boutiques existantes');
+        return;
+      }
     }
 
     // PHASE 1: Extraction des données du tableau (nouveau scraping)

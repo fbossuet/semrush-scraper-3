@@ -103,9 +103,22 @@ L'endpoint /albert doit retourner exactement:
 - **Bases de données** : Chemins relatifs, scraper utilise trendtrack.db
 - **Règles de sécurité** : Renforcées avec validation obligatoire
 
+## 🧪 RÈGLES DE TEST ET DEBUG
+- **Surveillance des logs en temps réel** : TOUJOURS lancer les scripts en arrière-plan avec redirection vers un fichier de log
+- **Arrêt automatique** : Arrêter le script après un certain nombre d'erreurs ou après un temps défini
+- **Analyse des logs** : Analyser les logs en temps réel pour identifier les problèmes
+- **Workflow de test** :
+  1. Lancer le script : `node script.js > test-debug.log 2>&1 &`
+  2. Surveiller les logs : `tail -f test-debug.log`
+  3. Arrêter après erreurs : `pkill -f "node script.js"`
+  4. Analyser les logs : `grep -E "(ERROR|❌|⚠️)" test-debug.log`
+- **Nettoyage des logs** : Supprimer les fichiers de log après analyse
+- **Pas de tests longs** : Éviter les tests sur 150+ boutiques, privilégier les tests courts et ciblés
+
 ## 🎯 ÉTAT ACTUEL
 - ✅ **Scraper TrendTrack** : Opérationnel (screen actif)
 - ✅ **Chemins relatifs** : Implémentés dans tous les fichiers
 - ✅ **Base de données** : 614 boutiques dans trendtrack.db
 - ⚠️ **API** : Problème de démarrage (non critique)
 - ✅ **Menu workers** : Fonctionne avec chemins corrigés
+- ✅ **Méthodes API géo** : Supprimées (voir API_REMOVAL.md)
