@@ -200,7 +200,7 @@ class TrendTrackAPI:
             cursor.execute("DELETE FROM processing_locks WHERE expires_at < ?", (datetime.now(timezone.utc).isoformat(),))
             
             # Essayer d'acquérir le lock
-            expires_at = datetime.now(timezone.utc).isoformat() + timedelta(seconds=timeout)
+            expires_at = (datetime.now(timezone.utc) + timedelta(seconds=timeout)).isoformat()
             cursor.execute("""
                 INSERT INTO processing_locks (lock_name, process_id, acquired_at, expires_at)
                 VALUES (?, ?, ?, ?)

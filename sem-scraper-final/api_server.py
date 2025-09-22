@@ -13,7 +13,7 @@ from datetime import datetime
 import logging
 
 # Import de notre API
-from trendtrack_api import TrendTrackAPI
+from trendtrack_api import TrendTrackAPI, get_database_path
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
