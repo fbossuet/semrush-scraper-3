@@ -72,12 +72,23 @@ L'endpoint /albert doit retourner exactement:
 - **Test de déploiement complet** sur le VPS
 - **Validation utilisateur** obligatoire pour chaque modification
 - **NE JAMAIS dire "c'est OK"** sans avoir testé tous les composants
+- **Nettoyage post-validation** : Supprimer immédiatement les fichiers temporaires après usage
+- **Pas de pollution Git** : Ne jamais committer de fichiers de debug/test/temporaires
 
 ## 🚀 DÉPLOIEMENT
 - Développer dans /test/
 - Déployer vers les autres branches quand prêt
 - Ne jamais modifier directement les autres branches
 - Utiliser le système de rollback en cas de problème
+
+## 📦 GESTION GIT ET VERSIONING
+- **Fichiers à committer** : Code source principal, configurations, documentation (.md)
+- **Fichiers à EXCLURE** : Scripts de debug, de test, fichiers temporaires, logs
+- **Règle de commit** : Commiter après validation utilisateur d'un test réussi
+- **Timing des commits** : Quand l'utilisateur confirme qu'une modification fonctionne
+- **Nettoyage obligatoire** : Supprimer les fichiers temporaires après usage (voir règles de sécurité)
+- **Documentation** : TOUS les fichiers .md doivent être committés
+- **Code source** : Seulement les modifications validées et testées
 
 ## 📚 RÉFÉRENCES IMPORTANTES
 - **Constitution**: .specify/memory/constitution.md
