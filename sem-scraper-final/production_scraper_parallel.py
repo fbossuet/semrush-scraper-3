@@ -1519,6 +1519,7 @@ class ParallelProductionScraper:
             "branded_traffic": "",
             "conversion_rate": "",
             "paid_search_traffic": "",
+            "visits": "",
             "traffic": "",
             "percent_branded_traffic": ""
         }
@@ -1534,6 +1535,11 @@ class ParallelProductionScraper:
             analytics_data['branded_traffic'] = domain_data.get('branded_traffic', '')
             analytics_data['conversion_rate'] = domain_data.get('conversion_rate', '')
             analytics_data['cpc'] = domain_data.get('cpc', '')
+        
+        # Récupérer les données de traffic_analysis (pour visits)
+        if 'traffic_analysis' in self.session_data['data']:
+            traffic_data = self.session_data['data']['traffic_analysis']
+            analytics_data['visits'] = traffic_data.get('visits', '')
         
         # Calculer percent_branded_traffic selon la formule de la doc
         analytics_data['percent_branded_traffic'] = self.calculate_percent_branded_traffic(analytics_data)
