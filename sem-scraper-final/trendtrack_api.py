@@ -80,8 +80,8 @@ class TrendTrackAPI:
                     shop_url TEXT UNIQUE NOT NULL,
                     scraping_status TEXT,
                     scraping_last_update TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
-                    updated_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat()
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
@@ -96,7 +96,7 @@ class TrendTrackAPI:
                     branded_traffic TEXT,
                     conversion_rate TEXT,
                     scraping_status TEXT DEFAULT 'completed',
-                    updated_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (shop_id) REFERENCES shops (id)
                 )
             """)
@@ -107,7 +107,7 @@ class TrendTrackAPI:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     shop_id INTEGER,
                     error_message TEXT,
-                    occurred_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
+                    occurred_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (shop_id) REFERENCES shops (id)
                 )
             """)
@@ -118,7 +118,7 @@ class TrendTrackAPI:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     lock_name TEXT UNIQUE NOT NULL,
                     process_id INTEGER,
-                    acquired_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
+                    acquired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     expires_at TIMESTAMP
                 )
             """)
@@ -130,7 +130,7 @@ class TrendTrackAPI:
                     selector_name TEXT NOT NULL,
                     success BOOLEAN,
                     response_time_ms INTEGER,
-                    timestamp TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     page_load_time_ms INTEGER
                 )
             """)
@@ -240,7 +240,7 @@ class TrendTrackAPI:
             cursor.execute("""
                 SELECT s.id, s.shop_name, s.shop_url, s.scraping_status, s.scraping_last_update, 
                        s.creation_date, s.category, s.monthly_visits, s.monthly_revenue, s.live_ads, 
-                       s.page_number, s.scraped_at, s.updated_at, s.project_source, s.external_id, s.metadata,
+                       s.live_ads_7d, s.live_ads_30d, s.page_number, s.scraped_at, s.updated_at, s.project_source, s.external_id, s.metadata,
                        a.organic_traffic, a.bounce_rate, a.avg_visit_duration, a.branded_traffic, a.conversion_rate, a.visits
                 FROM shops s 
                 LEFT JOIN analytics a ON s.id = a.shop_id 
@@ -265,18 +265,20 @@ class TrendTrackAPI:
                     'monthly_visits': row[7],
                     'monthly_revenue': row[8],
                     'live_ads': row[9],
-                    'page_number': row[10],
-                    'scraped_at': row[11],
-                    'updated_at': row[12],
-                    'project_source': row[13],
-                    'external_id': row[14],
-                    'metadata': row[15],
-                    'organic_traffic': row[16],
-                    'bounce_rate': row[17],
-                    'average_visit_duration': row[18],
-                    'branded_traffic': row[19],
-                    'conversion_rate': row[20],
-                    'visits': row[21]
+                    'live_ads_7d': row[10],
+                    'live_ads_30d': row[11],
+                    'page_number': row[12],
+                    'scraped_at': row[13],
+                    'updated_at': row[14],
+                    'project_source': row[15],
+                    'external_id': row[16],
+                    'metadata': row[17],
+                    'organic_traffic': row[18],
+                    'bounce_rate': row[19],
+                    'average_visit_duration': row[20],
+                    'branded_traffic': row[21],
+                    'conversion_rate': row[22],
+                    'visits': row[23]
                 })
             
             logger.info(f"📊 {len(shops)} boutiques récupérées avec analytics")

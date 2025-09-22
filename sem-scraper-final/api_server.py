@@ -100,7 +100,7 @@ class AdaptiveTimeoutRequest(BaseModel):
     base_timeout: Optional[int] = Field(30000, description="Timeout de base en millisecondes", ge=1000, le=300000)
 
 # Initialiser l'API TrendTrack
-api = TrendTrackAPI()
+api = TrendTrackAPI("../trendtrack-scraper-final/data/trendtrack.db")
 
 @app.get("/")
 async def root():
@@ -550,8 +550,10 @@ def transform_shop_data(shop_data):
         'market_de': shop_data.get('market_de'),
         'market_ca': shop_data.get('market_ca'),
         'market_au': shop_data.get('market_au'),
-                'market_fr': shop_data.get('market_fr'),
-        "live_ads": shop_data.get("live_ads")  # Champ ajouté à la fin
+        'market_fr': shop_data.get('market_fr'),
+        'live_ads': shop_data.get('live_ads'),
+        'live_ads_7d': shop_data.get('live_ads_7d'),
+        'live_ads_30d': shop_data.get('live_ads_30d')
     
     }
     # Appliquer les transformations * 100 pour les champs de pourcentage
@@ -580,11 +582,12 @@ async def get_albert_shops_with_analytics_ordered(since: Optional[str] = Query(N
     - pixel_google, pixel_facebook
     - organic_traffic, bounce_rate, avg_visit_duration, visits
     - branded_traffic, percent_branded_traffic, paid_search_traffic, cpc, conversion_rate
-    - market_us, market_uk, market_de, market_ca, market_au, market_fr',
+    - market_us, market_uk, market_de, market_ca, market_au, market_fr
+    - live_ads, live_ads_7d, live_ads_30d
     """
     try:
         # Utiliser la base de production
-        test_api = TrendTrackAPI()
+        test_api = TrendTrackAPI("../trendtrack-scraper-final/data/trendtrack.db")
         shops = test_api.get_all_shops()
         
         # Filtrer par date si spécifiée
@@ -2312,7 +2315,7 @@ async def get_all_shops_complete():
     Récupère toutes les boutiques avec TOUTES leurs métriques (shops + analytics)
     """
     try:
-        api = TrendTrackAPI()
+        api = TrendTrackAPI("../trendtrack-scraper-final/data/trendtrack.db")
         shops = api.get_all_shops()
         analytics = api.get_all_analytics()
         
@@ -2346,7 +2349,7 @@ async def get_complete_stats():
     Statistiques sur les boutiques avec métriques complètes
     """
     try:
-        api = TrendTrackAPI()
+        api = TrendTrackAPI("../trendtrack-scraper-final/data/trendtrack.db")
         shops = api.get_all_shops()
         analytics = api.get_all_analytics()
         

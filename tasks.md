@@ -2,7 +2,7 @@
 
 ## Tâches Actives
 
-### T001: Migration BDD - Ajout colonnes live_ads_7d et live_ads_30d [P0]
+### ✅ T001: Migration BDD - Ajout colonnes live_ads_7d et live_ads_30d [P0] - TERMINÉ
 **Type**: Infrastructure  
 **Dependencies**: Aucune  
 **Files**: `test/trendtrack-scraper-final/data/update_database_structure.sql`, `test/trendtrack-scraper-final/src/database/schema.js`  
@@ -11,22 +11,82 @@
 **Objectif**: Permettre le suivi des variations de Live Ads sur 7 jours et 30 jours pour une analyse de tendance.
 
 **Implémentation**:
-- [ ] Modifier le schéma SQL pour ajouter les colonnes live_ads_7d et live_ads_30d
-- [ ] Mettre à jour le schéma JavaScript dans schema.js
-- [ ] Créer un script de migration pour les bases existantes
-- [ ] Tester la migration sur la base de test
-- [ ] Valider la compatibilité avec les extracteurs existants
+- [x] Modifier le schéma SQL pour ajouter les colonnes live_ads_7d et live_ads_30d
+- [x] Mettre à jour le schéma JavaScript dans schema.js
+- [x] Créer un script de migration pour les bases existantes
+- [x] Tester la migration sur la base de test
+- [x] Valider la compatibilité avec les extracteurs existants
 
 **Validation**:
-- [ ] Les colonnes sont ajoutées à la table shops
-- [ ] Les extracteurs peuvent écrire dans ces colonnes
-- [ ] L'API peut lire ces nouvelles données
-- [ ] Les requêtes existantes restent compatibles
+- [x] Les colonnes sont ajoutées à la table shops
+- [x] Les extracteurs peuvent écrire dans ces colonnes
+- [x] L'API peut lire ces nouvelles données
+- [x] Les requêtes existantes restent compatibles
 
 **Critères de succès**:
-- Colonnes live_ads_7d et live_ads_30d ajoutées
-- Migration réussie sans perte de données
-- Compatibilité maintenue avec le code existant
+- ✅ Colonnes live_ads_7d et live_ads_30d ajoutées
+- ✅ Migration réussie sans perte de données
+- ✅ Compatibilité maintenue avec le code existant
+
+**Résultat**: Colonnes ajoutées avec succès. API `/albert` retourne maintenant les métriques live_ads, live_ads_7d et live_ads_30d.
+
+### ✅ P0-001: Remonter les colonnes live_ads_7d et live_ads_30d dans l'API albert [P0] - TERMINÉ
+**Type**: Feature  
+**Dependencies**: T001  
+**Files**: `sem-scraper-final/api_server.py`, `sem-scraper-final/trendtrack_api.py`  
+**Description**: Ajouter les colonnes live_ads_7d et live_ads_30d dans la réponse de l'API `/albert` pour exposer les métriques live ads 7 jours et 30 jours.
+
+**Objectif**: Permettre l'accès aux métriques live ads 7d et 30d via l'API endpoint principal.
+
+**Implémentation**:
+- [x] Ajouter les colonnes dans la requête SQL de `trendtrack_api.py`
+- [x] Mettre à jour le mapping des colonnes dans `trendtrack_api.py`
+- [x] Ajouter les colonnes dans `transform_shop_data()` de `api_server.py`
+- [x] Mettre à jour la documentation de l'endpoint `/albert`
+- [x] Corriger les erreurs de syntaxe SQL dans l'initialisation
+- [x] Tester l'API avec des valeurs de test
+
+**Validation**:
+- [x] L'API `/albert` retourne les colonnes live_ads_7d et live_ads_30d
+- [x] Les valeurs de test (25 et 67) sont correctement retournées
+- [x] L'API fonctionne sans erreur
+- [x] La structure JSON contient 28 champs (conforme aux spécifications)
+
+**Critères de succès**:
+- ✅ API `/albert` retourne live_ads, live_ads_7d et live_ads_30d
+- ✅ Test réussi avec 150 boutiques
+- ✅ Structure de réponse conforme aux spécifications
+
+**Résultat**: API `/albert` mise à jour avec succès. Toutes les métriques live ads sont maintenant disponibles.
+
+### ✅ P0-002: Récupérer les métriques live ads 7d et 30d depuis le scraper TrendTrack [P0] - TERMINÉ
+**Type**: Feature  
+**Dependencies**: T001  
+**Files**: `trendtrack-scraper-final/src/extractors/trendtrack-extractor.js`, `trendtrack-scraper-final/src/database/shop-repository.js`  
+**Description**: Implémenter la récupération des métriques live ads 7 jours et 30 jours depuis le scraper TrendTrack.
+
+**Objectif**: Extraire et sauvegarder les métriques live ads 7d et 30d depuis les colonnes 5 et 6 du tableau TrendTrack.
+
+**Implémentation**:
+- [x] Code d'extraction déjà présent dans `trendtrack-extractor.js` (lignes 346-364)
+- [x] Système de sauvegarde fonctionnel dans `shop-repository.js`
+- [x] Colonnes ajoutées dans le schéma de base de données
+- [x] Test des métriques avec des valeurs réelles
+- [x] Validation de la sauvegarde en base de données
+
+**Validation**:
+- [x] Les métriques sont extraites depuis les colonnes 5 et 6 du tableau
+- [x] Les données sont sauvegardées en base de données
+- [x] L'API peut récupérer et retourner ces métriques
+- [x] Test réussi avec 3 boutiques ayant des valeurs non nulles
+
+**Critères de succès**:
+- ✅ Extraction des métriques live_ads_7d et live_ads_30d fonctionnelle
+- ✅ Sauvegarde en base de données opérationnelle
+- ✅ API retourne les métriques correctement
+- ✅ Système complet de bout en bout fonctionnel
+
+**Résultat**: Système de récupération des métriques live ads 7d et 30d opérationnel et testé.
 
 ### T002: Désactivation système de locks dans l'environnement test [P0]
 **Type**: Bug Fix  
