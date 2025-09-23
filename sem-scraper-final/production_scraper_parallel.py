@@ -156,9 +156,9 @@ class ParallelProductionScraper:
             
             logger.info(f"🌐 Worker {self.worker_id}: Domaine nettoyé: {clean_domain}")
             
-            # Navigation vers sam2.mytoolsplan.xyz pour les appels API (comme dans l'ancien code qui marchait)
-            logger.info(f"🌐 Worker {self.worker_id}: Navigation vers sam2.mytoolsplan.xyz pour les appels API...")
-            await self.page.goto("https://sam2.mytoolsplan.xyz/analytics/", wait_until='domcontentloaded', timeout=30000)
+            # Navigation vers sam.mytoolsplan.xyz pour les appels API (comme dans l'ancien code qui marchait)
+            logger.info(f"🌐 Worker {self.worker_id}: Navigation vers sam.mytoolsplan.xyz pour les appels API...")
+            await self.page.goto("https://sam.mytoolsplan.xyz/analytics/", wait_until='domcontentloaded', timeout=30000)
             await asyncio.sleep(2)
             
             # Appel API organic.Summary
@@ -335,6 +335,11 @@ class ParallelProductionScraper:
             target_date = self.calculate_target_date()
             clean_domain = domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
             
+            # ÉCHAUFFEMENT SAME-ORIGIN (session chaude)
+            try:
+                await self.page.goto("https://sam.mytoolsplan.xyz/analytics/overview/", wait_until='domcontentloaded', timeout=20000)
+            except Exception:
+                pass
             # Appel API organic.OverviewTrend
             result = await self.api_client.call_organic_overview_trend_api(self.page, clean_domain, self.worker_id, target_date)
             
@@ -342,6 +347,10 @@ class ParallelProductionScraper:
                 return None
             
             # CORRECTION: Traiter la réponse de l'API avec le bon chemin
+            traffic_raw = 0
+            branded_traffic_raw = 0
+            cpc_raw = 0
+            
             if result.get('data') and result['data'].get('result'):
                 overview_data = result['data']['result']
                 if overview_data and len(overview_data) > 0:
@@ -351,9 +360,17 @@ class ParallelProductionScraper:
                     # Extraire les métriques selon la documentation
                     traffic_raw = latest_data.get('traffic', 0)
                     branded_traffic_raw = latest_data.get('trafficBranded', 0)
-                    
-                    # Récupérer CPC depuis l'API (si disponible)
                     cpc_raw = latest_data.get('cpc', 0)
+                    
+                    # Fallback calcule: si cpc manquant/0, calculer depuis cost/traffic paid
+                    try:
+                        if (cpc_raw is None) or float(cpc_raw) == 0.0:
+                            at = latest_data.get('adwordsTraffic', 0)
+                            atc = latest_data.get('adwordsTrafficCost', 0)
+                            if at and atc and float(at) > 0:
+                                cpc_raw = round(float(atc) / float(at), 4)
+                    except Exception:
+                        pass
                     
                     logger.info(f"✅ Worker {self.worker_id}: OverviewTrend - Traffic: {traffic_raw}, Branded: {branded_traffic_raw}, CPC: {cpc_raw}")
                     
@@ -371,6 +388,166 @@ class ParallelProductionScraper:
             
         except Exception as error:
             logger.error(f"❌ Worker {self.worker_id}: Erreur API organic.OverviewTrend: {error}")
+            return None
+    
+    async def get_cpc_via_topics_fallback(self, domain: str) -> Optional[str]:
+        """
+        Fallback CPC via organic.TopicsResult: prend le CPC du mot-clé avec le trafic le plus élevé.
+        """
+        try:
+            clean_domain = domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
+            creds = get_credentials_dict()
+            payload = {
+                'id': f'topics_{datetime.now(timezone.utc).isoformat()}',
+                'jsonrpc': '2.0',
+                'method': 'organic.TopicsResult',
+                'params': {
+                    'request_id': f'req_{datetime.now(timezone.utc).isoformat()}',
+                    'report': 'domain.overview',
+                    'args': {
+                        'database': 'us',
+                        'searchItem': clean_domain,
+                        'searchType': 'domain'
+                    },
+                    'userId': creds['userId'],
+                    'apiKey': creds['apiKey']
+                }
+            }
+            # ÉCHAUFFEMENT SAME-ORIGIN (session chaude)
+            try:
+                await self.page.goto("https://sam.mytoolsplan.xyz/analytics/overview/", wait_until='domcontentloaded', timeout=20000)
+            except Exception:
+                pass
+            result = await self.page.evaluate("""
+                async (body) => {
+                  try {
+                    const r = await fetch('/dpa/rpc', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      credentials: 'include',
+                      body: JSON.stringify(body)
+                    });
+                    if (!r.ok) return null;
+                    return await r.json();
+                  } catch (e) { return null; }
+                }
+            """, payload)
+
+            if not result or 'result' not in result or 'topics' not in result['result']:
+                return None
+
+            max_cpc: Optional[float] = None
+            max_traffic: float = -1.0
+            for topic in (result['result'].get('topics') or []):
+                pages = topic.get('pages') or []
+                for page in pages:
+                    kws = page.get('top_keywords') or []
+                    for kw in kws:
+                        try:
+                            t = float(kw.get('traffic') or 0)
+                        except Exception:
+                            t = 0.0
+                        c = kw.get('cpc')
+                        if t > max_traffic and c is not None:
+                            max_traffic = t
+                            try:
+                                max_cpc = float(c)
+                            except Exception:
+                                max_cpc = None
+            return str(max_cpc) if max_cpc is not None else None
+        except Exception as e:
+            logger.warning(f"⚠️ Worker {self.worker_id}: Fallback TopicsResult CPC erreur: {e}")
+            return None
+    
+    async def get_cpc_via_positions_overview(self, domain: str, database: str = 'us') -> Optional[str]:
+        """
+        Récupère le CPC via l'API organic.PositionsOverview.
+        MÊME FORMAT que les autres méthodes API utilisant APIClient.
+        """
+        try:
+            clean_domain = domain.replace('https://', '').replace('http://', '').replace('www.', '').strip('/')
+            target_date = self.calculate_target_date()
+            
+            # ÉCHAUFFEMENT SAME-ORIGIN (session chaude) - MÊME LOGIQUE que les autres APIs
+            try:
+                await self.page.goto(f"https://sam.mytoolsplan.xyz/analytics/overview/?searchType=domain&db={database}&q={clean_domain}&date={target_date[:6]}", wait_until='domcontentloaded', timeout=20000)
+            except Exception:
+                pass
+            
+            # Utiliser APIClient au lieu du code direct - MÊME FORMAT que les autres APIs
+            params = {
+                "database": database,
+                "dateType": "monthly", 
+                "date": target_date,
+                "dateFormat": "date",
+                "searchItem": clean_domain,
+                "searchType": "domain",
+                "positionsType": "all"
+            }
+            
+            result = await self.api_client.call_rpc_api(self.page, "organic.PositionsOverview", params, self.worker_id)
+            
+            if not result or not result.get('result') or len(result['result']) == 0:
+                logger.warning(f"⚠️ Worker {self.worker_id}: Aucun résultat via organic.PositionsOverview pour {domain}")
+                return None
+            
+            # NOUVELLE LOGIQUE: Analyser tous les items et calculer le ratio traffic/volume
+            # Chercher l'item avec le plus gros ratio traffic/volume et prendre son CPC
+            best_ratio = -1.0
+            best_cpc = None
+            best_item_info = None
+            
+            # Parcourir tous les résultats pour trouver le meilleur ratio
+            for data_entry in result['result']:
+                try:
+                    # Récupérer les métriques de l'item
+                    traffic = float(data_entry.get('traffic', 0))
+                    volume = float(data_entry.get('volume', 0))
+                    position = float(data_entry.get('position', 0))
+                    cpc = data_entry.get('cpc')
+                    
+                    # Calculer le ratio traffic/volume (éviter division par zéro)
+                    if volume > 0:
+                        ratio = traffic / volume
+                    elif position > 0:
+                        # Fallback: utiliser traffic/position si volume = 0
+                        ratio = traffic / position
+                    else:
+                        continue
+                    
+                    # Vérifier si c'est le meilleur ratio et si on a un CPC
+                    if ratio > best_ratio and cpc is not None:
+                        best_ratio = ratio
+                        best_cpc = cpc
+                        best_item_info = {
+                            'traffic': traffic,
+                            'volume': volume,
+                            'position': position,
+                            'ratio': ratio,
+                            'cpc': cpc
+                        }
+                        
+                except (ValueError, TypeError) as e:
+                    continue
+            
+            # Retourner le CPC du meilleur item
+            if best_cpc is not None:
+                logger.info(f"✅ Worker {self.worker_id}: CPC trouvé via organic.PositionsOverview (meilleur ratio traffic/volume): {best_cpc}")
+                logger.info(f"   📊 Item sélectionné: traffic={best_item_info['traffic']}, volume={best_item_info['volume']}, ratio={best_item_info['ratio']:.4f}")
+                return str(best_cpc)
+            
+            # Fallback: si aucun CPC trouvé via ratio, essayer le calcul cost/traffic
+            latest_data = result['result'][-1]  # Prendre la dernière entrée
+            if latest_data.get('adwordsTraffic') and latest_data.get('adwordsTrafficCost') and latest_data['adwordsTraffic'] > 0:
+                calculated_cpc = latest_data['adwordsTrafficCost'] / latest_data['adwordsTraffic']
+                logger.info(f"✅ Worker {self.worker_id}: CPC calculé via organic.PositionsOverview (cost/traffic fallback): {calculated_cpc:.4f}")
+                return str(calculated_cpc)
+            
+            logger.warning(f"⚠️ Worker {self.worker_id}: Aucun CPC trouvé via organic.PositionsOverview pour {domain}")
+            return None
+
+        except Exception as error:
+            logger.error(f"❌ Worker {self.worker_id}: Erreur API organic.PositionsOverview pour CPC: {error}")
             return None
     
     async def setup_browser(self):
@@ -466,7 +643,7 @@ class ParallelProductionScraper:
                     logger.error(f"❌ Worker {self.worker_id}: Login échoué - Pas sur la page membre")
                     return False
 
-                # Synchroniser les cookies avec sam2.mytoolsplan.xyz
+                # Synchroniser les cookies avec sam.mytoolsplan.xyz
                 await self.sync_cookies_with_sam()
                 
                 # Injecter le capturer de credentials (interception fetch/XHR)
@@ -547,8 +724,8 @@ class ParallelProductionScraper:
             logger.warning(f"⚠️ Worker {self.worker_id}: Échec injection capturer credentials: {e}")
     
     async def sync_cookies_with_sam(self):
-        """Synchronisation des cookies avec sam2.mytoolsplan.xyz (optimisée)"""
-        logger.info(f"🔄 Worker {self.worker_id}: Synchronisation des cookies avec sam2.mytoolsplan.xyz...")
+        """Synchronisation des cookies avec sam.mytoolsplan.xyz (optimisée)"""
+        logger.info(f"🔄 Worker {self.worker_id}: Synchronisation des cookies avec sam.mytoolsplan.xyz...")
         
         try:
             # Récupérer les cookies d'authentification
@@ -558,7 +735,7 @@ class ParallelProductionScraper:
             logger.info(f"📊 Worker {self.worker_id}: Cookies récupérés: {len(cookies)} cookies")
             logger.info(f"🔍 Worker {self.worker_id}: {len(auth_cookies)} cookies d'authentification identifiés")
             
-            # Définir les cookies d'authentification ET les dupliquer pour le domaine sam2.mytoolsplan.xyz
+            # Définir les cookies d'authentification ET les dupliquer pour le domaine sam.mytoolsplan.xyz
             if auth_cookies:
                 # Ajout brut
                 await self.context.add_cookies(auth_cookies)
@@ -566,8 +743,8 @@ class ParallelProductionScraper:
                 sam_cookies = []
                 for c in auth_cookies:
                     dup = {k: v for k, v in c.items()}
-                    dup['domain'] = 'sam2.mytoolsplan.xyz'
-                    dup['url'] = 'https://sam2.mytoolsplan.xyz'
+                    dup['domain'] = 'sam.mytoolsplan.xyz'
+                    dup['url'] = 'https://sam.mytoolsplan.xyz'
                     # S'assurer d'une path par défaut
                     dup['path'] = '/'
                     sam_cookies.append(dup)
@@ -682,7 +859,9 @@ class ParallelProductionScraper:
             engagement_metrics = await self.scrape_engagement_metrics(domain)
             
             # NOUVELLE API: Récupération des métriques manquantes via organic.OverviewTrend
-            overview_trend_result = await self.get_overview_trend_metrics_via_api(domain)
+            # TEMPORAIREMENT DÉSACTIVÉ POUR TESTER LA LOGIQUE RATIO TRAFFIC/VOLUME
+            # overview_trend_result = await self.get_overview_trend_metrics_via_api(domain)
+            overview_trend_result = None
             
             # Mettre à jour les métriques
             if 'domain_overview' not in self.session_data['data']:
@@ -695,7 +874,23 @@ class ParallelProductionScraper:
             if overview_trend_result:
                 self.session_data['data']['domain_overview']['traffic'] = overview_trend_result.get('traffic', '')
                 self.session_data['data']['domain_overview']['branded_traffic'] = overview_trend_result.get('branded_traffic', '')
-                self.session_data['data']['domain_overview']['cpc'] = overview_trend_result.get('cpc', '')
+                cpc_val = overview_trend_result.get('cpc', '')
+                # Fallback 2: si cpc manquant/0 → TopicsResult (top keyword CPC)
+                try:
+                    if not cpc_val or str(cpc_val).strip() in ('', '0', '0.0', '0.00'):
+                        topics_cpc = await self.get_cpc_via_topics_fallback(domain)
+                        if topics_cpc:
+                            cpc_val = str(topics_cpc)
+                            logger.info(f"✅ Worker {self.worker_id}: CPC fallback TopicsResult: {cpc_val}")
+                        else:
+                            # Essai final via PositionsOverview
+                            pos_cpc = await self.get_cpc_via_positions_overview(domain, database='us')
+                            if pos_cpc:
+                                cpc_val = str(pos_cpc)
+                                logger.info(f"✅ Worker {self.worker_id}: CPC fallback PositionsOverview: {cpc_val}")
+                except Exception as _:
+                    pass
+                self.session_data['data']['domain_overview']['cpc'] = cpc_val
                 logger.info(f"✅ Worker {self.worker_id}: Métriques organic.OverviewTrend récupérées (incluant CPC)")
             else:
                 logger.warning(f"⚠️ Worker {self.worker_id}: Échec API organic.OverviewTrend")
@@ -785,9 +980,9 @@ class ParallelProductionScraper:
             # Nettoyer le domaine
             domain_clean = domain.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
             
-            # Navigation vers sam2.mytoolsplan.xyz pour l'API engagement (comme dans l'ancien code qui marchait)
-            logger.info(f"🌐 Worker {self.worker_id}: Navigation vers sam2.mytoolsplan.xyz pour l'API engagement...")
-            await self.page.goto("https://sam2.mytoolsplan.xyz/analytics/", wait_until='domcontentloaded', timeout=30000)
+            # Navigation vers sam.mytoolsplan.xyz pour l'API engagement (comme dans l'ancien code qui marchait)
+            logger.info(f"🌐 Worker {self.worker_id}: Navigation vers sam.mytoolsplan.xyz pour l'API engagement...")
+            await self.page.goto("https://sam.mytoolsplan.xyz/analytics/", wait_until='domcontentloaded', timeout=30000)
             await asyncio.sleep(2)
             
             api_url = f"/analytics/ta/targ/v2/engagement?target={domain_clean}&device_type=desktop"
@@ -1071,7 +1266,7 @@ class ParallelProductionScraper:
             logger.info(f"🔍 Worker {self.worker_id}: DEBUG - FID récupéré: {fid}")
             
             # 2. Navigation vers Traffic Analytics avec FID
-            target_url = f"https://sam2.mytoolsplan.xyz/analytics/traffic/traffic-overview/?fid={fid}"
+            target_url = f"https://sam.mytoolsplan.xyz/analytics/traffic/traffic-overview/?fid={fid}"
             logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Navigation vers: {target_url}")
             
             success = await self.navigate_with_smart_timeout(target_url, "Traffic Analytics Conversion")

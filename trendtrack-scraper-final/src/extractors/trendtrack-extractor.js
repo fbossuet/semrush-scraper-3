@@ -663,6 +663,7 @@ export class TrendTrackExtractor extends BaseExtractor {
       const detailUrl = `https://app.trendtrack.io/fr/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops/${shopId}`;
       console.log(`🔍 URL de détail TrendTrack: ${detailUrl}`);
       
+      // Première tentative
       await this.page.goto(detailUrl, { 
         waitUntil: 'domcontentloaded',
         timeout: 60000 
@@ -681,7 +682,19 @@ export class TrendTrackExtractor extends BaseExtractor {
         console.log('✅ Navigation vers page de détail réussie');
         return true;
       } else {
-        console.log('❌ Navigation échouée - URL incorrecte');
+        console.log('❌ Navigation échouée - URL incorrecte, nouvel essai...');
+        // Retry unique avec backoff court
+        await this.page.waitForTimeout(1500);
+        await this.page.goto(detailUrl, {
+          waitUntil: 'domcontentloaded',
+          timeout: 60000
+        });
+        const url2 = this.page.url();
+        if (url2.includes(`/trending-shops/${shopId}`)) {
+          console.log('✅ Navigation vers page de détail réussie (retry)');
+          return true;
+        }
+        console.log('❌ Navigation échouée après retry');
         return false;
       }
       

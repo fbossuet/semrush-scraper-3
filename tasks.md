@@ -550,15 +550,15 @@ Exécuter ces commandes quand la base de données est bloquée par un lock.
 **Type**: Feature  
 **Dependencies**: Aucune  
 **Files**: `sem-scraper-final/api_client.py`, `sem-scraper-final/api_credentials.py`, `sem-scraper-final/auth_manager.py`  
-**Description**: Implémenter un système de fallback automatique avec login sur sam2.mytoolsplan.xyz et récupération automatique des credentials API pour assurer la continuité du service.
+**Description**: Implémenter un système de fallback automatique avec login sur sam.mytoolsplan.xyz et récupération automatique des credentials API pour assurer la continuité du service.
 
-**Objectif**: Créer un système robuste qui bascule automatiquement vers sam2.mytoolsplan.xyz en cas d'échec sur sam.mytoolsplan.xyz et récupère automatiquement les nouveaux credentials API.
+**Objectif**: Créer un système robuste qui bascule automatiquement vers sam.mytoolsplan.xyz en cas d'échec sur sam.mytoolsplan.xyz et récupère automatiquement les nouveaux credentials API.
 
 **Implémentation**:
 - [ ] Créer un système de détection d'échec d'authentification sur sam.mytoolsplan.xyz
-- [ ] Implémenter un fallback automatique vers sam2.mytoolsplan.xyz
-- [ ] Développer un système de login automatique sur sam2.mytoolsplan.xyz
-- [ ] Créer un extracteur automatique de credentials API depuis sam2.mytoolsplan.xyz
+- [ ] Implémenter un fallback automatique vers sam.mytoolsplan.xyz
+- [ ] Développer un système de login automatique sur sam.mytoolsplan.xyz
+- [ ] Créer un extracteur automatique de credentials API depuis sam.mytoolsplan.xyz
 - [ ] Implémenter une mise à jour automatique des credentials dans api_credentials.py
 - [ ] Ajouter un système de validation des nouveaux credentials
 - [ ] Créer un système de notification en cas de changement de credentials
@@ -568,8 +568,8 @@ Exécuter ces commandes quand la base de données est bloquée par un lock.
 
 **Validation**:
 - [ ] Le système détecte automatiquement les échecs d'authentification
-- [ ] Le basculement vers sam2.mytoolsplan.xyz fonctionne automatiquement
-- [ ] Le login automatique sur sam2.mytoolsplan.xyz est opérationnel
+- [ ] Le basculement vers sam.mytoolsplan.xyz fonctionne automatiquement
+- [ ] Le login automatique sur sam.mytoolsplan.xyz est opérationnel
 - [ ] La récupération automatique des credentials API fonctionne
 - [ ] La mise à jour des credentials est transparente
 - [ ] Le système de validation des credentials est fiable
@@ -579,7 +579,7 @@ Exécuter ces commandes quand la base de données est bloquée par un lock.
 
 **Critères de succès**:
 - Basculement automatique fonctionnel (sam → sam2)
-- Login automatique sur sam2.mytoolsplan.xyz opérationnel
+- Login automatique sur sam.mytoolsplan.xyz opérationnel
 - Récupération automatique des credentials API fiable
 - Mise à jour transparente des credentials
 - Système de validation robuste
@@ -590,7 +590,7 @@ Exécuter ces commandes quand la base de données est bloquée par un lock.
 - Documentation complète du système de fallback
 
 **Technical Details**:
-- **URLs de fallback**: sam.mytoolsplan.xyz → sam2.mytoolsplan.xyz
+- **URLs de fallback**: sam.mytoolsplan.xyz → sam.mytoolsplan.xyz
 - **Méthode de détection**: Timeout, erreurs HTTP 401/403, erreurs d'authentification
 - **Extraction credentials**: Interception fetch/XHR, parsing des réponses API
 - **Validation**: Test des credentials sur les endpoints critiques

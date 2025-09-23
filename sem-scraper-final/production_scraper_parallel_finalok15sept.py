@@ -353,12 +353,15 @@ class ParallelProductionScraper:
                     # Extraire les métriques selon la documentation
                     traffic_raw = latest_data.get('traffic', 0)
                     branded_traffic_raw = latest_data.get('trafficBranded', 0)
+                    # Récupérer CPC depuis l'API (si disponible)
+                    cpc_raw = latest_data.get('cpc', 0)
                     
-                    logger.info(f"✅ Worker {self.worker_id}: OverviewTrend - Traffic: {traffic_raw}, Branded: {branded_traffic_raw}")
+                    logger.info(f"✅ Worker {self.worker_id}: OverviewTrend - Traffic: {traffic_raw}, Branded: {branded_traffic_raw}, CPC: {cpc_raw}")
                     
                     return {
                         'traffic': str(traffic_raw),
                         'branded_traffic': str(branded_traffic_raw),
+                        'cpc': str(cpc_raw),
                         'traffic_raw': traffic_raw,
                         'branded_traffic_raw': branded_traffic_raw,
                         'source': 'organic.OverviewTrend API'
@@ -624,11 +627,13 @@ class ParallelProductionScraper:
             if overview_trend_result:
                 self.session_data['data']['domain_overview']['traffic'] = overview_trend_result.get('traffic', '')
                 self.session_data['data']['domain_overview']['branded_traffic'] = overview_trend_result.get('branded_traffic', '')
-                logger.info(f"✅ Worker {self.worker_id}: Métriques organic.OverviewTrend récupérées")
+                self.session_data['data']['domain_overview']['cpc'] = overview_trend_result.get('cpc', '')
+                logger.info(f"✅ Worker {self.worker_id}: Métriques organic.OverviewTrend récupérées (incluant CPC)")
             else:
                 logger.warning(f"⚠️ Worker {self.worker_id}: Échec API organic.OverviewTrend")
                 self.session_data['data']['domain_overview']['traffic'] = ""
                 self.session_data['data']['domain_overview']['branded_traffic'] = ""
+                self.session_data['data']['domain_overview']['cpc'] = ""
             
             # Récupérer conversion_rate via DOM scraping (SEULE MÉTRIQUE DOM)
             conversion_rate = await self.scrape_purchase_conversion(domain)

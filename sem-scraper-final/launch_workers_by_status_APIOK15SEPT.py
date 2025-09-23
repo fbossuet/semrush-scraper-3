@@ -88,7 +88,7 @@ class WorkersByStatusLauncher:
         logger.info("🔍 Vérification de la connectivité...")
         
         critical_urls = [
-            "sam2.mytoolsplan.xyz",
+            "sam.mytoolsplan.xyz",
             "app.mytoolsplan.com"
         ]
         

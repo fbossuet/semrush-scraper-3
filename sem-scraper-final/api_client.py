@@ -21,8 +21,8 @@ class APIClient:
         """
         Initialise l'APIClient avec récupération dynamique des credentials
         """
-        self.base_url = "https://sam2.mytoolsplan.xyz/dpa/rpc"
-        self.engagement_base_url = "https://sam2.mytoolsplan.xyz/analytics/ta/targ/v2/engagement"
+        self.base_url = "https://sam.mytoolsplan.xyz/dpa/rpc"
+        self.engagement_base_url = "https://sam.mytoolsplan.xyz/analytics/ta/targ/v2/engagement"
     
     async def call_rpc_api(self, page, method: str, params: dict, worker_id: int = 0):
         """
@@ -43,18 +43,18 @@ class APIClient:
         credentials = await self.get_dynamic_credentials(page, worker_id)
         
         
-        # Navigation vers sam2.mytoolsplan.xyz/analytics/organic/overview/ (comme demandé par l'utilisateur)                                                                   
+        # Navigation vers sam.mytoolsplan.xyz/analytics/organic/overview/ (comme demandé par l'utilisateur)                                                                   
         try:
-            await page.goto("https://sam2.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=15000)                               
+            await page.goto("https://sam.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=15000)                               
             await asyncio.sleep(2)
         except Exception as e:
-            logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam2.mytoolsplan.xyz/analytics/organic/overview/ échouée: {e}")
-            logger.info(f"🔄 Worker {worker_id}: Tentative de navigation vers sam2.mytoolsplan.xyz...")
+            logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam.mytoolsplan.xyz/analytics/organic/overview/ échouée: {e}")
+            logger.info(f"🔄 Worker {worker_id}: Tentative de navigation vers sam.mytoolsplan.xyz...")
             try:
-                await page.goto("https://sam2.mytoolsplan.xyz", wait_until='domcontentloaded', timeout=15000)
+                await page.goto("https://sam.mytoolsplan.xyz", wait_until='domcontentloaded', timeout=15000)
                 await asyncio.sleep(2)
             except Exception as e2:
-                logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam2.mytoolsplan.xyz échouée: {e2}")
+                logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam.mytoolsplan.xyz échouée: {e2}")
                 logger.info(f"🔄 Worker {worker_id}: Continuation sans navigation...")
         
         # Structure d'appel identique au code existant
@@ -150,7 +150,7 @@ class APIClient:
         
         # S'assurer d'être en même origine sur sam avant l'appel (comportement historique qui marchait)
         try:
-            await page.goto("https://sam2.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=20000)
+            await page.goto("https://sam.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=20000)
             await asyncio.sleep(1)
         except Exception as e:
             logger.warning(f"⚠️ Worker {worker_id}: Préparation même-origine engagement échouée: {e}")
@@ -162,8 +162,8 @@ class APIClient:
             async (data) => {
                 const attempt = async () => {
                     try {
-                        // Vérifier l'origine (doit être sam2.mytoolsplan.xyz)
-                        if (!location.host.includes('sam2.mytoolsplan.xyz')) {
+                        // Vérifier l'origine (doit être sam.mytoolsplan.xyz)
+                        if (!location.host.includes('sam.mytoolsplan.xyz')) {
                             return { ok: false, error: 'wrong_origin:'+location.host };
                         }
                         const response = await fetch(data.url, {
@@ -247,8 +247,8 @@ class APIClient:
         # 2. Nettoyer le domaine
         domain_clean = domain.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
 
-        # 3. Navigation vers sam2.mytoolsplan.xyz/analytics/organic/overview/ (comme demandé)
-        await page.goto("https://sam2.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=30000)
+        # 3. Navigation vers sam.mytoolsplan.xyz/analytics/organic/overview/ (comme demandé)
+        await page.goto("https://sam.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=30000)
         await asyncio.sleep(2)
 
         # 4. Utiliser la date passée en paramètre
@@ -338,18 +338,18 @@ class APIClient:
         # 2. Nettoyer le domaine
         domain_clean = domain.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
 
-        # 3. Navigation vers sam2.mytoolsplan.xyz/analytics/organic/overview/
+        # 3. Navigation vers sam.mytoolsplan.xyz/analytics/organic/overview/
         try:
-            await page.goto("https://sam2.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=15000)
+            await page.goto("https://sam.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=15000)
             await asyncio.sleep(2)
         except Exception as e:
-            logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam2.mytoolsplan.xyz/analytics/organic/overview/ échouée: {e}")
-            logger.info(f"🔄 Worker {worker_id}: Tentative de navigation vers sam2.mytoolsplan.xyz...")
+            logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam.mytoolsplan.xyz/analytics/organic/overview/ échouée: {e}")
+            logger.info(f"🔄 Worker {worker_id}: Tentative de navigation vers sam.mytoolsplan.xyz...")
             try:
-                await page.goto("https://sam2.mytoolsplan.xyz", wait_until='domcontentloaded', timeout=15000)
+                await page.goto("https://sam.mytoolsplan.xyz", wait_until='domcontentloaded', timeout=15000)
                 await asyncio.sleep(2)
             except Exception as e2:
-                logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam2.mytoolsplan.xyz échouée: {e2}")
+                logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam.mytoolsplan.xyz échouée: {e2}")
                 logger.info(f"🔄 Worker {worker_id}: Continuation sans navigation...")
 
         # 4. Utiliser la date passée en paramètre

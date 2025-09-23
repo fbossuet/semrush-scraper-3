@@ -68,7 +68,7 @@ Scraper SEM Parallèle : Système de scraping automatisé et optimisé pour réc
 
 ### Approche Adaptative Compliance
 - ✅ Dynamic metric validation (8 metrics counted dynamically)
-- ✅ Fallback system (sam2.mytoolsplan.xyz)
+- ✅ Fallback system (sam.mytoolsplan.xyz)
 - ✅ Intelligent timeout and error handling
 
 ## Project Structure

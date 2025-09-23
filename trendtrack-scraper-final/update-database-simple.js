@@ -1,7 +1,7 @@
 /**
- * Script de mise à jour de la base de données - ARCHITECTURE PARALLÈLE
+ * Script de mise à jour de la base de données - VERSION SIMPLIFIÉE
  * Extrait les nouvelles données de TrendTrack et les sauvegarde
- * Résout le problème de perte de session avec une architecture en 3 phases
+ * Version stable sans redémarrage automatique complexe
  */
 
 import { WebScraper } from './src/scraper.js';
@@ -34,40 +34,8 @@ async function extractTableDataOnly(extractor, pageCount = 1) {
     logProgress(`➡️  Extraction page ${page}/${pageCount}...`);
     
     try {
-      // Navigation vers la page avec retry automatique
-      let navSuccess = false;
-      try {
-        navSuccess = await extractor.navigateToTrendingShops(page);
-      } catch (navError) {
-        if (navError.message.includes('Target page, context or browser has been closed') || 
-            navError.message.includes('Timeout') || 
-            navError.message.includes('timeout')) {
-          logProgress(`🔄 Contexte fermé en Phase 1 - Redémarrage du scraper...`);
-          try {
-            // Fermer l'ancien scraper
-            if (extractor.scraper) {
-              await extractor.scraper.close();
-            }
-            
-            // Créer un nouveau scraper
-            const newScraper = new WebScraper();
-            await newScraper.init();
-            extractor = new TrendTrackExtractor(newScraper.page, newScraper.errorHandler);
-            
-            // Reconnexion à TrendTrack
-            const loginSuccess = await extractor.login('seif.alyakoob@gmail.com', 'Toulouse31!');
-            if (loginSuccess) {
-              logProgress(`✅ Scraper redémarré en Phase 1 - Retry navigation...`);
-              navSuccess = await extractor.navigateToTrendingShops(page);
-            } else {
-              logProgress(`❌ Échec de la reconnexion en Phase 1`);
-            }
-          } catch (restartError) {
-            logProgress(`❌ Erreur redémarrage Phase 1: ${restartError.message}`);
-          }
-        }
-      }
-      
+      // Navigation vers la page
+      const navSuccess = await extractor.navigateToTrendingShops(page);
       if (!navSuccess) {
         logProgress(`❌ Navigation échouée pour la page ${page}`);
         continue;
@@ -93,58 +61,23 @@ async function extractTableDataOnly(extractor, pageCount = 1) {
 
           const shopData = {};
           
-          // 0. EXTRACTION ID DE LA BOUTIQUE - via l'attribut id du <tr> (specs) + stratégies robustes
+          // 0. EXTRACTION ID DE LA BOUTIQUE - via l'attribut id du <tr> (specs)
           try {
-            let externalId = null;
-
-            // 0.1 Attribut id sur <tr>
             const trId = await row.getAttribute('id');
             logProgress(`🔍 DEBUG: tr#id (ligne ${i + 1}): ${trId}`);
             if (trId && trId.trim().length > 0) {
-              externalId = trId.trim();
-            }
-
-            // 0.2 Si pas trouvé, scanner le HTML de la ligne (outerHTML) et récupérer un UUID n'importe où
-            if (!externalId) {
-              const rowHtml = await row.evaluate(el => el.outerHTML);
-              logProgress(`🧩 DEBUG: row.outerHTML (${rowHtml.length} chars) ligne ${i + 1}: ${rowHtml.substring(0, 300)}...`);
-              const anyUuid = rowHtml.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
-              if (anyUuid) {
-                externalId = anyUuid[0];
-                logProgress(`🎯 DEBUG: UUID trouvé dans outerHTML: ${externalId}`);
-              }
-            }
-
-            // 0.3 Si toujours pas trouvé, essayer un href interne vers /trending-shops/{uuid} via evaluate
-            if (!externalId) {
-              const hrefCandidate = await row.evaluate(el => {
-                const aTags = Array.from(el.querySelectorAll('a'));
-                const internal = aTags.find(a => a.getAttribute('href') && a.getAttribute('href').includes('/trending-shops/'));
-                return internal ? internal.getAttribute('href') : null;
-              });
-              if (hrefCandidate) {
-                const idMatch = hrefCandidate.match(/trending-shops\/([0-9a-fA-F-]{36})/);
-                if (idMatch) {
-                  externalId = idMatch[1];
-                  logProgress(`🔗 DEBUG: UUID extrait depuis href interne: ${externalId}`);
-                }
-              }
-            }
-
-            shopData.externalId = externalId;
-            shopData.shopId = externalId || null; // alignement interne
-            if (externalId) {
-              logProgress(`✅ ID extrait: ${externalId} (ligne ${i + 1})`);
+              shopData.externalId = trId.trim();
+              logProgress(`✅ ID extrait: ${trId.trim()} (ligne ${i + 1})`);
             } else {
               logProgress(`❌ Aucun ID extrait pour la ligne ${i + 1}`);
+              shopData.externalId = null;
             }
           } catch (error) {
             logProgress(`⚠️ Erreur extraction external_id: ${error.message}`);
-            shopData.shopId = null;
             shopData.externalId = null;
           }
           
-          // 1. EXTRACTION INFO BOUTIQUE (cellule 1) - SÉLECTEURS QUI FONCTIONNENT
+          // 1. EXTRACTION INFO BOUTIQUE (cellule 1)
           try {
             const shopInfoHtml = await cells[1].innerHTML();
             const shopNameMatch = shopInfoHtml.match(/<p class=\"text-sm font-semibold\">([^<]+)<\/p>/);
@@ -159,7 +92,7 @@ async function extractTableDataOnly(extractor, pageCount = 1) {
             shopData.creationDate = '';
           }
           
-          // 2. EXTRACTION NOMBRE DE PRODUITS (cellule 2) - SÉLECTEURS QUI FONCTIONNENT
+          // 2. EXTRACTION NOMBRE DE PRODUITS (cellule 2)
           try {
             const productsCell = cells[2];
             const productsP = productsCell.locator("p:has(> span:has-text(\"products\"))");
@@ -174,7 +107,7 @@ async function extractTableDataOnly(extractor, pageCount = 1) {
             shopData.totalProducts = null;
           }
           
-          // 3. EXTRACTION MÉTRIQUES DE BASE (cellules 3, 4, 5) - SÉLECTEURS QUI FONCTIONNENT
+          // 3. EXTRACTION MÉTRIQUES DE BASE (cellules 3, 4, 5)
           try {
             shopData.category = (await cells[3].textContent()).trim();
             shopData.monthlyVisits = (await cells[4].textContent()).trim();
@@ -185,7 +118,7 @@ async function extractTableDataOnly(extractor, pageCount = 1) {
             shopData.monthlyRevenue = '';
           }
           
-          // 4. EXTRACTION LIVE ADS (cellule 7) - SÉLECTEURS QUI FONCTIONNENT
+          // 4. EXTRACTION LIVE ADS (cellule 7)
           try {
             const liveAdsDiv = await cells[7].locator('div.flex.items-center.justify-center.font-semibold');
             const liveAdsP = await liveAdsDiv.locator('p').first();
@@ -194,10 +127,9 @@ async function extractTableDataOnly(extractor, pageCount = 1) {
             shopData.liveAds = '';
           }
 
-          // 5. LIVE ADS 7D et 30D - Extrait en Phase 3 (page de détail) selon la spécification
-          // Ces métriques ne sont PAS extraites en Phase 1
-          shopData.live_ads_7d = 0;  // Valeur par défaut, sera mise à jour en Phase 3
-          shopData.live_ads_30d = 0; // Valeur par défaut, sera mise à jour en Phase 3
+          // 5. LIVE ADS 7D et 30D - Extrait en Phase 3
+          shopData.live_ads_7d = 0;
+          shopData.live_ads_30d = 0;
 
           // Ajouter les métadonnées
           shopData.scraping_status = 'table_extracted';
@@ -243,14 +175,12 @@ async function saveTableDataAndPrepareDetails(shopRepo, allTableData) {
       const existingShop = await shopRepo.getByUrl(shopData.shopUrl);
         if (existingShop) {
         logProgress(`⏭️ Shop existant: ${shopData.shopName} - Mise à jour`);
-        // Mettre à jour avec upsert (méthode qui fonctionne)
         const shopDataWithStatus = { ...shopData, scrapingStatus: 'table_extracted' };
         const shopId = await shopRepo.upsert(shopDataWithStatus);
         if (shopId && shopData.externalId) {
           shopsToProcess.push({ id: shopId, external_id: shopData.externalId, ...shopData });
         }
       } else {
-        // Shop n'existe pas, on l'ajoute avec upsert (méthode qui fonctionne)
         const shopDataWithStatus = { ...shopData, scrapingStatus: 'table_extracted' };
         const shopId = await shopRepo.upsert(shopDataWithStatus);
         if (shopId && shopData.externalId) {
@@ -269,67 +199,19 @@ async function saveTableDataAndPrepareDetails(shopRepo, allTableData) {
   return shopsToProcess;
 }
 
-// PHASE 3: Extraction des détails depuis la page de liste (CORRIGÉE)
+// PHASE 3: Extraction des détails depuis la page de liste (VERSION SIMPLE)
 async function extractAndSaveDetailsInParallel(extractor, shopRepo, shopsToProcess, scraper) {
   logProgress(`🔄 PHASE 3: Extraction des détails depuis la page de liste...`);
   
   try {
-    // Traiter les boutiques par petits lots pour éviter les blocages anti-bot
     logProgress(`📋 Traitement par petits lots pour éviter les blocages...`);
     
-    const batchSize = 1; // Traiter 1 boutique à la fois pour éviter la détection
+    const batchSize = 1;
     const totalBatches = Math.ceil(shopsToProcess.length / batchSize);
     
     let processedCount = 0;
     let successCount = 0;
     let errorCount = 0;
-    
-    // Fonction pour redémarrer le scraper en cas de fermeture de contexte
-    async function ensureScraperAlive() {
-      try {
-        // Vérifier si le contexte est encore vivant
-        await extractor.page.url();
-        logProgress(`✅ Contexte encore vivant`);
-        return true;
-      } catch (error) {
-        if (error.message.includes('Target page, context or browser has been closed')) {
-          logProgress(`🔄 Contexte fermé détecté - Redémarrage du scraper...`);
-          try {
-            // Fermer l'ancien scraper
-            if (scraper) {
-              logProgress(`🔚 Fermeture de l'ancien scraper...`);
-              await scraper.close();
-            }
-            
-            // Créer un nouveau scraper
-            logProgress(`🚀 Création du nouveau scraper...`);
-            scraper = new WebScraper();
-            await scraper.init();
-            logProgress(`✅ Nouveau scraper initialisé`);
-            
-            extractor = new TrendTrackExtractor(scraper.page, scraper.errorHandler);
-            logProgress(`✅ Nouvel extractor créé`);
-            
-            // Reconnexion à TrendTrack
-            logProgress(`🔑 Tentative de reconnexion...`);
-            const loginSuccess = await extractor.login('seif.alyakoob@gmail.com', 'Toulouse31!');
-            if (loginSuccess) {
-              logProgress(`✅ Scraper redémarré et reconnecté avec succès`);
-              return true;
-            } else {
-              logProgress(`❌ Échec de la reconnexion après redémarrage`);
-              return false;
-            }
-          } catch (restartError) {
-            logProgress(`❌ Erreur redémarrage scraper: ${restartError.message}`);
-            logProgress(`❌ Stack trace: ${restartError.stack}`);
-            return false;
-          }
-        }
-        logProgress(`⚠️ Erreur non liée à la fermeture de contexte: ${error.message}`);
-        return false;
-      }
-    }
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
       const startIndex = batchIndex * batchSize;
@@ -342,39 +224,8 @@ async function extractAndSaveDetailsInParallel(extractor, shopRepo, shopsToProce
         try {
           logProgress(`🔍 Extraction détails: ${shop.shopName}`);
           
-          // Vérifier et redémarrer le scraper si nécessaire
-          const scraperAlive = await ensureScraperAlive();
-          if (!scraperAlive) {
-            logProgress(`❌ Impossible de maintenir le scraper vivant pour ${shop.shopName}`);
-            errorCount++;
-            continue;
-          }
-          
-          // Rotation User-Agent légère (sans reload) avant chaque navigation détail
-          if (extractor.scraper && extractor.scraper.page) {
-            const newUserAgent = extractor.scraper.getRandomUserAgent();
-            await extractor.scraper.page.setExtraHTTPHeaders({
-              'User-Agent': newUserAgent
-            });
-            logProgress(`🔄 User-Agent changé pour ${shop.shopName}`);
-            // Reload désactivé pour éviter la fermeture de contexte avant navigation
-          }
-          
-          // Naviguer vers la page de détail de la boutique (UUID externe requis)
-          let navSuccess = false;
-          try {
-            navSuccess = await extractor.navigateToShopDetail(shop.external_id);
-          } catch (navError) {
-            if (navError.message.includes('Target page, context or browser has been closed')) {
-              logProgress(`🔄 Contexte fermé pendant navigation - Redémarrage...`);
-              const scraperAlive = await ensureScraperAlive();
-              if (scraperAlive) {
-                // Retry navigation après redémarrage
-                navSuccess = await extractor.navigateToShopDetail(shop.external_id);
-              }
-            }
-          }
-          
+          // Naviguer vers la page de détail de la boutique
+          const navSuccess = await extractor.navigateToShopDetail(shop.external_id);
           if (!navSuccess) {
             logProgress(`⚠️ Impossible de naviguer vers ${shop.shopName}`);
             errorCount++;
@@ -383,22 +234,7 @@ async function extractAndSaveDetailsInParallel(extractor, shopRepo, shopsToProce
           
           // Extraire les détails de la boutique
           logProgress(`🔍 Extraction des détails de la boutique (ID TrendTrack: ${shop.external_id})...`);
-          let shopDetails = null;
-          try {
-            shopDetails = await extractor.extractShopDetails(shop.external_id);
-          } catch (extractError) {
-            if (extractError.message.includes('Target page, context or browser has been closed')) {
-              logProgress(`🔄 Contexte fermé pendant extraction - Redémarrage...`);
-              const scraperAlive = await ensureScraperAlive();
-              if (scraperAlive) {
-                // Retry navigation et extraction après redémarrage
-                const retryNav = await extractor.navigateToShopDetail(shop.external_id);
-                if (retryNav) {
-                  shopDetails = await extractor.extractShopDetails(shop.external_id);
-                }
-              }
-            }
-          }
+          const shopDetails = await extractor.extractShopDetails(shop.external_id);
           
           if (shopDetails) {
             await shopRepo.updateDetailMetrics(shop.id, shopDetails);
@@ -412,8 +248,8 @@ async function extractAndSaveDetailsInParallel(extractor, shopRepo, shopsToProce
           
           processedCount++;
           
-          // Pause aléatoire entre les boutiques pour éviter les blocages
-          const randomDelay = Math.floor(Math.random() * 5000) + 3000; // 3-8 secondes
+          // Pause aléatoire entre les boutiques
+          const randomDelay = Math.floor(Math.random() * 5000) + 3000;
           logProgress(`⏸️ Pause de ${Math.round(randomDelay/1000)} secondes...`);
           await new Promise(resolve => setTimeout(resolve, randomDelay));
           
@@ -425,14 +261,11 @@ async function extractAndSaveDetailsInParallel(extractor, shopRepo, shopsToProce
       
       logProgress(`📊 Lot ${batchIndex + 1} terminé: ${successCount} succès, ${errorCount} erreurs`);
       
-      // Pause plus longue entre les lots
+      // Pause entre les lots
       if (batchIndex < totalBatches - 1) {
-        const lotDelay = Math.floor(Math.random() * 10000) + 5000; // 5-15 secondes
+        const lotDelay = Math.floor(Math.random() * 10000) + 5000;
         logProgress(`⏸️ Pause de ${Math.round(lotDelay/1000)} secondes avant le lot suivant...`);
         await new Promise(resolve => setTimeout(resolve, lotDelay));
-        
-        // Rotation d'IP désactivée pendant les tests de stabilité
-        // (pour éviter fermeture de contexte en plein workflow)
       }
     }
     
@@ -446,7 +279,7 @@ async function extractAndSaveDetailsInParallel(extractor, shopRepo, shopsToProce
 
 // FONCTION PRINCIPALE
 async function updateDatabase() {
-  logProgress('🚀 DÉMARRAGE - Architecture parallèle COMPLÈTE TrendTrack');
+  logProgress('🚀 DÉMARRAGE - Architecture parallèle SIMPLIFIÉE TrendTrack');
   logProgress('==================================================');
 
   let scraper = null;
@@ -458,7 +291,6 @@ async function updateDatabase() {
   try {
     // Prendre le lock avant toute opération sur la base
     logProgress('🔒 Acquisition du lock fichier...');
-    // await acquireLock(LOCK_FILE); // Temporairement désactivé
     lockAcquired = true;
 
     // Initialiser le scraper
@@ -482,43 +314,6 @@ async function updateDatabase() {
       return;
     }
 
-    // MODES CIBLÉS
-    // 1) Un seul UUID via TRENDTRACK_FORCE_ID
-    const forcedId = process.env.TRENDTRACK_FORCE_ID;
-    // 2) Liste d'UUIDs via TRENDTRACK_FORCE_IDS (séparés par virgule)
-    const forcedIdsList = process.env.TRENDTRACK_FORCE_IDS ? process.env.TRENDTRACK_FORCE_IDS.split(',').map(s=>s.trim()).filter(Boolean) : null;
-    if (forcedId || (forcedIdsList && forcedIdsList.length>0)) {
-      const ids = forcedIdsList && forcedIdsList.length>0 ? forcedIdsList : [forcedId];
-      logProgress(`🎯 MODE CIBLÉ: Test Phase 3 sur UUIDs ${ids.join(', ')}`);
-      try {
-        for (let i=0;i<ids.length;i++) {
-          const id = ids[i];
-          logProgress(`🔁 Ciblé ${i+1}/${ids.length} → ${id}`);
-          const navOk = await extractor.navigateToShopDetail(id);
-          if (!navOk) {
-            logProgress('❌ Navigation ciblée échouée');
-            break;
-          }
-          // Détection perte de session: si redirigé login l'appel précédent renvoie false
-          const details = await extractor.extractShopDetails(id);
-          if (!details) {
-            logProgress('⚠️ Aucun détail extrait (mode ciblé)');
-          } else {
-            logProgress('✅ Détails extraits (mode ciblé)');
-          }
-          // Vérifier si on a perdu la session avant de passer au suivant
-          const currentUrl = extractor.page.url();
-          if (currentUrl.includes('/login')) {
-            logProgress('❌ Session perdue après extraction - arrêt immédiat');
-            break;
-          }
-        }
-      } catch (e) {
-        logProgress(`❌ Erreur mode ciblé: ${e.message}`);
-      }
-      return; // Fin mode ciblé
-    }
-
     // Vérifier s'il y a des boutiques qui ont besoin de la Phase 3
     const existingShops = await shopRepo.findByStatus('table_extracted');
     
@@ -529,7 +324,6 @@ async function updateDatabase() {
       const shopsWithIds = existingShops.filter(shop => shop.external_id);
       if (shopsWithIds.length === 0) {
         logProgress('⚠️ Aucune boutique n\'a d\'ID externe - Forçage de la Phase 1');
-        // Forcer la phase 1 pour extraire les IDs puis enchaîner
         logProgress('🆕 Nouveau scraping - Phase 1: Extraction du tableau');
         const allTableData = await extractTableDataOnly(extractor);
         if (allTableData.length === 0) {
@@ -546,7 +340,6 @@ async function updateDatabase() {
         return;
       } else {
         logProgress(`✅ ${shopsWithIds.length} boutiques ont des IDs - Phase 3 requise`);
-        // PHASE 3: Extraction parallèle des détails uniquement pour celles avec ID
         await extractAndSaveDetailsInParallel(extractor, shopRepo, shopsWithIds, scraper);
         logProgress('✅ Phase 3 terminée pour les boutiques existantes');
         return;
@@ -574,12 +367,12 @@ async function updateDatabase() {
     await extractAndSaveDetailsInParallel(extractor, shopRepo, shopsToProcess, scraper);
 
     // Statistiques finales
-    logProgress('\n📊 STATISTIQUES FINALES - ARCHITECTURE PARALLÈLE COMPLÈTE:');
+    logProgress('\n📊 STATISTIQUES FINALES - ARCHITECTURE SIMPLIFIÉE:');
     logProgress('==================================================');
     logProgress(`📈 Boutiques extraites du tableau: ${allTableData.length}`);
     logProgress(`💾 Boutiques sauvegardées en base: ${shopsToProcess.length}`);
     logProgress(`🔄 Boutiques traitées en parallèle: ${shopsToProcess.length}`);
-    logProgress('✅ Architecture parallèle complète terminée !');
+    logProgress('✅ Architecture simplifiée terminée !');
 
         } catch (error) {
     logProgress(`❌ Erreur fatale: ${error.message}`);
@@ -588,7 +381,6 @@ async function updateDatabase() {
     // Libérer le lock
     if (lockAcquired) {
       try {
-        // await releaseLock(LOCK_FILE); // Temporairement désactivé
         logProgress('🔓 Lock libéré');
         } catch (error) {
         logProgress(`⚠️ Erreur libération lock: ${error.message}`);
@@ -620,4 +412,4 @@ async function updateDatabase() {
 updateDatabase().catch(error => {
   console.error('❌ Erreur fatale:', error);
   process.exit(1);
-}); 
+});
