@@ -343,25 +343,10 @@ export class TrendTrackExtractor extends BaseExtractor {
         console.log('⚠️ Nombre de produits non trouvé');
       }
 
-      // Live ads 7d
-      try {
-        const liveAds7dElement = await cells[5].locator('p').first();
-        if (await liveAds7dElement.count() > 0) {
-          shopData.live_ads_7d = this.parseNumber(await liveAds7dElement.textContent());
-        }
-      } catch (error) {
-        console.log('⚠️ Live ads 7d non trouvés');
-      }
-
-      // Live ads 30d
-      try {
-        const liveAds30dElement = await cells[6].locator('p').first();
-        if (await liveAds30dElement.count() > 0) {
-          shopData.live_ads_30d = this.parseNumber(await liveAds30dElement.textContent());
-        }
-      } catch (error) {
-        console.log('⚠️ Live ads 30d non trouvés');
-      }
+      // Live ads 7d et 30d - Extrait en Phase 3 (page de détail) selon la spécification
+      // Ces métriques ne sont PAS extraites en Phase 1
+      shopData.live_ads_7d = 0;  // Valeur par défaut, sera mise à jour en Phase 3
+      shopData.live_ads_30d = 0; // Valeur par défaut, sera mise à jour en Phase 3
 
       // Ajouter les métadonnées
       shopData.scraping_status = 'table_extracted';
@@ -683,11 +668,12 @@ export class TrendTrackExtractor extends BaseExtractor {
       console.log('🔍 Extraction des pixels via API TrendTrack...');
       const pixelData = await this.extractPixelsForShopJS(shopId || 'current_shop'); // Utiliser l'ID de la boutique
       
-      // 🌍 NOUVELLE MÉTHODE : Extraction des données géographiques via scraping DOM
-      console.log('🌍 Extraction des données géographiques via scraping DOM...');
+      // 🌍 EXTRACTION DES DONNÉES GÉOGRAPHIQUES VIA DOM
+      console.log('🌍 Extraction des données géographiques via DOM...');
       const marketData = await this.extractGeoDataViaDOM();
       
       const detailData = {
+        
         // Métriques de performance
         bounce_rate: await this.extractMetric('Bounce Rate'),
         avg_visit_duration: await this.extractMetric('Avg. Visit Duration'),
@@ -721,6 +707,10 @@ export class TrendTrackExtractor extends BaseExtractor {
         // Trafic marqué
         branded_traffic: await this.extractBrandedTraffic(),
         percent_branded_traffic: await this.extractPercentBrandedTraffic(),
+        
+        // Live ads 7d et 30d - Phase 3 (page de détail) selon la spécification
+        live_ads_7d: await this.extractLiveAds7d(),
+        live_ads_30d: await this.extractLiveAds30d(),
         
         scraping_status: 'details_extracted',
         last_updated: new Date().toISOString()
@@ -851,16 +841,47 @@ export class TrendTrackExtractor extends BaseExtractor {
    */
   async extractYearFounded() {
     try {
-      // Implémentation basique - à adapter selon la structure de la page
-      const selector = 'text=Founded';
-      const element = await this.page.locator(selector).first();
-      if (await element.count() > 0) {
-        const value = await element.textContent();
-        return this.parseNumber(value);
+      console.log('🔍 Extraction année de fondation via DOM...');
+      
+      // Sélecteurs basés sur l'analyse du DOM fourni
+      const selectors = [
+        'p.text-\\[11px\\]',           // Sélecteur principal unique trouvé dans le DOM
+        'p[class*="text-11px"]',       // Variante du sélecteur
+        'p[class*="text-xs"]',         // Autres variantes
+        'p[class*="text-sm"]',
+        'p[class*="text-"]',           // Sélecteur générique
+        'text=/founded/i',             // Fallback textuel
+        'text=/since/i', 
+        'text=/established/i',
+        'text=/created/i',
+        'text=/©/i'
+      ];
+      
+      // Essayer chaque sélecteur
+      for (const selector of selectors) {
+        try {
+          const element = await this.page.locator(selector).first();
+          if (await element.count() > 0) {
+            const text = await element.textContent();
+            if (text) {
+              const year = this.extractYearFromString(text);
+              if (year) {
+                console.log(`📅 Année trouvée avec sélecteur '${selector}': ${year}`);
+                return year;
+              }
+            }
+          }
+        } catch (e) {
+          // Continuer avec le prochain sélecteur
+          continue;
+        }
       }
+      
+      console.log('❌ Aucune année de fondation trouvée');
       return null;
+      
     } catch (error) {
-      console.log('⚠️ Année de fondation non trouvée');
+      console.log('⚠️ Erreur extraction année de fondation:', error.message);
       return null;
     }
   }
@@ -1272,10 +1293,11 @@ export class TrendTrackExtractor extends BaseExtractor {
    * 🆕 MÉTHODE SUPPRIMÉE : Extraire l'ID API depuis la réponse RSC
    * Cette méthode a été supprimée car elle ne fonctionnait pas.
    * Voir la documentation API_REMOVAL.md pour plus de détails.
+   * Remplacée par getGeoDataViaDOM() qui utilise le scraping DOM.
    */
   async extractApiIdFromRSC(shopId, workspace = 'w-al-yakoobs-workspace-x0Qg9st') {
     // Méthode supprimée - voir API_REMOVAL.md
-    console.log(`⚠️ Extraction ID API désactivée pour: ${shopId}`);
+    console.log(`⚠️ Extraction ID API désactivée pour: ${shopId} - Utilisation du scraping DOM`);
     return null;
   }
 
@@ -1408,126 +1430,77 @@ export class TrendTrackExtractor extends BaseExtractor {
           countries: []
         };
         
-        // 🔍 STRATÉGIE 1: Chercher les éléments avec des pourcentages et codes pays
-        const percentageElements = document.querySelectorAll('*');
+        // 🔍 STRATÉGIE OPTIMISÉE: Utiliser les sélecteurs TrendTrack identifiés
+        const countryElements = document.querySelectorAll('.flex.gap-2.w-full.items-center');
         let foundCountries = 0;
         
-        percentageElements.forEach(element => {
-          const text = element.textContent;
-          
-          // Chercher des patterns comme "US: 45.2%" ou "United States: 45.2%"
-          const countryPatterns = [
-            /(?:US|United States):\s*(\d+(?:\.\d+)?)%/i,
-            /(?:UK|United Kingdom|GB):\s*(\d+(?:\.\d+)?)%/i,
-            /(?:DE|Germany|Deutschland):\s*(\d+(?:\.\d+)?)%/i,
-            /(?:CA|Canada):\s*(\d+(?:\.\d+)?)%/i,
-            /(?:AU|Australia):\s*(\d+(?:\.\d+)?)%/i,
-            /(?:FR|France):\s*(\d+(?:\.\d+)?)%/i
-          ];
-          
-          countryPatterns.forEach((pattern, index) => {
-            const match = text.match(pattern);
-            if (match) {
-              const percentage = parseFloat(match[1]) / 100; // Convertir en décimal
-              const countryCodes = ['us', 'uk', 'de', 'ca', 'au', 'fr'];
-              const countryNames = ['United States', 'United Kingdom', 'Germany', 'Canada', 'Australia', 'France'];
+        console.log(`[PAGE] Trouvé ${countryElements.length} éléments de pays`);
+        
+        if (countryElements.length === 0) {
+          console.log('[PAGE] Aucun élément de pays trouvé avec le sélecteur .flex.gap-2.w-full.items-center');
+          return results;
+        }
+        
+        // Traiter chaque élément de pays selon la structure TrendTrack
+        countryElements.forEach((el, index) => {
+          try {
+            // Méthode identifiée dans market_traffic_extractor.py
+            const paysImg = el.querySelector('img[alt]');
+            const pays = paysImg?.getAttribute('alt');
+            const percentageEl = el.querySelector('p:last-child');
+            
+            if (pays && percentageEl) {
+              const countryCode = pays.toLowerCase().trim();
+              const percentageText = percentageEl.textContent.replace('%', '').trim();
+              const percentage = parseFloat(percentageText) / 100; // Convertir en décimal
               
-              if (countryCodes[index]) {
-                results[`market_${countryCodes[index]}`] = percentage;
+              console.log(`[PAGE] Pays trouvé: ${countryCode} → ${percentageText}%`);
+              
+              // Mapper les codes pays vers les champs de marché
+              switch(countryCode) {
+                case 'us':
+                case 'united states':
+                  results.market_us = percentage;
+                  break;
+                case 'gb':
+                case 'uk':
+                case 'united kingdom':
+                  results.market_uk = percentage;
+                  break;
+                case 'de':
+                case 'germany':
+                case 'deutschland':
+                  results.market_de = percentage;
+                  break;
+                case 'ca':
+                case 'canada':
+                  results.market_ca = percentage;
+                  break;
+                case 'au':
+                case 'australia':
+                  results.market_au = percentage;
+                  break;
+                case 'fr':
+                case 'france':
+                  results.market_fr = percentage;
+                  break;
+              }
+              
                 results.countries.push({
-                  countryCode: countryCodes[index].toUpperCase(),
-                  countryName: countryNames[index],
+                countryCode: countryCode.toUpperCase(),
+                countryName: pays,
                   visitsShare: percentage,
-                  visitsSharePercent: parseFloat(match[1])
+                visitsSharePercent: parseFloat(percentageText)
                 });
-                foundCountries++;
-                console.log(`✅ ${countryNames[index]}: ${match[1]}%`);
-              }
-            }
-          });
-        });
-        
-        // 🔍 STRATÉGIE 2: Chercher dans les tableaux de données
-        const tables = document.querySelectorAll('table, .table, [class*="table"]');
-        tables.forEach(table => {
-          const rows = table.querySelectorAll('tr, .row, [class*="row"]');
-          rows.forEach(row => {
-            const cells = row.querySelectorAll('td, th, .cell, [class*="cell"]');
-            if (cells.length >= 2) {
-              const firstCell = cells[0].textContent.trim();
-              const secondCell = cells[1].textContent.trim();
               
-              // Chercher des patterns comme "US" dans la première cellule et "45.2%" dans la seconde
-              const countryMatch = firstCell.match(/(US|UK|DE|CA|AU|FR|United States|United Kingdom|Germany|Canada|Australia|France)/i);
-              const percentageMatch = secondCell.match(/(\d+(?:\.\d+)?)%/);
-              
-              if (countryMatch && percentageMatch) {
-                const countryCode = countryMatch[1].toLowerCase();
-                const percentage = parseFloat(percentageMatch[1]) / 100;
-                
-                // Mapper les noms complets vers les codes
-                const countryMapping = {
-                  'united states': 'us',
-                  'united kingdom': 'uk',
-                  'germany': 'de',
-                  'canada': 'ca',
-                  'australia': 'au',
-                  'france': 'fr'
-                };
-                
-                const mappedCode = countryMapping[countryCode] || countryCode;
-                if (['us', 'uk', 'de', 'ca', 'au', 'fr'].includes(mappedCode)) {
-                  results[`market_${mappedCode}`] = percentage;
                   foundCountries++;
-                  console.log(`✅ Tableau: ${countryMatch[1]} → ${percentageMatch[1]}%`);
                 }
-              }
-            }
-          });
+          } catch (e) {
+            console.log(`[PAGE] Erreur parsing pays ${index}:`, e.message);
+                }
         });
         
-        // 🔍 STRATÉGIE 3: Chercher dans les éléments avec des classes spécifiques
-        const geoSelectors = [
-          '.geography',
-          '.country-data',
-          '.traffic-by-country',
-          '.market-data',
-          '[class*="geo"]',
-          '[class*="country"]',
-          '[class*="market"]'
-        ];
-        
-        geoSelectors.forEach(selector => {
-          const elements = document.querySelectorAll(selector);
-          elements.forEach(element => {
-            const text = element.textContent;
-            
-            // Chercher des patterns de pourcentages avec codes pays
-            const patterns = [
-              /US[:\s]*(\d+(?:\.\d+)?)%/gi,
-              /UK[:\s]*(\d+(?:\.\d+)?)%/gi,
-              /DE[:\s]*(\d+(?:\.\d+)?)%/gi,
-              /CA[:\s]*(\d+(?:\.\d+)?)%/gi,
-              /AU[:\s]*(\d+(?:\.\d+)?)%/gi,
-              /FR[:\s]*(\d+(?:\.\d+)?)%/gi
-            ];
-            
-            patterns.forEach((pattern, index) => {
-              const matches = [...text.matchAll(pattern)];
-              matches.forEach(match => {
-                const percentage = parseFloat(match[1]) / 100;
-                const countryCodes = ['us', 'uk', 'de', 'ca', 'au', 'fr'];
-                if (countryCodes[index] && !results[`market_${countryCodes[index]}`]) {
-                  results[`market_${countryCodes[index]}`] = percentage;
-                  foundCountries++;
-                  console.log(`✅ Sélecteur: ${countryCodes[index].toUpperCase()} → ${match[1]}%`);
-                }
-              });
-            });
-          });
-        });
-        
-        console.log(`🌍 Total pays trouvés: ${foundCountries}`);
+        console.log(`[PAGE] Total pays extraits: ${foundCountries}`);
         return results;
       });
       
@@ -1758,5 +1731,218 @@ export class TrendTrackExtractor extends BaseExtractor {
 
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+
+  /**
+   * 🗑️ MÉTHODE SUPPRIMÉE : extractGeoDataViaAPI
+   * Cette méthode a été supprimée car l'API TrendTrack ne fonctionnait pas.
+   * Remplacée par getGeoDataViaDOM() qui utilise le scraping DOM.
+   * Voir la documentation API_REMOVAL.md pour plus de détails.
+   */
+
+  /**
+   * Extrait l'ID API depuis la réponse RSC
+   * @param {string} shopId - ID de la boutique
+   * @param {string} workspace - Workspace TrendTrack
+   * @returns {Promise<string|null>} - ID API ou null
+   */
+  async extractApiIdFromRSC(shopId, workspace) {
+    try {
+      const response = await fetch(
+        `https://app.trendtrack.io/en/workspace/${workspace}/trending-shops/${shopId}`,
+        {
+          headers: {
+            'RSC': '1',
+            'Accept': 'text/x-component'
+          },
+          credentials: 'include'
+        }
+      );
+
+      const text = await response.text();
+      
+      // 🔍 PATTERNS À CHERCHER pour l'ID API
+      const patterns = [
+        /"websiteId":"([a-f0-9-]{36})"/,
+        /"siteId":"([a-f0-9-]{36})"/,
+        /"website["\.]id["\:]"([a-f0-9-]{36})"/,
+        /website[\/:]([a-f0-9-]{36})/,
+        /"id":"([a-f0-9-]{36})".*geography/,
+        /\/api\/websites\/([a-f0-9-]{36})/
+      ];
+
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match && match[1] !== shopId) { // Différent de l'ID de la liste
+          console.log(`✅ ID API trouvé avec pattern: ${pattern.source}`);
+          return match[1];
+        }
+      }
+
+      // 🔍 RECHERCHE PLUS LARGE - tous les UUIDs dans la réponse
+      const allUuids = text.match(/[a-f0-9-]{36}/g) || [];
+      const uniqueUuids = [...new Set(allUuids)].filter(id => id !== shopId);
+      
+      if (uniqueUuids.length > 0) {
+        console.log(`🎯 UUIDs candidats trouvés:`, uniqueUuids);
+        
+        // Tester chaque UUID avec l'API géo
+        for (const candidateId of uniqueUuids) {
+          try {
+            const testResponse = await fetch(
+              `https://app.trendtrack.io/api/websites/${candidateId}`,
+              {
+                headers: {
+                  "Accept": "*/*",
+                  "Sec-Fetch-Dest": "empty",
+                  "Sec-Fetch-Mode": "cors", 
+                  "Sec-Fetch-Site": "same-origin"
+                },
+                credentials: 'include'
+              }
+            );
+            
+            if (testResponse.ok) {
+              const testData = await testResponse.json();
+              if (testData.website?.geography) {
+                console.log(`✅ ID API validé: ${candidateId}`);
+                return candidateId;
+              }
+            }
+          } catch (e) {
+            // Continue avec le suivant
+          }
+        }
+      }
+
+      return null;
+    } catch (error) {
+      console.error('❌ Erreur extraction ID API:', error);
+      return null;
+    }
+  }
+
+
+  /**
+   * Extrait live_ads_7d depuis la page de détail (Phase 3) - Cellule 5
+   * @returns {Promise<number>} - Nombre de live ads 7d
+   */
+  async extractLiveAds7d() {
+    try {
+      console.log('🔍 Extraction live_ads_7d (Phase 3 - Cellule 5)...');
+      
+      // Attendre que le tableau soit chargé
+      await this.page.waitForSelector('table tbody tr', { timeout: 10000 });
+      
+      // Récupérer toutes les lignes du tableau
+      const rows = await this.page.locator('table tbody tr').all();
+      
+      if (rows.length === 0) {
+        console.log('⚠️ Aucune ligne trouvée dans le tableau');
+        return 0;
+      }
+      
+      // Prendre la première ligne (ou la ligne appropriée selon la structure)
+      const firstRow = rows[0];
+      const cells = await firstRow.locator('td').all();
+      
+      if (cells.length < 6) {
+        console.log('⚠️ Pas assez de cellules dans la ligne');
+        return 0;
+      }
+      
+      // Extraire depuis la cellule 5 (index 4)
+      const liveAds7dElement = await cells[4].locator('p').first();
+      if (await liveAds7dElement.count() > 0) {
+        const liveAds7dText = await liveAds7dElement.textContent();
+        const value = this.parseNumber(liveAds7dText);
+        console.log(`📊 Live ads 7d extrait (Phase 3): ${value}`);
+        return value;
+      } else {
+        console.log('⚠️ Aucun élément <p> trouvé dans la cellule 5 pour live_ads_7d');
+        return 0;
+      }
+      
+    } catch (error) {
+      console.log(`❌ Erreur extraction live_ads_7d (Phase 3): ${error.message}`);
+      return 0;
+    }
+  }
+
+  /**
+   * Extrait live_ads_30d depuis la page de détail (Phase 3) - Cellule 6
+   * Note: La cellule 6 a une structure HTML différente (pas d'élément <p>)
+   * @returns {Promise<number>} - Nombre de live ads 30d
+   */
+  async extractLiveAds30d() {
+    try {
+      console.log('🔍 Extraction live_ads_30d (Phase 3 - Cellule 6)...');
+      
+      // Attendre que le tableau soit chargé
+      await this.page.waitForSelector('table tbody tr', { timeout: 10000 });
+      
+      // Récupérer toutes les lignes du tableau
+      const rows = await this.page.locator('table tbody tr').all();
+      
+      if (rows.length === 0) {
+        console.log('⚠️ Aucune ligne trouvée dans le tableau');
+        return 0;
+      }
+      
+      // Prendre la première ligne (ou la ligne appropriée selon la structure)
+      const firstRow = rows[0];
+      const cells = await firstRow.locator('td').all();
+      
+      if (cells.length < 7) {
+        console.log('⚠️ Pas assez de cellules dans la ligne');
+        return 0;
+      }
+      
+      // Extraire depuis la cellule 6 (index 5)
+      // La cellule 6 a une structure HTML différente selon la spécification
+      const cell6 = cells[5];
+      
+      // Essayer différents sélecteurs selon la spécification
+      let liveAds30dText = null;
+      
+      // 1. Essayer avec un élément <p> (au cas où)
+      const pElement = await cell6.locator('p').first();
+      if (await pElement.count() > 0) {
+        liveAds30dText = await pElement.textContent();
+        console.log('📊 Live ads 30d trouvé avec sélecteur <p>');
+      } else {
+        // 2. Essayer avec un élément <div>
+        const divElement = await cell6.locator('div').first();
+        if (await divElement.count() > 0) {
+          liveAds30dText = await divElement.textContent();
+          console.log('📊 Live ads 30d trouvé avec sélecteur <div>');
+        } else {
+          // 3. Essayer avec un élément <span>
+          const spanElement = await cell6.locator('span').first();
+          if (await spanElement.count() > 0) {
+            liveAds30dText = await spanElement.textContent();
+            console.log('📊 Live ads 30d trouvé avec sélecteur <span>');
+          } else {
+            // 4. Essayer de récupérer le textContent direct de la cellule
+            liveAds30dText = await cell6.textContent();
+            console.log('📊 Live ads 30d trouvé avec textContent direct');
+          }
+        }
+      }
+      
+      if (liveAds30dText) {
+        const value = this.parseNumber(liveAds30dText);
+        console.log(`📊 Live ads 30d extrait (Phase 3): ${value}`);
+        return value;
+      } else {
+        console.log('⚠️ Aucun contenu trouvé dans la cellule 6 pour live_ads_30d');
+        return 0;
+      }
+
+    } catch (error) {
+      console.log(`❌ Erreur extraction live_ads_30d (Phase 3): ${error.message}`);
+      return 0;
+    }
   }
 } 

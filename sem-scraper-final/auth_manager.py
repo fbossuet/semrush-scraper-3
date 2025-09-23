@@ -20,13 +20,13 @@ class AuthManager:
     - Synchronisation des cookies cross-domain
     - Auto-refresh des sessions expirées
     - Récupération dynamique des credentials
-    - Gestion des locks pour workers parallèles
+    - Support des workers parallèles (sans locks)
     """
     
     def __init__(self):
         self.is_authenticated = False
         self.last_auth_time = 0
-        self.auth_lock = asyncio.Lock()
+        # LOCK SUPPRIMÉ - Empêchait les workers parallèles de fonctionner
         self.credentials_cache = {}
         self.session_health_checked = False
         
@@ -41,59 +41,59 @@ class AuthManager:
         Returns:
             bool: True si authentification réussie
         """
-        async with self.auth_lock:
-            # Vérifier si déjà authentifié récemment
-            if self.is_authenticated and (time.time() - self.last_auth_time) < 300:  # 5 minutes
-                logger.info(f"🔐 Worker {worker_id}: Session déjà authentifiée (cache)")
-                return True
+        # LOCK SUPPRIMÉ - Permet aux workers parallèles de s'authentifier simultanément
+        # Vérifier si déjà authentifié récemment
+        if self.is_authenticated and (time.time() - self.last_auth_time) < 300:  # 5 minutes
+            logger.info(f"🔐 Worker {worker_id}: Session déjà authentifiée (cache)")
+            return True
+        
+        logger.info(f"🔐 Worker {worker_id}: Authentification MyToolsPlan...")
+        
+        try:
+            # 1. Navigation vers la page de login
+            await page.goto("https://app.mytoolsplan.com/login", wait_until='domcontentloaded', timeout=60000)
+            await page.wait_for_load_state('networkidle')
             
-            logger.info(f"🔐 Worker {worker_id}: Authentification MyToolsPlan...")
+            # 2. Récupérer les credentials depuis l'environnement
+            from config import get_mytoolsplan_credentials
+            username, password = get_mytoolsplan_credentials()
+            
+            # 3. Remplir et soumettre le formulaire
+            await page.fill('input[name="amember_login"]', username)
+            await page.fill('input[name="amember_pass"]', password)
             
             try:
-                # 1. Navigation vers la page de login
-                await page.goto("https://app.mytoolsplan.com/login", wait_until='domcontentloaded', timeout=60000)
-                await page.wait_for_load_state('networkidle')
-                
-                # 2. Récupérer les credentials depuis l'environnement
-                from config import get_mytoolsplan_credentials
-                username, password = get_mytoolsplan_credentials()
-                
-                # 3. Remplir et soumettre le formulaire
-                await page.fill('input[name="amember_login"]', username)
-                await page.fill('input[name="amember_pass"]', password)
-                
-                try:
-                    await page.click('input[type="submit"][class="frm-submit"]')
-                except:
-                    await page.evaluate('document.querySelector("form[name=\\"login\\"]").submit()')
-                
-                await page.wait_for_load_state('networkidle')
-                await asyncio.sleep(3)
-                
-                # 4. Vérifier le succès du login
-                current_url = page.url
-                if "member" not in current_url.lower():
-                    logger.error(f"❌ Worker {worker_id}: Login échoué - Pas sur la page membre")
-                    return False
-                
-                logger.info(f"✅ Worker {worker_id}: Login réussi sur app.mytoolsplan.com")
-                
-                # 5. Synchroniser les cookies avec sam.mytoolsplan.xyz
-                await self._sync_cookies_to_sam_domain(page, worker_id)
-                
-                # 6. Récupérer les credentials dynamiques
-                await self._extract_dynamic_credentials(page, worker_id)
-                
-                self.is_authenticated = True
-                self.last_auth_time = time.time()
-                self.session_health_checked = True
-                
-                logger.info(f"✅ Worker {worker_id}: Authentification complète réussie")
-                return True
-                
-            except Exception as e:
-                logger.error(f"❌ Worker {worker_id}: Erreur authentification: {e}")
+                await page.click('input[type="submit"][class="frm-submit"]')
+            except:
+                await page.evaluate('document.querySelector("form[name=\\"login\\"]").submit()')
+            
+            await page.wait_for_load_state('networkidle')
+            await asyncio.sleep(3)
+            
+            # 4. Vérifier le succès du login
+            current_url = page.url
+            if "member" not in current_url.lower():
+                logger.error(f"❌ Worker {worker_id}: Login échoué - Pas sur la page membre")
                 return False
+            
+            logger.info(f"✅ Worker {worker_id}: Login réussi sur app.mytoolsplan.com")
+            
+            # 5. Synchroniser les cookies avec sam.mytoolsplan.xyz
+            await self._sync_cookies_to_sam_domain(page, worker_id)
+            
+            # 6. Récupérer les credentials dynamiques
+            await self._extract_dynamic_credentials(page, worker_id)
+            
+            self.is_authenticated = True
+            self.last_auth_time = time.time()
+            self.session_health_checked = True
+            
+            logger.info(f"✅ Worker {worker_id}: Authentification complète réussie")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Worker {worker_id}: Erreur authentification: {e}")
+            return False
     
     async def _sync_cookies_to_sam_domain(self, page, worker_id: int):
         """Synchronise les cookies d'authentification avec sam.mytoolsplan.xyz"""

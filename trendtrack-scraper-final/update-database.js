@@ -127,37 +127,10 @@ async function extractTableDataOnly(extractor, pageCount = 5) {
             shopData.liveAds = '';
           }
 
-          // 5. EXTRACTION LIVE ADS 7D (cellule 5) - NOUVELLE MÉTRIQUE
-          try {
-            const liveAds7dElement = await cells[5].locator('p').first();
-            if (await liveAds7dElement.count() > 0) {
-              const liveAds7dText = await liveAds7dElement.textContent();
-              shopData.liveAds7d = parseInt(liveAds7dText?.trim()) || 0;
-              console.log(`📊 Live ads 7d extrait: ${shopData.liveAds7d}`);
-            } else {
-              shopData.liveAds7d = 0;
-              console.log('⚠️ Aucun élément <p> trouvé dans la cellule 5 pour live_ads_7d');
-            }
-          } catch (error) {
-            shopData.liveAds7d = 0;
-            console.log(`❌ Erreur extraction live_ads_7d: ${error.message}`);
-          }
-
-          // 6. EXTRACTION LIVE ADS 30D (cellule 6) - NOUVELLE MÉTRIQUE
-          try {
-            const liveAds30dElement = await cells[6].locator('p').first();
-            if (await liveAds30dElement.count() > 0) {
-              const liveAds30dText = await liveAds30dElement.textContent();
-              shopData.liveAds30d = parseInt(liveAds30dText?.trim()) || 0;
-              console.log(`📊 Live ads 30d extrait: ${shopData.liveAds30d}`);
-            } else {
-              shopData.liveAds30d = 0;
-              console.log('⚠️ Aucun élément <p> trouvé dans la cellule 6 pour live_ads_30d');
-            }
-          } catch (error) {
-            shopData.liveAds30d = 0;
-            console.log(`❌ Erreur extraction live_ads_30d: ${error.message}`);
-          }
+          // 5. LIVE ADS 7D et 30D - Extrait en Phase 3 (page de détail) selon la spécification
+          // Ces métriques ne sont PAS extraites en Phase 1
+          shopData.live_ads_7d = 0;  // Valeur par défaut, sera mise à jour en Phase 3
+          shopData.live_ads_30d = 0; // Valeur par défaut, sera mise à jour en Phase 3
 
           // Ajouter les métadonnées
           shopData.scraping_status = 'table_extracted';

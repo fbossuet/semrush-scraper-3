@@ -32,8 +32,6 @@ test-stealth-profile/
 
 # Autres temporaires
 *.py~  # Fichiers temporaires éditeurs
-
-sem-scraper-final/identify_looping_scripts.py
-sem-scraper-final/improved_year_founded_selectors.py
-trendtrack-scraper-final/extract-ids-only.js
-trendtrack-scraper-final/extract-shop-ids.js
+        sem-scraper-final/identify_looping_scripts.py
+        sem-scraper-final/improved_year_founded_selectors.py
+        trendtrack-scraper-final/extract-ids-onlytrendtrack-scraper-final/extract-shop-ids.js
