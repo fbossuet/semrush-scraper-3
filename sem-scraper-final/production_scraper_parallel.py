@@ -414,6 +414,14 @@ class ParallelProductionScraper:
         )
         
         self.page = await self.context.new_page()
+        try:
+            await self.context.set_extra_http_headers({
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
+                'Upgrade-Insecure-Requests': '1'
+            })
+        except Exception:
+            pass
         logger.info(f"✅ Worker {self.worker_id}: Navigateur configuré")
     
     async def authenticate_mytoolsplan(self):
@@ -550,10 +558,21 @@ class ParallelProductionScraper:
             logger.info(f"📊 Worker {self.worker_id}: Cookies récupérés: {len(cookies)} cookies")
             logger.info(f"🔍 Worker {self.worker_id}: {len(auth_cookies)} cookies d'authentification identifiés")
             
-            # Définir les cookies d'authentification (pas besoin de navigation supplémentaire)
+            # Définir les cookies d'authentification ET les dupliquer pour le domaine sam.mytoolsplan.xyz
             if auth_cookies:
+                # Ajout brut
                 await self.context.add_cookies(auth_cookies)
-                logger.info(f"✅ Worker {self.worker_id}: {len(auth_cookies)} cookies d'auth synchronisés")
+                # Duplication avec domaine sam
+                sam_cookies = []
+                for c in auth_cookies:
+                    dup = {k: v for k, v in c.items()}
+                    dup['domain'] = 'sam.mytoolsplan.xyz'
+                    dup['url'] = 'https://sam.mytoolsplan.xyz'
+                    # S'assurer d'une path par défaut
+                    dup['path'] = '/'
+                    sam_cookies.append(dup)
+                await self.context.add_cookies(sam_cookies)
+                logger.info(f"✅ Worker {self.worker_id}: {len(auth_cookies)} cookies d'auth synchronisés (+ duplication domaine sam)")
             
             # Test de la session directement (on est déjà sur app.mytoolsplan.com/member)
             logger.info(f"🔍 Worker {self.worker_id}: Test de la session sur app.mytoolsplan.com/analytics/...")

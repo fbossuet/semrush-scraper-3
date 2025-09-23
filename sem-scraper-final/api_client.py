@@ -148,34 +148,51 @@ class APIClient:
         # Nettoyer le domaine (comme dans le code existant)
         domain_clean = domain.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
         
-        # Navigation vers sam.mytoolsplan.xyz (comme dans le code existant)                                                                   
-        await page.goto("https://sam.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=30000)                               
-        await asyncio.sleep(2)
+        # Navigation vers sam.mytoolsplan.xyz pour établir le contexte/session
+        try:
+            await page.goto("https://sam.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=20000)
+            await asyncio.sleep(1)
+        except Exception as e:
+            logger.warning(f"⚠️ Worker {worker_id}: Navigation pré-engagement échouée: {e}")
         
-        api_url = f"/analytics/ta/targ/v2/engagement?target={domain_clean}&device_type=desktop"
+        # Appel engagement avec cookies + en-têtes; retries pour contourner 418/antibot
+        api_url_abs = f"https://sam.mytoolsplan.xyz/analytics/ta/targ/v2/engagement?target={domain_clean}&device_type=desktop"
         
-        # Structure d'appel identique au code existant
-        result = await page.evaluate(f"""
-            async () => {{
-                try {{
-                    const response = await fetch("{api_url}", {{
-                        method: "GET",
-                        headers: {{
-                            "Content-Type": "application/json"
-                        }}
-                    }});
-                    
-                    if (response.ok) {{
-                        const data = await response.json();
-                        return {{ success: true, data: data }};
-                    }} else {{
-                        return {{ success: false, error: response.status }}
-                    }}
-                }} catch (error) {{
-                    return {{ success: false, error: error.toString() }}
-                }}
-            }}
-        """)
+        result = await page.evaluate("""
+            async (data) => {
+                const attempt = async () => {
+                    try {
+                        const response = await fetch(data.url, {
+                            method: 'GET',
+                            headers: {
+                                'Accept': 'application/json, text/plain, */*',
+                                'Content-Type': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest',
+                            },
+                            credentials: 'include',
+                            cache: 'no-cache',
+                            mode: 'cors'
+                        });
+                        if (response.ok) {
+                            const js = await response.json();
+                            return { ok: true, data: js };
+                        }
+                        const text = await response.text();
+                        return { ok: false, status: response.status, body: text };
+                    } catch (err) {
+                        return { ok: false, error: String(err) };
+                    }
+                };
+                
+                // 3 tentatives avec petite attente
+                for (let i = 0; i < 3; i++) {
+                    const res = await attempt();
+                    if (res.ok) return { success: true, data: res.data };
+                    await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+                }
+                return { success: false, error: 'engagement_retries_failed' };
+            }
+        """, { 'url': api_url_abs })
         
         if not result.get("success"):
             logger.error(f"❌ Worker {worker_id}: Erreur API engagement: {result.get('error')}")
