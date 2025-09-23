@@ -63,16 +63,22 @@ async function extractTableDataOnly(extractor, pageCount = 5) {
           
           // 0. EXTRACTION ID DE LA BOUTIQUE - NOUVEAU
           try {
-            const rowHtml = await row.evaluate(el => el.outerHTML, { timeout: 10000 });
-            const rowIdMatch = rowHtml.match(/<tr[^>]*id=["']([^"']+)["']/);
-            const rowId = rowIdMatch ? rowIdMatch[1] : null;
-            shopData.shopId = rowId;
-            shopData.externalId = rowId; // Mapping pour la base de données
-            if (rowId) {
-              logProgress(`✅ ID extrait: ${rowId} pour ${shopData.shopName || 'boutique'}`);
+            // Extraire le href du lien contenant /trending-shops/{uuid}
+            const linkHtml = await cells[1].innerHTML();
+            const hrefMatch = linkHtml.match(/href=["']([^"']+trending-shops\/[0-9a-fA-F-]+)["']/);
+            const href = hrefMatch ? hrefMatch[1] : null;
+            let externalId = null;
+            if (href) {
+              const idMatch = href.match(/trending-shops\/([0-9a-fA-F-]+)/);
+              externalId = idMatch ? idMatch[1] : null;
+            }
+            shopData.externalId = externalId;
+            shopData.shopId = externalId; // aligner le champ interne
+            if (externalId) {
+              logProgress(`✅ ID extrait: ${externalId} pour ${shopData.shopName || 'boutique'}`);
             }
           } catch (error) {
-            logProgress(`⚠️ Erreur extraction ID ligne: ${error.message}`);
+            logProgress(`⚠️ Erreur extraction external_id: ${error.message}`);
             shopData.shopId = null;
             shopData.externalId = null;
           }
@@ -241,8 +247,8 @@ async function extractAndSaveDetailsInParallel(extractor, shopRepo, shopsToProce
             logProgress(`🔄 Page rechargée pour ${shop.shopName}`);
           }
           
-          // Naviguer vers la page de détail de la boutique
-          const navSuccess = await extractor.navigateToShopDetail(shop.shopUrl);
+          // Naviguer vers la page de détail de la boutique (UUID externe requis)
+          const navSuccess = await extractor.navigateToShopDetail(shop.external_id);
           if (!navSuccess) {
             logProgress(`⚠️ Impossible de naviguer vers ${shop.shopName}`);
             errorCount++;
@@ -365,6 +371,30 @@ async function updateDatabase() {
     if (!loginSuccess) {
       logProgress('❌ Échec de la connexion');
       return;
+    }
+
+    // MODE CIBLÉ: Forcer un UUID pour la Phase 3 via variable d'environnement
+    const forcedId = process.env.TRENDTRACK_FORCE_ID;
+    if (forcedId) {
+      logProgress(`🎯 MODE CIBLÉ: Test Phase 3 sur UUID ${forcedId}`);
+      try {
+        // Navigation directe vers la page de détail FR trending-shops/{UUID}
+        const navOk = await extractor.navigateToShopDetail(forcedId);
+        if (!navOk) {
+          logProgress('❌ Navigation ciblée échouée');
+          return;
+        }
+        logProgress(`🔍 Extraction des détails de la boutique (ID TrendTrack: ${forcedId})...`);
+        const details = await extractor.extractShopDetails(forcedId);
+        if (details) {
+          logProgress('✅ Détails extraits (mode ciblé)');
+        } else {
+          logProgress('⚠️ Aucun détail extrait (mode ciblé)');
+        }
+      } catch (e) {
+        logProgress(`❌ Erreur mode ciblé: ${e.message}`);
+      }
+      return; // Fin du mode ciblé
     }
 
     // Vérifier s'il y a des boutiques qui ont besoin de la Phase 3
