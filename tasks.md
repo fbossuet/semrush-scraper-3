@@ -2,6 +2,25 @@
 
 ## Tâches Actives
 
+### ✅ P0-SEM-001: Remise en conformité du scraper SEM [P0] - TERMINÉ
+**Type**: Bug Fix / Compliance  
+**Dependencies**: .cursorrules, /specify, /specs  
+**Files**: `sem-scraper-final/api_client.py`, `sem-scraper-final/api_credentials.py`, `sem-scraper-final/production_scraper_parallel.py`  
+**Description**: Mise en conformité stricte du scraper SEM avec la documentation: exécution headless via Xvfb, user-agent Chrome récent, suppression du forçage de statut, capture centralisée des credentials et extraction robuste de la conversion.  
+**Implémentation**:
+- [x] Activer headless=True et conserver Xvfb
+- [x] Mettre un user-agent Chrome récent (compliant)
+- [x] Capturer dynamiquement credentials (interception fetch/XHR) et synchroniser vers backend centralisé
+- [x] Supprimer le fallback JS obsolète, utiliser `api_credentials.py`
+- [x] Retirer le forçage de statut `completed` côté worker (écriture `partial`, décision finale par API)
+- [x] Ajouter extraction `conversion_rate` via sélecteur stable `summary-cell conversion` (parsing `< 0.01%` et `0.23%`)
+- [x] Tests ciblés bodycakes.com et nike.com validés
+**Validation**:
+- [x] Logs montrent OverviewTrend OK, Summary OK (nike), conversion extraite (bodycakes=0.0)
+- [x] Statut non forcé côté worker (écrit `partial`)
+- [x] Conformité .cursorrules et /specify respectée
+**Résultat**: Conformité rétablie et stabilité accrue pour l’extraction des métriques SEM.  
+
 ### ✅ T076: Implémentation des métriques live_ads_7d et live_ads_30d [P1] - TERMINÉ
 **Type**: Feature  
 **Dependencies**: Aucune  
