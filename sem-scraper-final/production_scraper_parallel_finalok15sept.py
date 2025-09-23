@@ -390,7 +390,7 @@ class ParallelProductionScraper:
         # Configuration identique au scraper de production
         self.context = await playwright.chromium.launch_persistent_context(
             user_data_dir='./session-profile-shared',
-            headless=False,  # Pas de headless comme demandé
+            headless=True,  # Headless activé (conforme prod)
             args=[
                 '--no-sandbox',
                 '--disable-setuid-sandbox',

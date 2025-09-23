@@ -21,8 +21,8 @@ class APIClient:
         """
         Initialise l'APIClient avec récupération dynamique des credentials
         """
-        self.base_url = "https://sam.mytoolsplan.xyz/dpa/rpc"
-        self.engagement_base_url = "https://sam.mytoolsplan.xyz/analytics/ta/targ/v2/engagement"
+        self.base_url = "https://sam2.mytoolsplan.xyz/dpa/rpc"
+        self.engagement_base_url = "https://sam2.mytoolsplan.xyz/analytics/ta/targ/v2/engagement"
     
     async def call_rpc_api(self, page, method: str, params: dict, worker_id: int = 0):
         """
@@ -43,18 +43,18 @@ class APIClient:
         credentials = await self.get_dynamic_credentials(page, worker_id)
         
         
-        # Navigation vers sam.mytoolsplan.xyz/analytics/organic/overview/ (comme demandé par l'utilisateur)                                                                   
+        # Navigation vers sam2.mytoolsplan.xyz/analytics/organic/overview/ (comme demandé par l'utilisateur)                                                                   
         try:
-            await page.goto("https://sam.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=15000)                               
+            await page.goto("https://sam2.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=15000)                               
             await asyncio.sleep(2)
         except Exception as e:
-            logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam.mytoolsplan.xyz/analytics/organic/overview/ échouée: {e}")
-            logger.info(f"🔄 Worker {worker_id}: Tentative de navigation vers sam.mytoolsplan.xyz...")
+            logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam2.mytoolsplan.xyz/analytics/organic/overview/ échouée: {e}")
+            logger.info(f"🔄 Worker {worker_id}: Tentative de navigation vers sam2.mytoolsplan.xyz...")
             try:
-                await page.goto("https://sam.mytoolsplan.xyz", wait_until='domcontentloaded', timeout=15000)
+                await page.goto("https://sam2.mytoolsplan.xyz", wait_until='domcontentloaded', timeout=15000)
                 await asyncio.sleep(2)
             except Exception as e2:
-                logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam.mytoolsplan.xyz échouée: {e2}")
+                logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam2.mytoolsplan.xyz échouée: {e2}")
                 logger.info(f"🔄 Worker {worker_id}: Continuation sans navigation...")
         
         # Structure d'appel identique au code existant
@@ -129,7 +129,7 @@ class APIClient:
                 logger.info("🔄 Credentials synchronisés depuis le navigateur → backend")
         except Exception as sync_err:
             logger.warning(f"⚠️ Worker {worker_id}: Impossible de synchroniser les credentials capturés: {sync_err}")
-
+        
         return result
     
     async def call_engagement_api(self, page, domain: str, worker_id: int = 0):
@@ -148,30 +148,28 @@ class APIClient:
         # Nettoyer le domaine (comme dans le code existant)
         domain_clean = domain.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
         
-        # Navigation vers sam.mytoolsplan.xyz pour établir le contexte/session
+        # S'assurer d'être en même origine sur sam avant l'appel (comportement historique qui marchait)
         try:
-            await page.goto("https://sam.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=20000)
+            await page.goto("https://sam2.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=20000)
             await asyncio.sleep(1)
         except Exception as e:
-            logger.warning(f"⚠️ Worker {worker_id}: Navigation pré-engagement échouée: {e}")
-        
-        # Appel engagement avec cookies + en-têtes; retries pour contourner 418/antibot
-        api_url_abs = f"https://sam.mytoolsplan.xyz/analytics/ta/targ/v2/engagement?target={domain_clean}&device_type=desktop"
-        
+            logger.warning(f"⚠️ Worker {worker_id}: Préparation même-origine engagement échouée: {e}")
+
+        # Appel same-origin, URL relative, cookies inclus, sans headers additionnels
+        api_url_rel = f"/analytics/ta/targ/v2/engagement?target={domain_clean}&device_type=desktop"
+
         result = await page.evaluate("""
             async (data) => {
                 const attempt = async () => {
                     try {
+                        // Vérifier l'origine (doit être sam2.mytoolsplan.xyz)
+                        if (!location.host.includes('sam2.mytoolsplan.xyz')) {
+                            return { ok: false, error: 'wrong_origin:'+location.host };
+                        }
                         const response = await fetch(data.url, {
                             method: 'GET',
-                            headers: {
-                                'Accept': 'application/json, text/plain, */*',
-                                'Content-Type': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
                             credentials: 'include',
-                            cache: 'no-cache',
-                            mode: 'cors'
+                            cache: 'no-cache'
                         });
                         if (response.ok) {
                             const js = await response.json();
@@ -183,16 +181,14 @@ class APIClient:
                         return { ok: false, error: String(err) };
                     }
                 };
-                
-                // 3 tentatives avec petite attente
-                for (let i = 0; i < 3; i++) {
+                for (let i = 0; i < 2; i++) {
                     const res = await attempt();
                     if (res.ok) return { success: true, data: res.data };
-                    await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+                    await new Promise(r => setTimeout(r, 800 * (i + 1)));
                 }
                 return { success: false, error: 'engagement_retries_failed' };
             }
-        """, { 'url': api_url_abs })
+        """, { 'url': api_url_rel })
         
         if not result.get("success"):
             logger.error(f"❌ Worker {worker_id}: Erreur API engagement: {result.get('error')}")
@@ -225,10 +221,10 @@ class APIClient:
         except Exception as e:
             logger.error(f"❌ Worker {worker_id}: Erreur récupération credentials: {e}")
             # Fallback d'urgence avec les credentials fonctionnels
-            return {
+        return {
                 'userId': 27073915,
                 'apiKey': 'f11f04e4184a3d54c7c42eae3aa71d40'
-            }
+        }
 
     async def call_organic_summary_api(self, page, domain: str, worker_id: int = 0, target_date: Optional[str] = None):
         """
@@ -251,8 +247,8 @@ class APIClient:
         # 2. Nettoyer le domaine
         domain_clean = domain.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
 
-        # 3. Navigation vers sam.mytoolsplan.xyz/analytics/organic/overview/ (comme demandé)
-        await page.goto("https://sam.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=30000)
+        # 3. Navigation vers sam2.mytoolsplan.xyz/analytics/organic/overview/ (comme demandé)
+        await page.goto("https://sam2.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=30000)
         await asyncio.sleep(2)
 
         # 4. Utiliser la date passée en paramètre
@@ -342,18 +338,18 @@ class APIClient:
         # 2. Nettoyer le domaine
         domain_clean = domain.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
 
-        # 3. Navigation vers sam.mytoolsplan.xyz/analytics/organic/overview/
+        # 3. Navigation vers sam2.mytoolsplan.xyz/analytics/organic/overview/
         try:
-            await page.goto("https://sam.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=15000)
+            await page.goto("https://sam2.mytoolsplan.xyz/analytics/organic/overview/", wait_until='domcontentloaded', timeout=15000)
             await asyncio.sleep(2)
         except Exception as e:
-            logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam.mytoolsplan.xyz/analytics/organic/overview/ échouée: {e}")
-            logger.info(f"🔄 Worker {worker_id}: Tentative de navigation vers sam.mytoolsplan.xyz...")
+            logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam2.mytoolsplan.xyz/analytics/organic/overview/ échouée: {e}")
+            logger.info(f"🔄 Worker {worker_id}: Tentative de navigation vers sam2.mytoolsplan.xyz...")
             try:
-                await page.goto("https://sam.mytoolsplan.xyz", wait_until='domcontentloaded', timeout=15000)
+                await page.goto("https://sam2.mytoolsplan.xyz", wait_until='domcontentloaded', timeout=15000)
                 await asyncio.sleep(2)
             except Exception as e2:
-                logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam.mytoolsplan.xyz échouée: {e2}")
+                logger.warning(f"⚠️ Worker {worker_id}: Navigation vers sam2.mytoolsplan.xyz échouée: {e2}")
                 logger.info(f"🔄 Worker {worker_id}: Continuation sans navigation...")
 
         # 4. Utiliser la date passée en paramètre

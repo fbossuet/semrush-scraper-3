@@ -156,9 +156,9 @@ class ParallelProductionScraper:
             
             logger.info(f"🌐 Worker {self.worker_id}: Domaine nettoyé: {clean_domain}")
             
-            # Navigation vers sam.mytoolsplan.xyz pour les appels API (comme dans l'ancien code qui marchait)
-            logger.info(f"🌐 Worker {self.worker_id}: Navigation vers sam.mytoolsplan.xyz pour les appels API...")
-            await self.page.goto("https://sam.mytoolsplan.xyz/analytics/", wait_until='domcontentloaded', timeout=30000)
+            # Navigation vers sam2.mytoolsplan.xyz pour les appels API (comme dans l'ancien code qui marchait)
+            logger.info(f"🌐 Worker {self.worker_id}: Navigation vers sam2.mytoolsplan.xyz pour les appels API...")
+            await self.page.goto("https://sam2.mytoolsplan.xyz/analytics/", wait_until='domcontentloaded', timeout=30000)
             await asyncio.sleep(2)
             
             # Appel API organic.Summary
@@ -466,7 +466,7 @@ class ParallelProductionScraper:
                     logger.error(f"❌ Worker {self.worker_id}: Login échoué - Pas sur la page membre")
                     return False
 
-                # Synchroniser les cookies avec sam.mytoolsplan.xyz
+                # Synchroniser les cookies avec sam2.mytoolsplan.xyz
                 await self.sync_cookies_with_sam()
                 
                 # Injecter le capturer de credentials (interception fetch/XHR)
@@ -547,8 +547,8 @@ class ParallelProductionScraper:
             logger.warning(f"⚠️ Worker {self.worker_id}: Échec injection capturer credentials: {e}")
     
     async def sync_cookies_with_sam(self):
-        """Synchronisation des cookies avec sam.mytoolsplan.xyz (optimisée)"""
-        logger.info(f"🔄 Worker {self.worker_id}: Synchronisation des cookies avec sam.mytoolsplan.xyz...")
+        """Synchronisation des cookies avec sam2.mytoolsplan.xyz (optimisée)"""
+        logger.info(f"🔄 Worker {self.worker_id}: Synchronisation des cookies avec sam2.mytoolsplan.xyz...")
         
         try:
             # Récupérer les cookies d'authentification
@@ -558,7 +558,7 @@ class ParallelProductionScraper:
             logger.info(f"📊 Worker {self.worker_id}: Cookies récupérés: {len(cookies)} cookies")
             logger.info(f"🔍 Worker {self.worker_id}: {len(auth_cookies)} cookies d'authentification identifiés")
             
-            # Définir les cookies d'authentification ET les dupliquer pour le domaine sam.mytoolsplan.xyz
+            # Définir les cookies d'authentification ET les dupliquer pour le domaine sam2.mytoolsplan.xyz
             if auth_cookies:
                 # Ajout brut
                 await self.context.add_cookies(auth_cookies)
@@ -566,8 +566,8 @@ class ParallelProductionScraper:
                 sam_cookies = []
                 for c in auth_cookies:
                     dup = {k: v for k, v in c.items()}
-                    dup['domain'] = 'sam.mytoolsplan.xyz'
-                    dup['url'] = 'https://sam.mytoolsplan.xyz'
+                    dup['domain'] = 'sam2.mytoolsplan.xyz'
+                    dup['url'] = 'https://sam2.mytoolsplan.xyz'
                     # S'assurer d'une path par défaut
                     dup['path'] = '/'
                     sam_cookies.append(dup)
@@ -785,9 +785,9 @@ class ParallelProductionScraper:
             # Nettoyer le domaine
             domain_clean = domain.replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
             
-            # Navigation vers sam.mytoolsplan.xyz pour l'API engagement (comme dans l'ancien code qui marchait)
-            logger.info(f"🌐 Worker {self.worker_id}: Navigation vers sam.mytoolsplan.xyz pour l'API engagement...")
-            await self.page.goto("https://sam.mytoolsplan.xyz/analytics/", wait_until='domcontentloaded', timeout=30000)
+            # Navigation vers sam2.mytoolsplan.xyz pour l'API engagement (comme dans l'ancien code qui marchait)
+            logger.info(f"🌐 Worker {self.worker_id}: Navigation vers sam2.mytoolsplan.xyz pour l'API engagement...")
+            await self.page.goto("https://sam2.mytoolsplan.xyz/analytics/", wait_until='domcontentloaded', timeout=30000)
             await asyncio.sleep(2)
             
             api_url = f"/analytics/ta/targ/v2/engagement?target={domain_clean}&device_type=desktop"
@@ -1071,7 +1071,7 @@ class ParallelProductionScraper:
             logger.info(f"🔍 Worker {self.worker_id}: DEBUG - FID récupéré: {fid}")
             
             # 2. Navigation vers Traffic Analytics avec FID
-            target_url = f"https://sam.mytoolsplan.xyz/analytics/traffic/traffic-overview/?fid={fid}"
+            target_url = f"https://sam2.mytoolsplan.xyz/analytics/traffic/traffic-overview/?fid={fid}"
             logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Navigation vers: {target_url}")
             
             success = await self.navigate_with_smart_timeout(target_url, "Traffic Analytics Conversion")

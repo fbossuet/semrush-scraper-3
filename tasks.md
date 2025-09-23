@@ -372,20 +372,20 @@
 
 ## Métriques
 
-- **Total des tâches**: 11
+- **Total des tâches**: 12
 - **Tâches P0**: 2 (T001, T002)
 - **Tâches P1**: 2 (T003, T004, T005)
-- **Tâches P2**: 4 (T006, T007, T008, T009)
+- **Tâches P2**: 5 (T006, T007, T008, T009, T012)
 - **Tâches P3**: 1 (T010)
 - **Tâches P4**: 1 (T011)
 - **Tâches terminées**: 0
-- **Tâches en cours**: 11
+- **Tâches en cours**: 12
 - **Tâches en attente**: 0
 
 ---
 
-**Dernière mise à jour**: 2025-09-19 08:45:00 UTC  
-**Version**: 1.2.0
+**Dernière mise à jour**: 2025-09-23 11:30:00 UTC  
+**Version**: 1.3.0
 
 ### T009: Sauvegarde incrémentale par lots pour TrendTrack [P2]
 **Type**: Feature  
@@ -545,3 +545,54 @@ Exécuter ces commandes quand la base de données est bloquée par un lock.
 **Exemples de fichiers orphelins identifiés**:
 - ✅ `trendtrack-scraper-final/trendtrack.db` (supprimé - base orpheline)
 - [ ] Autres fichiers à identifier lors de l'audit complet
+
+### T012: Système de fallback login sam2 + récupération automatique credentials API [P2]
+**Type**: Feature  
+**Dependencies**: Aucune  
+**Files**: `sem-scraper-final/api_client.py`, `sem-scraper-final/api_credentials.py`, `sem-scraper-final/auth_manager.py`  
+**Description**: Implémenter un système de fallback automatique avec login sur sam2.mytoolsplan.xyz et récupération automatique des credentials API pour assurer la continuité du service.
+
+**Objectif**: Créer un système robuste qui bascule automatiquement vers sam2.mytoolsplan.xyz en cas d'échec sur sam.mytoolsplan.xyz et récupère automatiquement les nouveaux credentials API.
+
+**Implémentation**:
+- [ ] Créer un système de détection d'échec d'authentification sur sam.mytoolsplan.xyz
+- [ ] Implémenter un fallback automatique vers sam2.mytoolsplan.xyz
+- [ ] Développer un système de login automatique sur sam2.mytoolsplan.xyz
+- [ ] Créer un extracteur automatique de credentials API depuis sam2.mytoolsplan.xyz
+- [ ] Implémenter une mise à jour automatique des credentials dans api_credentials.py
+- [ ] Ajouter un système de validation des nouveaux credentials
+- [ ] Créer un système de notification en cas de changement de credentials
+- [ ] Implémenter un rollback automatique en cas d'échec du fallback
+- [ ] Ajouter des logs détaillés pour le suivi des basculements
+- [ ] Tester le système de fallback avec différents scénarios d'échec
+
+**Validation**:
+- [ ] Le système détecte automatiquement les échecs d'authentification
+- [ ] Le basculement vers sam2.mytoolsplan.xyz fonctionne automatiquement
+- [ ] Le login automatique sur sam2.mytoolsplan.xyz est opérationnel
+- [ ] La récupération automatique des credentials API fonctionne
+- [ ] La mise à jour des credentials est transparente
+- [ ] Le système de validation des credentials est fiable
+- [ ] Les notifications de changement sont envoyées correctement
+- [ ] Le rollback automatique fonctionne en cas de problème
+- [ ] Les logs permettent un suivi complet des opérations
+
+**Critères de succès**:
+- Basculement automatique fonctionnel (sam → sam2)
+- Login automatique sur sam2.mytoolsplan.xyz opérationnel
+- Récupération automatique des credentials API fiable
+- Mise à jour transparente des credentials
+- Système de validation robuste
+- Notifications automatiques en cas de changement
+- Rollback automatique en cas d'échec
+- Logs détaillés pour le monitoring
+- Tests de régression passants
+- Documentation complète du système de fallback
+
+**Technical Details**:
+- **URLs de fallback**: sam.mytoolsplan.xyz → sam2.mytoolsplan.xyz
+- **Méthode de détection**: Timeout, erreurs HTTP 401/403, erreurs d'authentification
+- **Extraction credentials**: Interception fetch/XHR, parsing des réponses API
+- **Validation**: Test des credentials sur les endpoints critiques
+- **Notification**: Logs + alertes système
+- **Rollback**: Retour automatique vers sam.mytoolsplan.xyz si sam2 échoue

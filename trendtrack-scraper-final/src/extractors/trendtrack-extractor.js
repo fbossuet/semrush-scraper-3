@@ -450,6 +450,49 @@ export class TrendTrackExtractor extends BaseExtractor {
         shopData.totalProducts = null;
       }
 
+      // 🆕 Extraction de l'année de fondation (Phase 1 - page de liste)
+      try {
+        console.log(`🔍 Extraction année de fondation pour ${shopData.shopName}...`);
+        
+        // Chercher dans la cellule d'info de la boutique (cellule 1)
+        const shopInfoHtml = await cells[1].innerHTML();
+        
+        // Patterns pour l'année de fondation
+        const yearPatterns = [
+          /founded[:\s]*(\d{4})/i,
+          /since[:\s]*(\d{4})/i,
+          /established[:\s]*(\d{4})/i,
+          /created[:\s]*(\d{4})/i,
+          /(\d{4})[:\s]*founded/i,
+          /(\d{4})[:\s]*since/i,
+          /(\d{4})[:\s]*established/i,
+          /(\d{4})[:\s]*created/i
+        ];
+        
+        let yearFounded = null;
+        for (const pattern of yearPatterns) {
+          const match = shopInfoHtml.match(pattern);
+          if (match && match[1]) {
+            const year = parseInt(match[1]);
+            if (year >= 1990 && year <= new Date().getFullYear()) {
+              yearFounded = year;
+              console.log(`📅 Année de fondation trouvée: ${yearFounded}`);
+              break;
+            }
+          }
+        }
+        
+        shopData.yearFounded = yearFounded;
+        
+        if (!yearFounded) {
+          console.log(`⚠️ Aucune année de fondation trouvée pour ${shopData.shopName}`);
+        }
+        
+      } catch (error) {
+        console.error(`⚠️ Erreur extraction année de fondation pour ${shopData.shopName}:`, error.message);
+        shopData.yearFounded = null;
+      }
+
 
 
       // Ajouter les données de trafic par pays si demandé
@@ -626,6 +669,12 @@ export class TrendTrackExtractor extends BaseExtractor {
       });
       
       await this.page.waitForTimeout(2000);
+      // Détection page login
+      const isLogin = await this.isLoginPage();
+      if (isLogin) {
+        console.log('❌ Redirection vers login détectée après navigation');
+        return false;
+      }
       
       const currentUrl = this.page.url();
       if (currentUrl.includes(`/trending-shops/${shopId}`)) {
@@ -638,6 +687,24 @@ export class TrendTrackExtractor extends BaseExtractor {
       
     } catch (error) {
       console.error(`❌ Erreur navigation détail: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Vérifie si la page courante est la page de login TrendTrack
+   * @returns {Promise<boolean>}
+   */
+  async isLoginPage() {
+    try {
+      const url = this.page.url();
+      if (url.includes('/login')) return true;
+      const title = await this.page.title();
+      if ((title || '').toLowerCase().includes('login')) return true;
+      // Vérifier présence du formulaire de login
+      const hasLoginForm = await this.page.locator('input[type="email"], input[name="email"]').first().count();
+      return hasLoginForm > 0;
+    } catch {
       return false;
     }
   }
@@ -685,8 +752,8 @@ export class TrendTrackExtractor extends BaseExtractor {
         pixel_google: pixelData.pixel_google,
         pixel_facebook: pixelData.pixel_facebook,
         
-        // Année de fondation
-        year_founded: await this.extractYearFounded(),
+        // Année de fondation (extraite en Phase 1, pas en Phase 3)
+        year_founded: null,
         
         // AOV (Average Order Value)
         aov: await this.extractAOV(),
@@ -1832,39 +1899,52 @@ export class TrendTrackExtractor extends BaseExtractor {
    */
   async extractLiveAds7d() {
     try {
-      console.log('🔍 Extraction live_ads_7d (Phase 3 - Cellule 5)...');
+      console.log('🔍 Extraction live_ads_7d (Phase 3 - .flex.items-center.gap-2)...');
       
-      // Attendre que le tableau soit chargé
-      await this.page.waitForSelector('table tbody tr', { timeout: 10000 });
-      
-      // Récupérer toutes les lignes du tableau
-      const rows = await this.page.locator('table tbody tr').all();
-      
-      if (rows.length === 0) {
-        console.log('⚠️ Aucune ligne trouvée dans le tableau');
-        return 0;
-      }
-      
-      // Prendre la première ligne (ou la ligne appropriée selon la structure)
-      const firstRow = rows[0];
-      const cells = await firstRow.locator('td').all();
-      
-      if (cells.length < 6) {
-        console.log('⚠️ Pas assez de cellules dans la ligne');
-        return 0;
-      }
-      
-      // Extraire depuis la cellule 5 (index 4)
-      const liveAds7dElement = await cells[4].locator('p').first();
-      if (await liveAds7dElement.count() > 0) {
-        const liveAds7dText = await liveAds7dElement.textContent();
-        const value = this.parseNumber(liveAds7dText);
-        console.log(`📊 Live ads 7d extrait (Phase 3): ${value}`);
-        return value;
-      } else {
-        console.log('⚠️ Aucun élément <p> trouvé dans la cellule 5 pour live_ads_7d');
-        return 0;
-      }
+      const metrics = await this.page.evaluate(() => {
+        const results = {};
+        
+        // Chercher tous les éléments contenant les périodes et pourcentages
+        const periodElements = document.querySelectorAll('.flex.items-center.gap-2');
+        
+        periodElements.forEach(element => {
+          const text = element.textContent;
+          
+          // Vérifier si c'est un élément de période (contient "7d", "30d", etc.)
+          if (text.includes('d') && text.includes('%')) {
+            
+            // Extraire la période (7d, 30d)
+            const periodMatch = text.match(/(\d+d)/);
+            
+            // Extraire le pourcentage avec son signe
+            const percentageMatch = text.match(/([+-]?\d+)%/);
+            
+            if (periodMatch && percentageMatch) {
+              const period = periodMatch[1]; // "7d" ou "30d"
+              let value = parseInt(percentageMatch[1]); // -22 ou 2
+              
+              // Appliquer les transformations
+              if (period === '7d') {
+                // Pour 7d: -22% → 22 (enlever le signe négatif)
+                value = Math.abs(value);
+              } else if (period === '30d') {
+                // Pour 30d: 2% → 2 (garder tel quel)
+                value = value;
+              }
+              
+              results[period] = value;
+              
+              console.log(`${period}: ${percentageMatch[1]}% → transformé en: ${value}`);
+            }
+          }
+        });
+        
+        return results;
+      });
+
+      const value = metrics['7d'] || 0;
+      console.log(`📊 Live ads 7d extrait (Phase 3): ${value}`);
+      return value;
       
     } catch (error) {
       console.log(`❌ Erreur extraction live_ads_7d (Phase 3): ${error.message}`);
@@ -1879,68 +1959,52 @@ export class TrendTrackExtractor extends BaseExtractor {
    */
   async extractLiveAds30d() {
     try {
-      console.log('🔍 Extraction live_ads_30d (Phase 3 - Cellule 6)...');
+      console.log('🔍 Extraction live_ads_30d (Phase 3 - .flex.items-center.gap-2)...');
       
-      // Attendre que le tableau soit chargé
-      await this.page.waitForSelector('table tbody tr', { timeout: 10000 });
-      
-      // Récupérer toutes les lignes du tableau
-      const rows = await this.page.locator('table tbody tr').all();
-      
-      if (rows.length === 0) {
-        console.log('⚠️ Aucune ligne trouvée dans le tableau');
-        return 0;
-      }
-      
-      // Prendre la première ligne (ou la ligne appropriée selon la structure)
-      const firstRow = rows[0];
-      const cells = await firstRow.locator('td').all();
-      
-      if (cells.length < 7) {
-        console.log('⚠️ Pas assez de cellules dans la ligne');
-        return 0;
-      }
-      
-      // Extraire depuis la cellule 6 (index 5)
-      // La cellule 6 a une structure HTML différente selon la spécification
-      const cell6 = cells[5];
-      
-      // Essayer différents sélecteurs selon la spécification
-      let liveAds30dText = null;
-      
-      // 1. Essayer avec un élément <p> (au cas où)
-      const pElement = await cell6.locator('p').first();
-      if (await pElement.count() > 0) {
-        liveAds30dText = await pElement.textContent();
-        console.log('📊 Live ads 30d trouvé avec sélecteur <p>');
-      } else {
-        // 2. Essayer avec un élément <div>
-        const divElement = await cell6.locator('div').first();
-        if (await divElement.count() > 0) {
-          liveAds30dText = await divElement.textContent();
-          console.log('📊 Live ads 30d trouvé avec sélecteur <div>');
-        } else {
-          // 3. Essayer avec un élément <span>
-          const spanElement = await cell6.locator('span').first();
-          if (await spanElement.count() > 0) {
-            liveAds30dText = await spanElement.textContent();
-            console.log('📊 Live ads 30d trouvé avec sélecteur <span>');
-          } else {
-            // 4. Essayer de récupérer le textContent direct de la cellule
-            liveAds30dText = await cell6.textContent();
-            console.log('📊 Live ads 30d trouvé avec textContent direct');
+      const metrics = await this.page.evaluate(() => {
+        const results = {};
+        
+        // Chercher tous les éléments contenant les périodes et pourcentages
+        const periodElements = document.querySelectorAll('.flex.items-center.gap-2');
+        
+        periodElements.forEach(element => {
+          const text = element.textContent;
+          
+          // Vérifier si c'est un élément de période (contient "7d", "30d", etc.)
+          if (text.includes('d') && text.includes('%')) {
+            
+            // Extraire la période (7d, 30d)
+            const periodMatch = text.match(/(\d+d)/);
+            
+            // Extraire le pourcentage avec son signe
+            const percentageMatch = text.match(/([+-]?\d+)%/);
+            
+            if (periodMatch && percentageMatch) {
+              const period = periodMatch[1]; // "7d" ou "30d"
+              let value = parseInt(percentageMatch[1]); // -22 ou 2
+              
+              // Appliquer les transformations
+              if (period === '7d') {
+                // Pour 7d: -22% → 22 (enlever le signe négatif)
+                value = Math.abs(value);
+              } else if (period === '30d') {
+                // Pour 30d: 2% → 2 (garder tel quel)
+                value = value;
+              }
+              
+              results[period] = value;
+              
+              console.log(`${period}: ${percentageMatch[1]}% → transformé en: ${value}`);
+            }
           }
-        }
-      }
-      
-      if (liveAds30dText) {
-        const value = this.parseNumber(liveAds30dText);
-        console.log(`📊 Live ads 30d extrait (Phase 3): ${value}`);
-        return value;
-      } else {
-        console.log('⚠️ Aucun contenu trouvé dans la cellule 6 pour live_ads_30d');
-        return 0;
-      }
+        });
+        
+        return results;
+      });
+
+      const value = metrics['30d'] || 0;
+      console.log(`📊 Live ads 30d extrait (Phase 3): ${value}`);
+      return value;
 
     } catch (error) {
       console.log(`❌ Erreur extraction live_ads_30d (Phase 3): ${error.message}`);

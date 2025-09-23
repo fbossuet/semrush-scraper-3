@@ -75,8 +75,8 @@ Récupérer les métriques de progression des live ads pour une analyse temporel
 
 ### Test d'Extraction
 - ✅ **Live Ads** : Récupéré avec succès depuis la page de liste (Phase 1)
-- ✅ **Live Ads 7d** : Récupéré avec succès depuis la page de détail (Phase 3) (valeurs : 670, 982, 2, 3, 658, etc.)
-- ❌ **Live Ads 30d** : Structure HTML différente dans la cellule 6 (pas d'élément <p>)
+- ✅ **Live Ads 7d** : Récupéré avec succès depuis la page de détail (Phase 3) avec sélecteur `.flex.items-center.gap-2` (valeurs : 62, 0, 5, 1, etc.)
+- ✅ **Live Ads 30d** : Récupéré avec succès depuis la page de détail (Phase 3) avec sélecteur `.flex.items-center.gap-2` (valeurs : -35, -10, 10, 29, etc.)
 
 ### Test de Sauvegarde
 - ✅ **Base de données** : 150 boutiques avec métriques live_ads_7d
@@ -99,11 +99,56 @@ Récupérer les métriques de progression des live ads pour une analyse temporel
 
 - **Phase d'extraction** : 
   - `live_ads` : **Phase 1** (page de liste) - Cellule 7
-  - `live_ads_7d` : **Phase 3** (page de détail) - Cellule 5
-  - `live_ads_30d` : **Phase 3** (page de détail) - Cellule 6
-- **Source** : Cellules 5, 6 et 7 du tableau des boutiques tendances
+  - `live_ads_7d` : **Phase 3** (page de détail) - Sélecteur `.flex.items-center.gap-2`
+  - `live_ads_30d` : **Phase 3** (page de détail) - Sélecteur `.flex.items-center.gap-2`
+- **Source** : Cellule 7 du tableau + éléments `.flex.items-center.gap-2` sur page de détail
 - **Mapping** : Les IDs des boutiques sont extraits en Phase 1 et utilisés en Phase 3
-- **Structure HTML** : La cellule 6 a une structure différente (pas d'élément `<p>`)
+- **Structure HTML** : Les métriques 7d/30d sont dans des éléments flex avec parsing de texte
+
+## Nouveaux Sélecteurs Live Ads (2025-01-23)
+
+### Sélecteur Principal
+```javascript
+// Sélecteur pour live_ads_7d et live_ads_30d
+const periodElements = document.querySelectorAll('.flex.items-center.gap-2');
+```
+
+### Logique d'Extraction
+```javascript
+periodElements.forEach(element => {
+  const text = element.textContent;
+  
+  // Vérifier si c'est un élément de période (contient "7d", "30d", etc.)
+  if (text.includes('d') && text.includes('%')) {
+    
+    // Extraire la période (7d, 30d)
+    const periodMatch = text.match(/(\d+d)/);
+    
+    // Extraire le pourcentage avec son signe
+    const percentageMatch = text.match(/([+-]?\d+)%/);
+    
+    if (periodMatch && percentageMatch) {
+      const period = periodMatch[1]; // "7d" ou "30d"
+      let value = parseInt(percentageMatch[1]); // -22 ou 2
+      
+      // Appliquer les transformations
+      if (period === '7d') {
+        // Pour 7d: -22% → 22 (enlever le signe négatif)
+        value = Math.abs(value);
+      } else if (period === '30d') {
+        // Pour 30d: 2% → 2 (garder tel quel)
+        value = value;
+      }
+      
+      results[period] = value;
+    }
+  }
+});
+```
+
+### Exemples de Données Extraites
+- **live_ads_7d** : `62`, `0`, `5`, `1`, `19`, `3`
+- **live_ads_30d** : `-35`, `-10`, `10`, `29`, `66`, `5`
 
 ## Solution API pour les Données Géographiques
 
