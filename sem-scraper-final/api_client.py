@@ -110,6 +110,26 @@ class APIClient:
             logger.error(f"❌ Worker {worker_id}: Erreur API {method}: {result['error']}")
             return None
         
+        # Après l'appel, tenter de récupérer d'éventuels credentials capturés côté navigateur
+        try:
+            captured = await page.evaluate("""
+                () => {
+                    try {
+                        if (window.semrushCapturer && typeof window.semrushCapturer.getCredentials === 'function') {
+                            const creds = window.semrushCapturer.getCredentials();
+                            return creds && creds.isComplete ? creds : null;
+                        }
+                        return null;
+                    } catch (e) { return null; }
+                }
+            """)
+            if captured and captured.get('isComplete'):
+                from api_credentials import set_captured_credentials
+                set_captured_credentials(user_id=int(captured.get('userId')), api_key=str(captured.get('apiKey')), source='captured_browser')
+                logger.info("🔄 Credentials synchronisés depuis le navigateur → backend")
+        except Exception as sync_err:
+            logger.warning(f"⚠️ Worker {worker_id}: Impossible de synchroniser les credentials capturés: {sync_err}")
+
         return result
     
     async def call_engagement_api(self, page, domain: str, worker_id: int = 0):
@@ -165,79 +185,33 @@ class APIClient:
     
     async def get_dynamic_credentials(self, page, worker_id: int = 0):
         """
-        Récupère les credentials dynamiquement depuis le navigateur.
-        Basé sur le code JavaScript fourni par l'utilisateur.
+        Récupère les credentials depuis api_credentials.py (centralisé).
         
         Args:
-            page: Page Playwright
+            page: Page Playwright (non utilisé, gardé pour compatibilité)
             worker_id: ID du worker pour les logs
             
         Returns:
-            dict: Credentials récupérés ou fallback
+            dict: Credentials depuis api_credentials.py
         """
         try:
-            credentials = await page.evaluate("""
-                () => {
-                    try {
-                        console.log('🔍 Récupération des credentials...');
-                        
-                        // Chercher dans localStorage
-                        const authToken = localStorage.getItem('auth_token') || localStorage.getItem('semrush_token');
-                        const userId = localStorage.getItem('user_id') || localStorage.getItem('semrush_user_id');
-                        
-                        // Chercher dans sessionStorage
-                        const sessionAuth = sessionStorage.getItem('auth_token') || sessionStorage.getItem('semrush_credentials');
-                        
-                        // Chercher dans les cookies
-                        const cookies = document.cookie.split(';').reduce((acc, cookie) => {
-                            const [key, value] = cookie.trim().split('=');
-                            acc[key] = value;
-                            return acc;
-                        }, {});
-                        
-                        // Essayer window global
-                        const windowAuth = window.user_credentials || window.semrushAuth || window.authData;
-                        
-                        console.log('📊 Credentials trouvés:', {
-                            localStorage: !!authToken,
-                            sessionStorage: !!sessionAuth,
-                            cookies: Object.keys(cookies).filter(k => k.includes('auth') || k.includes('semrush') || k.includes('user')),
-                            window: !!windowAuth
-                        });
-                        
-                        console.log('🍪 Tous les cookies:', Object.keys(cookies));
-                        
-                        // Utiliser les plus récents - privilégier la session
-                                   const credentials = {
-                                       apiKey: authToken || sessionAuth || cookies.auth_token || cookies.semrush_api_key || "705c3b39fcbc4a952f1b924e53a00b25",
-                                       userId: parseInt(userId) || parseInt(cookies.user_id) || parseInt(cookies.semrush_user_id) || 26970955,
-                                       lastUpdate: new Date().toISOString()
-                                   };
-                        
-                        return credentials;
-                        
-                    } catch (error) {
-                        console.error('❌ Erreur récupération credentials:', error);
-                        // Fallback sur credentials par défaut
-                                   return {
-                                       apiKey: "705c3b39fcbc4a952f1b924e53a00b25",
-                                       userId: 26970955,
-                                       lastUpdate: new Date().toISOString()
-                                   };
-                    }
-                }
-            """)
+            # Utiliser directement les credentials centralisés
+            from api_credentials import get_credentials_dict
+            credentials = get_credentials_dict()
+            
+            logger.info(f"✅ Worker {worker_id}: Credentials récupérés depuis api_credentials.py")
+            logger.info(f"   User ID: {credentials['userId']}")
+            logger.info(f"   API Key: {credentials['apiKey'][:8]}...")
             
             return credentials
             
         except Exception as e:
             logger.error(f"❌ Worker {worker_id}: Erreur récupération credentials: {e}")
-            # Fallback sur credentials par défaut
-        return {
-            'apiKey': "705c3b39fcbc4a952f1b924e53a00b25",
-            'userId': 26970955,
-            'lastUpdate': int(time.time() * 1000)
-        }
+            # Fallback d'urgence avec les credentials fonctionnels
+            return {
+                'userId': 27073915,
+                'apiKey': 'f11f04e4184a3d54c7c42eae3aa71d40'
+            }
 
     async def call_organic_summary_api(self, page, domain: str, worker_id: int = 0, target_date: Optional[str] = None):
         """

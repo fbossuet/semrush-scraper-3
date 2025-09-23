@@ -393,7 +393,7 @@ class ParallelProductionScraper:
         # Configuration identique au scraper de production
         self.context = await playwright.chromium.launch_persistent_context(
             user_data_dir='./session-profile-shared',
-            headless=False,  # Pas de headless comme demandé
+            headless=True,  # Headless activé (Xvfb gère l'affichage)
             args=[
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -404,10 +404,13 @@ class ParallelProductionScraper:
                 '--disable-gpu',
                 '--disable-background-timer-throttling',
                 '--disable-backgrounding-occluded-windows',
-                '--disable-renderer-backgrounding'
+                '--disable-renderer-backgrounding',
+                '--ignore-certificate-errors',
+                '--window-size=1920,1080',
+                '--enable-features=NetworkService,NetworkServiceInProcess'
             ],
             viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            user_agent='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
         )
         
         self.page = await self.context.new_page()
@@ -458,6 +461,9 @@ class ParallelProductionScraper:
                 # Synchroniser les cookies avec sam.mytoolsplan.xyz
                 await self.sync_cookies_with_sam()
                 
+                # Injecter le capturer de credentials (interception fetch/XHR)
+                await self.inject_credential_capturer()
+                
                 logger.info(f"✅ Worker {self.worker_id}: Authentification terminée")
                 return True
 
@@ -487,7 +493,50 @@ class ParallelProductionScraper:
                 return False
             
             logger.info(f"✅ Worker {self.worker_id}: Authentification terminée par Worker 0")
+            # S'assurer que le capturer est injecté pour les autres workers aussi
+            await self.inject_credential_capturer()
             return True
+
+    async def inject_credential_capturer(self):
+        """Injecte un script côté navigateur pour capturer apiKey/userId dans les requêtes réseau."""
+        try:
+            script_content = (
+                "(function(){\n" 
+                "if (window.semrushCapturer && window.semrushCapturer.getStatus) { return; }\n" 
+                "class SemrushCredentialCapturer {\n"
+                "  constructor(){ this.credentials={apiKey:null,userId:null}; this.originalFetch=null; this.originalXHR=null; }\n"
+                "  init(){ this.setupNetworkInterception(); }\n"
+                "  setupNetworkInterception(){\n"
+                "    // Interception FETCH\n"
+                "    this.originalFetch = window.fetch;\n"
+                "    const self=this;\n"
+                "    window.fetch = function(url, options){ try{ self.analyzeRequest(url, options||{}); }catch(e){} return self.originalFetch.apply(this, arguments); };\n"
+                "    // Interception XHR\n"
+                "    this.originalXHR = window.XMLHttpRequest;\n"
+                "    window.XMLHttpRequest = function(){ const xhr = new self.originalXHR(); const send=xhr.send; xhr.send = function(data){ try{ if(data){ self.analyzeXHRData(data); } }catch(e){} return send.apply(this, arguments); }; return xhr; };\n"
+                "  }\n"
+                "  analyzeRequest(url, options){ try{ if(typeof url==='string'){ this.extractFromUrl(url); } if(options && options.body){ this.extractFromBody(options.body); } }catch(e){} }\n"
+                "  analyzeXHRData(data){ try{ if(data){ this.extractFromBody(data); } }catch(e){} }\n"
+                "  extractFromUrl(url){ try{ const apiKeyMatch = url.match(/(?:api_?key|key)=([a-f0-9]{32})/i); if(apiKeyMatch){ this.updateApiKey(apiKeyMatch[1]); } const userIdMatch = url.match(/(?:user_?id|userId)=(\d+)/i); if(userIdMatch){ this.updateUserId(userIdMatch[1]); } }catch(e){} }\n"
+                "  extractFromBody(body){ try{ let dataStr = (typeof body==='string')? body : JSON.stringify(body); let obj=null; try{ obj=JSON.parse(dataStr); }catch(e){} if(obj){ this.extractFromObject(obj); } this.extractFromString(dataStr); }catch(e){} }\n"
+                "  extractFromObject(obj){ const self=this; function walk(o){ if(!o||typeof o!=='object') return; Object.keys(o).forEach(k=>{ const v=o[k]; if((k.toLowerCase().includes('api')||k.toLowerCase().includes('key')) && typeof v==='string' && /^[a-f0-9]{32}$/i.test(v)){ self.updateApiKey(v); } if((k.toLowerCase().includes('user')||k.toLowerCase().includes('id')) && ((typeof v==='number')||(typeof v==='string'&&/^\d+$/.test(v)))){ self.updateUserId(String(v)); } if(typeof v==='object'){ walk(v); } }); } walk(obj); }\n"
+                "  extractFromString(str){ const apiKeyMatches = str.match(/[a-f0-9]{32}/gi)||[]; apiKeyMatches.forEach(m=>this.updateApiKey(m)); const userIdMatches = str.match(/\b\d{6,10}\b/g)||[]; userIdMatches.forEach(m=>{ if(!this.credentials.userId){ this.updateUserId(m); } }); }\n"
+                "  updateApiKey(k){ if(!k||this.credentials.apiKey===k) return; this.credentials.apiKey=k; }\n"
+                "  updateUserId(u){ if(!u||this.credentials.userId===u) return; this.credentials.userId=u; }\n"
+                "  getCredentials(){ return { apiKey:this.credentials.apiKey, userId:this.credentials.userId, isComplete: !!(this.credentials.apiKey && this.credentials.userId) }; }\n"
+                "  getStatus(){ return this.getCredentials(); }\n"
+                "  reset(){ this.credentials={apiKey:null,userId:null}; }\n"
+                "}\n"
+                "window.semrushCapturer = new SemrushCredentialCapturer();\n"
+                "window.semrushCapturer.init();\n"
+                "})();"
+            )
+            await self.page.add_init_script(script_content)
+            # Aussi injecter dans le contexte actuel
+            await self.page.add_script_tag(content=script_content)
+            logger.info(f"✅ Worker {self.worker_id}: Capturer de credentials injecté")
+        except Exception as e:
+            logger.warning(f"⚠️ Worker {self.worker_id}: Échec injection capturer credentials: {e}")
     
     async def sync_cookies_with_sam(self):
         """Synchronisation des cookies avec sam.mytoolsplan.xyz (optimisée)"""
@@ -1129,7 +1178,31 @@ class ParallelProductionScraper:
                 dom_debug_2 = await self.page.evaluate("() => ({ allElements: document.querySelectorAll('*').length, hasContent: document.body.textContent.length > 100 })")
                 logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Après attente supplémentaire: {dom_debug_2}")
             
-            # 8. Scraping Purchase Conversion via JavaScript (approche data-testid)
+            # 8. Tentative directe via sélecteur stable (summary-cell conversion)
+            try:
+                selector = 'div[data-testid="summary-cell conversion"] span[data-testid="value"]'
+                elem = await self.page.wait_for_selector(selector, timeout=5000)
+                if elem:
+                    txt = (await elem.inner_text() or '').strip()
+                    if txt:
+                        import re
+                        m = re.search(r'(\d+\.?\d*|<\s*0\.\d+)%', txt)
+                        if m:
+                            val = m.group(1)
+                            if val.startswith('<'):
+                                num_match = re.search(r'0\.\d+', val)
+                                if num_match:
+                                    num = float(num_match.group(0))
+                                    return str(num/100)
+                            else:
+                                num = float(val)
+                                return str(num/100)
+                        # Si pas de %, retourner brut si pertinent
+                        logger.info(f"ℹ️ Worker {self.worker_id}: Conversion brute lue: {txt}")
+            except Exception as _:
+                pass
+
+            # 9. Scraping Purchase Conversion via JavaScript (approche data-testid)
             logger.info(f"🔍 Worker {self.worker_id}: DEBUG - Tentative scraping via JavaScript (approche table + data-testid)...")
             
             conversion_data = await self.page.evaluate(f"""
@@ -1633,9 +1706,10 @@ class ParallelProductionScraper:
                         
                         # Enregistrer en BDD
                         analytics_data = self.format_analytics_for_api()
-                        status = 'completed' if self.session_data['data'].get('domain_overview') else 'partial'
+                        # Ne pas forcer 'completed' ici; par défaut marquer 'partial' côté worker,
+                        # et laisser trendtrack_api déterminer le statut final selon les métriques.
                         api.update_shop_analytics(shop_id, analytics_data)
-                        logger.info(f"💾 Worker {self.worker_id}: {domain} enregistré en BDD avec statut '{status}'")
+                        logger.info(f"💾 Worker {self.worker_id}: {domain} enregistré en BDD avec statut 'partial' (détermination finale par API)")
                     else:
                         logger.warning(f"⚠️ Worker {self.worker_id}: {domain} échoué")
                         

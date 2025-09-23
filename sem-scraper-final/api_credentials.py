@@ -29,13 +29,13 @@ class APICredentials:
             user_id = os.getenv('SAM_USER_ID') or os.getenv('MYTOOLSPLAN_USER_ID')
             api_key = os.getenv('SAM_API_KEY') or os.getenv('MYTOOLSPLAN_API_KEY')
             
-            # Fallbacks sécurisés (credentials actuels du scraper)
+            # Fallbacks sécurisés (credentials fonctionnels du 15 septembre)
             if not user_id:
-                user_id = '26931056'  # Credential actuel du scraper
+                user_id = '27073915'  # Credential fonctionnel du 15 septembre
                 logger.warning("⚠️ SAM_USER_ID non défini, utilisation du fallback")
             
             if not api_key:
-                api_key = '943cfac719badc2ca14126e08b8fe44f'  # Credential actuel du scraper
+                api_key = 'f11f04e4184a3d54c7c42eae3aa71d40'  # Credential fonctionnel du 15 septembre
                 logger.warning("⚠️ SAM_API_KEY non définie, utilisation du fallback")
             
             # Validation des credentials
@@ -59,10 +59,10 @@ class APICredentials:
             
         except Exception as e:
             logger.error(f"❌ Erreur lors du chargement des credentials: {e}")
-            # Fallback d'urgence
+            # Fallback d'urgence (credentials fonctionnels du 15 septembre)
             self._credentials = {
-                'userId': 26931056,
-                'apiKey': '943cfac719badc2ca14126e08b8fe44f',
+                'userId': 27073915,
+                'apiKey': 'f11f04e4184a3d54c7c42eae3aa71d40',
                 'source': 'emergency_fallback'
             }
             logger.warning("🚨 Utilisation du fallback d'urgence")
@@ -99,6 +99,24 @@ class APICredentials:
         if not self._credentials:
             self._load_credentials()
         return self._credentials.get('source', 'unknown')
+    
+    def update_credentials(self, user_id: int, api_key: str, source: str = 'captured') -> None:
+        """Met à jour les credentials dynamiquement (ex: capture réseau côté navigateur).
+        Valide les valeurs et remplace le cache interne pour les appels suivants."""
+        try:
+            user_id_int = int(user_id)
+        except (TypeError, ValueError):
+            raise ValueError(f"USER_ID invalide: {user_id}")
+        if not api_key or not isinstance(api_key, str) or len(api_key) < 10:
+            raise ValueError("API_KEY invalide (trop courte ou vide)")
+        self._credentials = {
+            'userId': user_id_int,
+            'apiKey': api_key,
+            'source': source or 'captured'
+        }
+        logger.info("✅ Credentials mis à jour dynamiquement (source=%s)", self._credentials['source'])
+        logger.info("   User ID: %s", user_id_int)
+        logger.info("   API Key: %s...", api_key[:8])
     
     def is_from_environment(self) -> bool:
         """Vérifie si les credentials viennent des variables d'environnement"""
@@ -140,6 +158,11 @@ def get_credentials_dict() -> Dict[str, Any]:
         dict: Credentials au format {'userId': int, 'apiKey': str}
     """
     return get_api_credentials().get_credentials()
+
+def set_captured_credentials(user_id: int, api_key: str, source: str = 'captured') -> None:
+    """Fonction utilitaire pour pousser des credentials capturés vers le gestionnaire centralisé."""
+    creds = get_api_credentials()
+    creds.update_credentials(user_id=user_id, api_key=api_key, source=source)
 
 # Test en isolation
 if __name__ == "__main__":
