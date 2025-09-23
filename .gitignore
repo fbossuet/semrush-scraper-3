@@ -10,6 +10,8 @@ session-profile-shared/
 *backup*.*
 *test*.*
 *clean*.*
+trendtrack-scraper-final/data/trendtrack.db-shm
+trendtrack-scraper-final/data/trendtrack.db-wal
 
 # Ignorer backups et temporaires
 *.backup*
