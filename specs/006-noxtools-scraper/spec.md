@@ -126,10 +126,15 @@ En tant qu'analyste de données, je veux que le système de scraping Noxtools r�
 - **Base de Données Partagée** : Base SQLite partagée entre les systèmes TrendTrack, SEM et Noxtools
 
 ### Standards de Format de Données
-- **Dates** : Toutes les dates DOIVENT être au format ISO 8601 UTC (ex: "2025-01-18T10:30:45.123Z")
-- **Python** : Utiliser `datetime.now(timezone.utc).isoformat()`
+- **Dates pour logs/métadonnées** : Format ISO 8601 UTC (ex: "2025-01-18T10:30:45.123Z")
+- **Dates pour base de données** : Format SQLite DATE (ex: "2025-01-18")
+- **Python** : 
+  - Logs : `datetime.utcnow().isoformat() + 'Z'`
+  - BDD : `datetime.utcnow().date().isoformat()`
 - **JavaScript** : Utiliser `new Date().toISOString()`
-- **SQLite** : Stocker en TEXT avec format ISO 8601
+- **SQLite** : 
+  - Champ `scraped_at` : TEXT avec format ISO 8601 (métadonnées)
+  - Champ `updated_at` : DATE avec format YYYY-MM-DD
 
 ### Inputs Nécessaires par Version
 
@@ -245,7 +250,9 @@ CREATE TABLE analytics (
 - **Métriques de Performance** : Conversion des valeurs numériques (entiers, décimaux)
 - **Métriques de Trafic** : Normalisation des pourcentages et volumes
 - **Métriques de Conversion** : Validation des taux de conversion (0-100%)
-- **Métriques Temporelles** : Conversion des dates et timestamps
+- **Métriques Temporelles** : 
+  - Logs/métadonnées : Format ISO 8601 UTC avec microsecondes
+  - Base de données : Format SQLite DATE (YYYY-MM-DD)
 - **Métriques Géographiques** : Normalisation des codes pays et régions
 
 #### Validation des Données
@@ -257,7 +264,7 @@ CREATE TABLE analytics (
 #### Transformation des Données
 - **Nettoyage** : Suppression des caractères spéciaux et normalisation
 - **Conversion** : Transformation des formats (string → int, date → ISO)
-- **Enrichissement** : Ajout de métadonnées (timestamp, source, version)
+- **Enrichissement** : Ajout de métadonnées (timestamp ISO 8601, source, version)
 - **Structuration** : Organisation des données selon le schéma de la table analytics
 
 #### Gestion des Erreurs de Formatage

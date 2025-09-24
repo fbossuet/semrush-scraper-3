@@ -44,7 +44,7 @@ Initialiser le scraper Noxtools (stealth headless), s’authentifier, naviguer v
 
 14. [P0][Feature] Formatage des données (pipeline dédié)
     - `33.3K` → `333000`; `33.3M` → `333000000` (supprimer séparateurs, appliquer multiplicateur)
-    - Conversion des dates en timestamp ISO/epoch (définir standard projet)
+    - Conversion des dates : ISO 8601 UTC pour logs/métadonnées, SQLite DATE pour BDD
 
 15. [P0][Infrastructure] Récupération des URLs des shops à scraper
     - Sélectionner `shop_url` depuis `shops` uniquement si `analytics.scraping_status` est NULL (FK shops ↔ analytics)
@@ -65,6 +65,8 @@ Initialiser le scraper Noxtools (stealth headless), s’authentifier, naviguer v
 
 19. [P2][Improvement] Amélioration calcul CPC
     - Vérifier correspondance domaine ↔ phrase (sanity check du keyword/domain)
+
+20. [P0][Feature] Scraper la métrique "branded traffic" et mapper → `analytics.branded_traffic`
 
 ### Inputs Fournis pour Alpha
 - **Page de login** : https://noxtools.com/secure/login

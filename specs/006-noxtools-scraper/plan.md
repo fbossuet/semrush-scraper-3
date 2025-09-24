@@ -80,7 +80,7 @@ Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui 
 - Schéma `analytics` (structure/contraintes/index)
 - 1 métrique calculée à partir des données scrapées
 - Gestion d’erreurs (fallbacks, valeurs par défaut)
-- Métadonnées (timestamp, source, version scraper)
+- Métadonnées (timestamp ISO 8601 pour logs, SQLite DATE pour BDD, source, version scraper)
 
 ### Finale (à fournir/valider)
 - Configuration des workers (nombre, répartition, priorités)
@@ -108,7 +108,7 @@ Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui 
 
 ### Logs
 - Niveaux: DEBUG/INFO/WARNING/ERROR (configurable)
-- Format: ISO timestamp, level, message; sortie console + fichier `logs/noxtools.log`
+- Format: ISO 8601 timestamp, level, message; sortie console + fichier `logs/noxtools.log`
 - Captures conditionnelles (screenshots) sur erreurs critiques (alpha/beta)
 
 ### Gestion des erreurs
@@ -117,7 +117,7 @@ Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui 
 - Politique d’arrêt: continuer par boutique; compteur d’échecs max/session
 
 ### Métadonnées
-- `scraper_source='noxtools'`, `scraper_version`, `scraped_at` (ISO UTC)
+- `scraper_source='noxtools'`, `scraper_version`, `scraped_at` (ISO 8601 UTC), `updated_at` (SQLite DATE)
 - Conserver `session_id` et `worker_id` (version finale) pour traçabilité
 
 ## Vérification Constitution
