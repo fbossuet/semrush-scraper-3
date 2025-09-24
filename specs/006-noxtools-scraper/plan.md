@@ -40,12 +40,37 @@ Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui 
 ## Inputs Requis par Version
 
 ### Alpha (à fournir/valider)
-- Sélecteurs auth + navigation, URL finale, sélecteurs des métriques
-- Credentials d’authentification Noxtools
-- Domaine source Noxtools (URL de base)
-- Sessions: gestion cookies entre domaines
-- Anti-détection: User-Agents, headers, délais (ref. specs/002)
-- Paramètres scraping: timeouts, retry, délais (ref. `sem-scraper-final/config.env`)
+- ✅ Sélecteurs auth + navigation, URL finale, sélecteurs des métriques
+- ✅ Credentials d'authentification Noxtools
+- ✅ Domaine source Noxtools (URL de base)
+- ✅ Sessions: gestion cookies entre domaines
+- ✅ Anti-détection: User-Agents, headers, délais (ref. specs/002)
+- ✅ Paramètres scraping: timeouts, retry, délais (ref. `sem-scraper-final/config.env`)
+- ✅ **Inputs fournis** :
+  - Page login: https://noxtools.com/secure/login
+  - Sélecteurs: `#amember-login`, `#amember-pass`, `[type="submit"]`
+  - Redirection: https://noxtools.com/secure/member
+  - URL finale: https://semrush1.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507
+  - URL métriques: https://semrush1.semrush.pw/analytics/traffic/market-overview?searchType=domain&fid=1355702&dateRange=2025-07-01&country=us
+  - Sélecteurs métriques (SAP React gridcell):
+    - visits: `[data-ui-name="Flex"][role="gridcell"][name="entrances"][tabindex="-1"][aria-colindex="3"]`
+    - organic: `[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchOrganic"][tabindex="-1"][aria-colindex="9"]`
+    - paid: `[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchPaid"][tabindex="-1"][aria-colindex="11"]`
+    - purchase conversion: `[data-ui-name="Flex"][role="gridcell"][name="purchasesPerVisit"][tabindex="-1"][aria-colindex="21"]`
+    - avg visit duration: `[data-ui-name="Flex"][role="gridcell"][name="avgVisitDuration"][tabindex="-1"][aria-colindex="27"]`
+    - bounce rate: `[data-ui-name="Flex"][role="gridcell"][name="bouncesPerVisit"][tabindex="-1"][aria-colindex="29"]`
+  - Métrique supplémentaire Alpha: CPC (sélecteur à confirmer, affichage log uniquement)
+  - Technologie: SAP React (extraction adaptée)
+
+### CPC (Alpha)
+- Navigation: Dashboard → Bridge `https://semrush.noxtools.com/server3.php` → Overview
+  - Remarque: en Version Finale, ajouter un fallback automatique (domaines/passerelles alternatifs) si indisponible (cf. `NOX-FINAL-005`).
+- URL Overview (alpha, hardcodée): `https://semrush1.semrush.pw/analytics/overview/?fid=1355922&searchType=domain&db=us&q=worldwildlife.org`
+- Attentes: `networkidle` + délai 2s
+- Extraction par évaluation:
+  - Lignes: `div[data-ui-name="Body.Row"]`
+  - `volume`, `trafficPercent`, `cpc` via sélecteurs fournis
+  - Calcul ratio volume/traffic et sélection du CPC max-ratio
 - Rate limiting: limites/minute et burst
 
 ### Beta (à fournir/valider)

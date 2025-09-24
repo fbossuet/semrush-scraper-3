@@ -114,8 +114,9 @@ En tant qu'analyste de données, je veux que le système de scraping Noxtools r�
 - **NOX-FINAL-002** : Le système DOIT optimiser les performances de scraping (NOX-023)
 - **NOX-FINAL-003** : Le système DOIT implémenter le scraping parallèle avec workers
 - **NOX-FINAL-004** : Le système DOIT gérer les timeouts adaptatifs avancés (NOX-020)
-- **NOX-FINAL-005** : Le système DOIT fournir des métriques de performance et monitoring
-- **NOX-FINAL-006** : Le système DOIT être prêt pour le déploiement en production
+- **NOX-FINAL-005** : Le système DOIT mettre en place un fallback pour le domaine Noxtools en cas de 404
+- **NOX-FINAL-006** : Le système DOIT fournir des métriques de performance et monitoring
+- **NOX-FINAL-007** : Le système DOIT être prêt pour le déploiement en production
 
 ### Entités Clés *(inclure si la fonctionnalité implique des données)*
 - **Boutique Noxtools** : Représente une boutique avec ses métriques Noxtools spécifiques
@@ -141,10 +142,43 @@ En tant qu'analyste de données, je veux que le système de scraping Noxtools r�
 - ✅ **Configuration anti-détection** : User-Agents, headers, délais (voir specs 002-headers-anti-detection)
 - ✅ **Paramètres de scraping** : Timeouts, retry, délais entre requêtes (voir sem-scraper-final/config.env)
 
+**Inputs Fournis :**
+- ✅ **Page de login** : https://noxtools.com/secure/login
+- ✅ **Sélecteurs formulaire** : 
+  - Identifiant : `id="amember-login"`
+  - Mot de passe : `id="amember-pass"`
+  - Bouton validation : `type="submit"`
+- ✅ **Redirection après login** : https://noxtools.com/secure/member
+- ✅ **URL finale avec paramètres** : https://semrush1.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507
+- ✅ **URL des métriques** : https://semrush1.semrush.pw/analytics/traffic/market-overview?searchType=domain&fid=1355702&dateRange=2025-07-01&country=us
+- ✅ **URL overview (CPC)** : https://semrush1.semrush.pw/analytics/overview/?fid=1355922&searchType=domain&db=us&q=worldwildlife.org
+- ✅ **Gestion session/cookies** : Maintenir entre domaines (noxtools.com → semrush1.semrush.pw)
+- ✅ **Sélecteurs des métriques** : 
+  - visits : `[data-ui-name="Flex"][role="gridcell"][name="entrances"][tabindex="-1"][aria-colindex="3"]`
+  - organic search traffic : `[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchOrganic"][tabindex="-1"][aria-colindex="9"]`
+  - paid search traffic : `[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchPaid"][tabindex="-1"][aria-colindex="11"]`
+  - purchase conversion : `[data-ui-name="Flex"][role="gridcell"][name="purchasesPerVisit"][tabindex="-1"][aria-colindex="21"]`
+  - avg visit duration : `[data-ui-name="Flex"][role="gridcell"][name="avgVisitDuration"][tabindex="-1"][aria-colindex="27"]`
+  - bounce rate : `[data-ui-name="Flex"][role="gridcell"][name="bouncesPerVisit"][tabindex="-1"][aria-colindex="29"]`
+  - cpc (à confirmer) : `name="cpc"` (sélecteur à valider; Alpha: affichage log uniquement)
+- ✅ **Technologie** : Page chargée en SAP React (à prendre en compte pour l'extraction)
+
+**Extraction CPC (Alpha)**
+- Naviguer vers l’overview (cf. URL overview) après passage par `https://semrush.noxtools.com/server3.php`
+  - Note: pour la version Finale, prévoir un mécanisme de fallback automatique sur d’autres passerelles/domains en cas d’erreur (ex: indisponibilité/404), conformément à `NOX-FINAL-005`.
+- Attendre le chargement SAP React (networkidle + délais de stabilisation)
+- Parcourir les lignes `div[data-ui-name="Body.Row"]`
+- Sélecteurs:
+  - Volume: `div[name="volume"][role="gridcell"] [data-at="value-volume"]`
+  - Traffic %: `div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]`
+  - CPC: `div[name="cpc"][role="gridcell"] [data-at="value-cpc"]`
+- Calcul: ratio = volume / trafficPercent; conserver la ligne au ratio maximal et retourner le CPC associé
+
 **Inputs à Fournir :**
-- **Domaine source** : URL de base de Noxtools
-- **Sessions** : Gestion des cookies entre domaines
 - **Rate limiting** : Limites de requêtes par minute/heure
+
+**Note Version Beta :**
+- **Paramètres URL dynamiques** : Pour la version Beta, il faudra fournir la mécanique de récupération des paramètres URL (fid, dateRange, country) au lieu du hardcoding Alpha
 
 #### Version Beta - Formatage et Enregistrement
 **Inputs Identifiés :**
@@ -293,6 +327,7 @@ CREATE TABLE analytics (
 - **Toutes les fonctionnalités Alpha et Beta** : Base complète
 - **Optimisation performances** : Scraping parallèle avec workers
 - **Timeouts adaptatifs** : Gestion avancée des délais
+- **Fallback Noxtools** : Basculement automatique en cas de 404
 - **Monitoring** : Métriques de performance et surveillance
 - **Production** : Déploiement et maintenance
 
