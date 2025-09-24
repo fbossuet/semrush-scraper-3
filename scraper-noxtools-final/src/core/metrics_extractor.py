@@ -52,7 +52,9 @@ class MetricsConfig:
                 'paid_search_traffic': '[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchPaid"][tabindex="-1"][aria-colindex="11"]',
                 'purchase_conversion': '[data-ui-name="Flex"][role="gridcell"][name="purchasesPerVisit"][tabindex="-1"][aria-colindex="21"]',
                 'avg_visit_duration': '[data-ui-name="Flex"][role="gridcell"][name="avgVisitDuration"][tabindex="-1"][aria-colindex="27"]',
-                'bounce_rate': '[data-ui-name="Flex"][role="gridcell"][name="bouncesPerVisit"][tabindex="-1"][aria-colindex="29"]'
+                'bounce_rate': '[data-ui-name="Flex"][role="gridcell"][name="bouncesPerVisit"][tabindex="-1"][aria-colindex="29"]',
+                # Sélecteur branded traffic (analytics domain overview page)
+                'branded_traffic': '[data-at="br-vs-nonbr-legend"] > [data-ui-name="Link.Text"]'
             }
 
 @dataclass
@@ -64,6 +66,7 @@ class ExtractedMetrics:
     purchase_conversion: Optional[str] = None
     avg_visit_duration: Optional[str] = None
     bounce_rate: Optional[str] = None
+    branded_traffic: Optional[str] = None
     
     # Métadonnées
     extraction_timestamp: Optional[str] = None
@@ -80,6 +83,7 @@ class ExtractedMetrics:
             'purchase_conversion': self.purchase_conversion,
             'avg_visit_duration': self.avg_visit_duration,
             'bounce_rate': self.bounce_rate,
+            'branded_traffic': self.branded_traffic,
             'extraction_timestamp': self.extraction_timestamp,
             'url': self.url,
             'success': self.success,
