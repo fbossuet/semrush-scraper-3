@@ -112,7 +112,7 @@ class AuthManager:
             submit_button = await page.query_selector(self.config.submit_selector)
             
             if username_field and password_field and submit_button:
-                logger.debug("✅ Login form elements found")
+                logger.info("✅ Login form elements found")
                 return True
             else:
                 logger.warning("⚠️ Login form elements not found")
@@ -135,7 +135,7 @@ class AuthManager:
                 
             await username_field.fill("")  # Clear field
             await username_field.fill(username)
-            logger.debug("✅ Username field filled")
+            logger.info("✅ Username field filled")
             
             # Clear and fill password field
             password_field = await page.query_selector(self.config.password_selector)
@@ -145,7 +145,7 @@ class AuthManager:
                 
             await password_field.fill("")  # Clear field
             await password_field.fill(password)
-            logger.debug("✅ Password field filled")
+            logger.info("✅ Password field filled")
             
             # Add human-like delay before submit
             delay = compute_delay_seconds(
@@ -174,7 +174,7 @@ class AuthManager:
                 
             # Click submit button
             await submit_button.click()
-            logger.debug("✅ Submit button clicked")
+            logger.info("✅ Submit button clicked")
             
             # Wait for navigation/redirect
             await asyncio.sleep(self.config.delay_after_submit_ms / 1000.0)
@@ -224,11 +224,11 @@ class AuthManager:
         """Validate that the current session is still authenticated."""
         try:
             current_url = page.url
-            logger.debug(f"🔍 Validating session at: {current_url}")
+            logger.info(f"🔍 Validating session at: {current_url}")
             
             # Check if we're on an authenticated page
             if self._is_authentication_successful(current_url):
-                logger.debug("✅ Session is valid")
+                logger.info("✅ Session is valid")
                 return True
             else:
                 logger.warning("⚠️ Session appears to be invalid")

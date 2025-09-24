@@ -128,7 +128,7 @@ class MarketOverviewNavigator:
             await page.wait_for_load_state('domcontentloaded', timeout=self.config.network_idle_timeout_ms)
             await asyncio.sleep(1.0)
             
-            logger.debug(f"✅ Session refreshed via bridge: {bridge_url}")
+            logger.info(f"✅ Session refreshed via bridge: {bridge_url}")
             
         except Exception as e:
             logger.warning(f"⚠️ Session refresh failed for bridge {bridge_url}: {e}")
@@ -145,7 +145,7 @@ class MarketOverviewNavigator:
             await page.wait_for_load_state('networkidle', timeout=self.config.network_idle_timeout_ms)
             await asyncio.sleep(2.0)  # Extra time for SAP React
             
-            logger.debug("✅ Navigated to market overview base URL")
+            logger.info("✅ Navigated to market overview base URL")
             
         except Exception as e:
             logger.warning(f"⚠️ Navigation to base URL failed: {e}")
@@ -166,7 +166,7 @@ class MarketOverviewNavigator:
                 logger.warning("🚫 Paywall indicators found in page content")
                 return True
             
-            logger.debug("✅ No paywall detected")
+            logger.info("✅ No paywall detected")
             return False
             
         except Exception as e:
@@ -201,7 +201,7 @@ class MarketOverviewNavigator:
             analyze_button = await page.query_selector('button[data-testid="analyze-cta"]')
             
             if not competitors_input or not analyze_button:
-                logger.debug("Primary search selectors not found")
+                logger.info("Primary search selectors not found")
                 return False
             
             # Fill domain and submit
@@ -212,11 +212,11 @@ class MarketOverviewNavigator:
             await page.wait_for_load_state('domcontentloaded', timeout=self.config.navigation_timeout_ms)
             await asyncio.sleep(2.0)
             
-            logger.debug("✅ Primary search method successful")
+            logger.info("✅ Primary search method successful")
             return True
             
         except Exception as e:
-            logger.debug(f"Primary search method failed: {e}")
+            logger.info(f"Primary search method failed: {e}")
             return False
     
     async def _try_secondary_search(self, page: Page, domain: str) -> bool:
@@ -227,7 +227,7 @@ class MarketOverviewNavigator:
             search_button = await page.query_selector('button[data-test="searchbar_search_submit"]')
             
             if not search_input or not search_button:
-                logger.debug("Secondary search selectors not found")
+                logger.info("Secondary search selectors not found")
                 return False
             
             # Fill domain and submit
@@ -238,18 +238,18 @@ class MarketOverviewNavigator:
             await page.wait_for_load_state('domcontentloaded', timeout=self.config.navigation_timeout_ms)
             await asyncio.sleep(2.0)
             
-            logger.debug("✅ Secondary search method successful")
+            logger.info("✅ Secondary search method successful")
             return True
             
         except Exception as e:
-            logger.debug(f"Secondary search method failed: {e}")
+            logger.info(f"Secondary search method failed: {e}")
             return False
     
     async def _extract_fid_and_build_url(self, page: Page) -> Optional[str]:
         """Extract FID from current URL and build complete market overview URL."""
         try:
             current_url = page.url
-            logger.debug(f"Current URL for FID extraction: {current_url}")
+            logger.info(f"Current URL for FID extraction: {current_url}")
             
             # Extract FID from URL
             fid = extract_fid_from_url(current_url)
@@ -268,7 +268,7 @@ class MarketOverviewNavigator:
                 country="us"
             )
             
-            logger.debug(f"Built complete URL: {complete_url}")
+            logger.info(f"Built complete URL: {complete_url}")
             return complete_url
             
         except Exception as e:

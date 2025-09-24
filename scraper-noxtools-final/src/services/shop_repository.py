@@ -139,7 +139,7 @@ class ShopRepository:
                 cursor.execute(query)
                 count = cursor.fetchone()[0]
                 
-                logger.debug(f"Total shops to scrape: {count}")
+                logger.info(f"Total shops to scrape: {count}")
                 return count
                 
         except sqlite3.Error as e:
@@ -179,7 +179,7 @@ class ShopRepository:
                     jitter_ms=self.config.jitter_ms
                 )
                 await asyncio.sleep(delay)
-                logger.debug(f"Applied anti-detection delay: {delay:.2f}s")
+                logger.info(f"Applied anti-detection delay: {delay:.2f}s")
                 
             return shops
             
@@ -224,7 +224,7 @@ class ShopRepository:
                         name=row['name'],
                         status=row['scraping_status']
                     )
-                    logger.debug(f"Retrieved shop {shop_id}: {shop.shop_url}")
+                    logger.info(f"Retrieved shop {shop_id}: {shop.shop_url}")
                     return shop
                 else:
                     logger.warning(f"Shop {shop_id} not found")

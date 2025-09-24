@@ -112,7 +112,7 @@ class SessionManager:
                     relevant_cookies.append(cookie)
             
             self.cookies_before_navigation = relevant_cookies
-            logger.debug(f"🍪 Stored {len(relevant_cookies)} relevant cookies before navigation")
+            logger.info(f"🍪 Stored {len(relevant_cookies)} relevant cookies before navigation")
             
         except Exception as e:
             logger.error(f"❌ Error storing cookies: {e}")
@@ -124,7 +124,7 @@ class SessionManager:
             
             # Check if we can access the page (not redirected to login)
             current_url = page.url
-            logger.debug(f"📍 Current URL after navigation: {current_url}")
+            logger.info(f"📍 Current URL after navigation: {current_url}")
             
             # Check for authentication indicators
             auth_indicators = await self._check_authentication_indicators(page, target_domain)
@@ -184,7 +184,7 @@ class SessionManager:
                     indicators['reason'] = f'Logout elements found ({len(logout_elements)})'
                     
             except Exception as e:
-                logger.debug(f"Element check error: {e}")
+                logger.info(f"Element check error: {e}")
             
             return indicators
             

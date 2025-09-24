@@ -19,6 +19,7 @@ from playwright.async_api import Page
 from .anti_detection import get_default_stealth_config, StealthConfig
 from .playwright_manager import PlaywrightManager
 from .session_manager import SessionManager
+from utils.url_params import build_date_range
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +32,8 @@ class MetricsConfig:
     dashboard_url: str = "https://noxtools.com/secure/member"
     # URL passerelle Noxtools → Semrush (réactive la session côté Semrush)
     bridge_url: str = "https://semrush.noxtools.com/server3.php"
-    # URL overview pour CPC (Alpha hardcodée)
-    overview_url: str = "https://semrush3.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507"
+    # URL overview pour CPC (sera construite dynamiquement avec le domaine)
+    overview_base_url: str = "https://semrush3.semrush.pw/analytics/overview/"
     
     # Sélecteurs des métriques (à enregistrer en BDD plus tard)
     selectors: Dict[str, str] = None
@@ -67,6 +68,7 @@ class ExtractedMetrics:
     avg_visit_duration: Optional[str] = None
     bounce_rate: Optional[str] = None
     branded_traffic: Optional[str] = None
+    cpc: Optional[str] = None
     
     # Métadonnées
     extraction_timestamp: Optional[str] = None
@@ -84,6 +86,7 @@ class ExtractedMetrics:
             'avg_visit_duration': self.avg_visit_duration,
             'bounce_rate': self.bounce_rate,
             'branded_traffic': self.branded_traffic,
+            'cpc': self.cpc,
             'extraction_timestamp': self.extraction_timestamp,
             'url': self.url,
             'success': self.success,
@@ -96,15 +99,46 @@ class MetricsExtractor:
     def __init__(self, config: Optional[MetricsConfig] = None, stealth_config: Optional[StealthConfig] = None):
         self.config = config or MetricsConfig()
         self.stealth_config = stealth_config or get_default_stealth_config()
+    
+    def _extract_domain_from_url(self, shop_url: str) -> str:
+        """Extrait le domaine d'une URL de shop."""
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(shop_url)
+            domain = parsed.netloc
+            # Enlever www. si présent
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            return domain
+        except Exception as e:
+            logger.warning(f"⚠️ Error extracting domain from {shop_url}: {e}")
+            return shop_url  # Fallback: utiliser l'URL complète
+    
+    def _build_overview_url(self, domain: str) -> str:
+        """Construit l'URL overview avec le domaine et la date calculée."""
+        date_range = build_date_range()
+        # Format de date pour l'URL overview (YYYYMM)
+        date_param = date_range.replace('-', '')[:6]  # 2025-07-15 -> 202507
+        
+        params = {
+            'searchType': 'domain',
+            'q': domain,
+            'db': 'us',
+            'date': date_param
+        }
+        
+        query_string = urlencode(params)
+        return f"{self.config.overview_base_url}?{query_string}"
         
     async def extract_metrics(self, page: Page, playwright_manager: PlaywrightManager, 
-                            session_manager: SessionManager) -> ExtractedMetrics:
+                            session_manager: SessionManager, shop_url: str) -> ExtractedMetrics:
         """Extract metrics from the Noxtools analytics page.
         
         Args:
             page: Playwright page instance
             playwright_manager: PlaywrightManager instance
             session_manager: SessionManager instance
+            shop_url: Shop URL to extract domain for CPC extraction
             
         Returns:
             ExtractedMetrics: Extracted metrics data
@@ -149,6 +183,16 @@ class MetricsExtractor:
             if extraction_success:
                 metrics.success = True
                 logger.info("✅ Metrics extraction successful")
+                
+                # Extract CPC using the domain from shop_url
+                domain = self._extract_domain_from_url(shop_url)
+                cpc_data = await self.extract_cpc_best_ratio(page, playwright_manager, session_manager, domain)
+                if cpc_data and cpc_data.get('cpc'):
+                    metrics.cpc = str(cpc_data['cpc'])
+                    logger.info(f"✅ CPC extracted: {metrics.cpc}")
+                else:
+                    logger.warning("⚠️ CPC extraction failed or no data found")
+                
                 self._log_extracted_metrics(metrics)
             else:
                 metrics.error_message = "Failed to extract metrics from page"
@@ -161,7 +205,7 @@ class MetricsExtractor:
         return metrics
 
     async def extract_cpc_best_ratio(self, page: Page, playwright_manager: PlaywrightManager,
-                                     session_manager: SessionManager) -> Optional[Dict[str, Any]]:
+                                     session_manager: SessionManager, domain: str) -> Optional[Dict[str, Any]]:
         """Extract CPC based on max(volume/traffic) from overview grid.
         Returns dict: { keyword, ratio, cpc, cpcRaw }
         """
@@ -184,13 +228,16 @@ class MetricsExtractor:
             except Exception as e:
                 logger.warning(f"⚠️ Bridge URL visit failed for CPC: {e}")
 
-            # Step 3: Navigate to overview URL for CPC extraction
+            # Step 3: Build and navigate to overview URL with domain
+            overview_url = self._build_overview_url(domain)
+            logger.info(f"🔗 Navigating to overview URL: {overview_url}")
+            
             # Use the same approach as _navigate_to_metrics_page for consistency
             navigation_success = False
             try:
                 # First try session manager for cross-domain navigation
                 navigation_success = await session_manager.navigate_cross_domain(
-                    page, playwright_manager, self.config.overview_url
+                    page, playwright_manager, overview_url
                 )
             except Exception as e:
                 logger.warning(f"⚠️ Cross-domain navigation error for CPC: {e}")
@@ -198,7 +245,7 @@ class MetricsExtractor:
             # If session manager failed, try direct navigation with referer
             if not navigation_success:
                 try:
-                    await page.goto(self.config.overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                    await page.goto(overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
                     navigation_success = True
                     logger.info("✅ Direct navigation to CPC page with referer succeeded")
                 except Exception as e:
@@ -252,13 +299,13 @@ class MetricsExtractor:
                           return true;
                         }
                     """)
-                    logger.debug("✅ Grid scrolled using container method")
+                    logger.info("✅ Grid scrolled using container method")
                 except Exception as e:
-                    logger.debug(f"⚠️ Container scroll failed, using window scroll: {e}")
+                    logger.warning(f"⚠️ Container scroll failed, using window scroll: {e}")
                     for _ in range(6):
                         await page.evaluate('window.scrollBy(0, Math.max(300, window.innerHeight/2))')
                         await asyncio.sleep(0.25)
-                    logger.debug("✅ Grid scrolled using window method")
+                    logger.info("✅ Grid scrolled using window method")
 
             # Step 3: Evaluate table-like grid with retries
             eval_script = r"""
@@ -295,7 +342,7 @@ class MetricsExtractor:
             for attempt in range(3):
                 try:
                     best = await page.evaluate(eval_script)
-                    logger.debug(f"CPC evaluation attempt {attempt + 1}: {best}")
+                    logger.info(f"CPC evaluation attempt {attempt + 1}: {best}")
                 except Exception as e:
                     logger.warning(f"⚠️ CPC evaluation attempt {attempt + 1} failed: {e}")
                     best = None
@@ -357,7 +404,7 @@ class MetricsExtractor:
                             logger.info("✅ Navigated via window.location to metrics page")
                             return True
             except Exception as e:
-                logger.debug(f"Dashboard link navigation attempt failed: {e}")
+                logger.info(f"Dashboard link navigation attempt failed: {e}")
 
             # Step 4: Use session manager for cross-domain navigation with referer
             navigation_success = False
@@ -406,7 +453,7 @@ class MetricsExtractor:
                     metrics.error_message = "Session expired on metrics page"
                     return False
             except Exception as e:
-                logger.debug(f"Content check error: {e}")
+                logger.info(f"Content check error: {e}")
                 
             # Wait for React to fully load
             try:
@@ -597,10 +644,10 @@ class MetricsExtractor:
                 if element:
                     text = await read_element_text(element)
                     if text:
-                        logger.debug(f"✅ Extracted {metric_name} (direct): {text}")
+                        logger.info(f"✅ Extracted {metric_name} (direct): {text}")
                         return text
             except Exception as e:
-                logger.debug(f"Direct selector failed for {metric_name}: {e}")
+                logger.info(f"Direct selector failed for {metric_name}: {e}")
 
             # 1b) Relaxed variants
             for sel in relaxed_variants:
@@ -609,10 +656,10 @@ class MetricsExtractor:
                     if element:
                         text = await read_element_text(element)
                         if text:
-                            logger.debug(f"✅ Extracted {metric_name} (relaxed): {text}")
+                            logger.info(f"✅ Extracted {metric_name} (relaxed): {text}")
                             return text
                 except Exception as e:
-                    logger.debug(f"Relaxed selector failed for {metric_name}: {e}")
+                    logger.info(f"Relaxed selector failed for {metric_name}: {e}")
 
             # 2) Attribute selector [name="..."]
             try:
@@ -623,10 +670,10 @@ class MetricsExtractor:
                     if element:
                         text = await read_element_text(element)
                         if text:
-                            logger.debug(f"✅ Extracted {metric_name} (attr): {text}")
+                            logger.info(f"✅ Extracted {metric_name} (attr): {text}")
                             return text
             except Exception as e:
-                logger.debug(f"Attribute selector failed for {metric_name}: {e}")
+                logger.info(f"Attribute selector failed for {metric_name}: {e}")
 
             # 3) Input value
             try:
@@ -637,10 +684,10 @@ class MetricsExtractor:
                     if element:
                         input_value = await element.input_value()
                         if input_value and input_value.strip():
-                            logger.debug(f"✅ Extracted {metric_name} (input): {input_value.strip()}")
+                            logger.info(f"✅ Extracted {metric_name} (input): {input_value.strip()}")
                             return input_value.strip()
             except Exception as e:
-                logger.debug(f"Input selector failed for {metric_name}: {e}")
+                logger.info(f"Input selector failed for {metric_name}: {e}")
 
             # 4) Span inside named container
             try:
@@ -651,16 +698,16 @@ class MetricsExtractor:
                     if element:
                         text_content = await element.text_content()
                         if text_content and text_content.strip():
-                            logger.debug(f"✅ Extracted {metric_name} (span): {text_content.strip()}")
+                            logger.info(f"✅ Extracted {metric_name} (span): {text_content.strip()}")
                             return text_content.strip()
             except Exception as e:
-                logger.debug(f"Span selector failed for {metric_name}: {e}")
+                logger.info(f"Span selector failed for {metric_name}: {e}")
 
             logger.warning(f"⚠️ {metric_name} not found with any approach (selector: {selector})")
             return None
 
         except Exception as e:
-            logger.debug(f"⚠️ Error extracting {metric_name}: {e}")
+            logger.info(f"⚠️ Error extracting {metric_name}: {e}")
             return None
     
     def _log_extracted_metrics(self, metrics: ExtractedMetrics):

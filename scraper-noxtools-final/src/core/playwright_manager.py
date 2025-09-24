@@ -88,7 +88,7 @@ class PlaywrightManager:
         # Set viewport and other stealth settings
         await page.set_viewport_size({'width': 1920, 'height': 1080})
         
-        logger.debug(f"📄 Created new page with {context_type} headers")
+        logger.info(f"📄 Created new page with {context_type} headers")
         return page
     
     async def navigate_with_retry(self, page: Page, url: str, max_retries: int = 3) -> bool:

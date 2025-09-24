@@ -48,7 +48,7 @@ def compute_reference_date(today_utc: Optional[datetime] = None) -> date:
     
     reference_date = date(target_year, target_month, 15)
     
-    logger.debug(f"Computed reference date: {today_utc.date()} -> {reference_date}")
+    logger.info(f"Computed reference date: {today_utc.date()} -> {reference_date}")
     return reference_date
 
 def build_date_range(ref_date: Optional[date] = None) -> str:
@@ -65,7 +65,7 @@ def build_date_range(ref_date: Optional[date] = None) -> str:
         ref_date = compute_reference_date()
     
     date_range = ref_date.strftime("%Y-%m-15")
-    logger.debug(f"Built date range: {date_range}")
+    logger.info(f"Built date range: {date_range}")
     return date_range
 
 def build_market_overview_url(base_url: str, fid: str, date_range: str, 
@@ -97,7 +97,7 @@ def build_market_overview_url(base_url: str, fid: str, date_range: str,
     # Build complete URL
     complete_url = base_url + '?' + urlencode(params)
     
-    logger.debug(f"Built market overview URL: {complete_url}")
+    logger.info(f"Built market overview URL: {complete_url}")
     return complete_url
 
 def extract_fid_from_url(url: str) -> Optional[str]:
@@ -116,7 +116,7 @@ def extract_fid_from_url(url: str) -> Optional[str]:
         fid = query_params.get('fid', [None])[0]
         
         if fid:
-            logger.debug(f"Extracted FID from URL: {fid}")
+            logger.info(f"Extracted FID from URL: {fid}")
         else:
             logger.warning(f"No FID found in URL: {url}")
             

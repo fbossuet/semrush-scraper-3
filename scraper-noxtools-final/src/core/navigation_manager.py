@@ -107,7 +107,7 @@ class NavigationManager:
             
             # Check current URL
             current_url = page.url
-            logger.debug(f"📍 Current URL: {current_url}")
+            logger.info(f"📍 Current URL: {current_url}")
             
             # Validate URL structure
             url_valid = self._validate_url_structure(current_url)
@@ -162,7 +162,7 @@ class NavigationManager:
                 logger.warning(f"⚠️ Unexpected query: {query_params.get('q')}")
                 return False
                 
-            logger.debug("✅ URL structure validation successful")
+            logger.info("✅ URL structure validation successful")
             return True
             
         except Exception as e:
@@ -219,7 +219,7 @@ class NavigationManager:
                         indicators['reason'] = f'Analytics-related title: {title}'
                         
             except Exception as e:
-                logger.debug(f"Element check error: {e}")
+                logger.info(f"Element check error: {e}")
                 indicators['details']['element_check_error'] = str(e)
             
             # If no specific indicators found, check for general page content
@@ -242,7 +242,7 @@ class NavigationManager:
                             indicators['reason'] = 'Page appears to have minimal content and wrong URL'
                         
                 except Exception as e:
-                    logger.debug(f"Content check error: {e}")
+                    logger.info(f"Content check error: {e}")
                     indicators['reason'] = f'Content check failed: {e}'
             
             return indicators

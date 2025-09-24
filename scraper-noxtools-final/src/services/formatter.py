@@ -281,7 +281,7 @@ def format_metrics(raw_metrics: Dict[str, Any]) -> Dict[str, Any]:
     formatted['updated_at'] = to_sqlite_date(datetime.utcnow())    # SQLite DATE format
     formatted['scraper_source'] = 'noxtools'
     
-    logger.debug(f"Formatted metrics: {len(formatted)} fields processed")
+    logger.info(f"Formatted metrics: {len(formatted)} fields processed")
     return formatted
 
 def get_formatter_info() -> Dict[str, Any]:
