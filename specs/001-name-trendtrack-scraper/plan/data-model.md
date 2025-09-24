@@ -14,21 +14,28 @@
 - `id` (INTEGER, PRIMARY KEY): Unique identifier
 - `shop_name` (TEXT): Human-readable name of the website
 - `shop_url` (TEXT, UNIQUE, NOT NULL): Full URL of the website
-- `scraping_status` (TEXT): Current processing status
+- `scraping_status` (TEXT): Final processing status
   - Values: 'completed', 'partial', 'failed', 'na', 'pending', ''
+  - Default: 'pending'
+- `table_scraping_status` (TEXT): Phase 2 table extraction status
+  - Values: 'table_extracted', 'failed', 'pending'
+  - Default: 'pending'
+- `details_scraping_status` (TEXT): Phase 3 details extraction status
+  - Values: 'details_extracted', 'failed', 'pending'
   - Default: 'pending'
 - `scraping_last_update` (TEXT): ISO timestamp of last scraping attempt
 - `updated_at` (TEXT): ISO timestamp of last record update
 - `creation_date` (TEXT): ISO timestamp of record creation
-- `monthly_visits` (TEXT): Monthly visits data (if available)
-- `monthly_revenue` (TEXT): Monthly revenue data (if available)
-- `live_ads` (TEXT): Live ads information
+- `monthly_visits` (INTEGER): Monthly visits data (format: 647600 for "647.6K")
+- `monthly_revenue` (TEXT): Monthly revenue data (format: "597.9K$ - 1.8M$")
+- `live_ads` (INTEGER): Live ads information (format: 7319)
 - `page_number` (TEXT): Page number in source data
 - `scraped_at` (TEXT): ISO timestamp of last successful scraping
 - `project_source` (TEXT): Source of the website data
 - `external_id` (TEXT): External system identifier
 - `metadata` (TEXT): JSON string with additional metadata
-- `year_founded` (TEXT): Year the website was founded
+- `year_founded` (TEXT): Year the website was founded (format: "2021", not 2021.0)
+- `creation_date` (TEXT): ISO 8601 UTC timestamp of website creation (format: 2021-09-17T00:00:00.000Z)
 
 **Validation Rules**:
 - `shop_url` must be a valid URL format
@@ -160,6 +167,8 @@ CREATE TABLE IF NOT EXISTS "shops" (
     shop_name TEXT,
     shop_url TEXT UNIQUE NOT NULL,
     scraping_status TEXT,
+    table_scraping_status TEXT,
+    details_scraping_status TEXT,
     scraping_last_update TEXT,
     updated_at TEXT,
     creation_date TEXT,
@@ -171,7 +180,8 @@ CREATE TABLE IF NOT EXISTS "shops" (
     project_source TEXT,
     external_id TEXT,
     metadata TEXT,
-    year_founded TEXT
+    year_founded TEXT,
+    creation_date TEXT
 );
 ```
 
@@ -243,6 +253,66 @@ CREATE INDEX idx_analytics_updated_at ON analytics(updated_at);
 CREATE INDEX idx_workers_session_id ON workers(session_id);
 CREATE INDEX idx_workers_status ON workers(status);
 ```
+
+## Workflow des Statuts de Scraping
+
+### Règle Fondamentale
+**Le scraper MVP TrendTrack ne met JAMAIS à jour la table `analytics`**
+
+### Workflow des Statuts dans la Table `shops`
+
+#### Phase 2 - Extraction des données de table
+```javascript
+// Fin de Phase 2 (ligne 424)
+shopData.table_scraping_status = 'table_extracted';
+```
+
+#### Phase 3 - Extraction des métriques détaillées
+```javascript
+// Succès Phase 3 (ligne 862)
+shopData.details_scraping_status = 'details_extracted';
+
+// Échec Phase 3 - Aucune métrique (ligne 874)
+shopData.scraping_status = 'failed';
+
+// Échec Phase 3 - Exception (ligne 886)
+shopData.scraping_status = 'failed';
+```
+
+#### Script Principal - Après Phase 2
+```javascript
+// Après sauvegarde Phase 2 (ligne 226)
+await shopRepo.updateShopStatus(mappedShopData.externalId, 'table_extracted');
+```
+
+### Suppression des Mises à Jour Analytics
+- **Ligne 373** : Supprimer `detailData.scraping_status` dans l'insertion analytics
+- **Ligne 549** : Supprimer `analyticsData.scraping_status` dans la mise à jour analytics
+
+## Data Formatting Module
+
+### DataFormatter Class
+Le module `src/utils/data-formatter.js` centralise tous les formats de données selon les spécifications :
+
+#### Méthodes de Formatage
+- `formatYearFounded(value)` : Retourne `{year_founded: TEXT, creation_date: ISO_STRING}`
+- `formatMonthlyVisits(visitsText)` : Convertit "647.6K" → 647600 (INTEGER)
+- `formatMonthlyRevenue(revenueText)` : Conserve "597.9K$ - 1.8M$" (TEXT)
+- `formatLiveAds(liveAdsText)` : Extrait 7319 de "7319" (INTEGER)
+- `formatCategories(categoryElements)` : Joint "Cat1|Cat2" (TEXT)
+- `formatAOV(aovText)` : Convertit "1.25" → 1.25 (NUMERIC)
+- `formatTotalProducts(productsText)` : Extrait 24750 de "24750 products" (INTEGER)
+- `formatTimestamp(date)` : Génère timestamp ISO 8601 UTC
+- `formatUrl(url)` : Valide et formate les URLs
+
+#### Formats de Données Standardisés
+- **Timestamps** : ISO 8601 UTC (`2021-09-17T00:00:00.000Z`)
+- **Années** : TEXT ("2021", pas 2021.0)
+- **Visites** : INTEGER (647600 pour "647.6K")
+- **Revenus** : TEXT range ("597.9K$ - 1.8M$")
+- **Live Ads** : INTEGER (7319)
+- **AOV** : NUMERIC (1.25)
+- **Produits** : INTEGER (24750)
 
 ## Data Validation Rules
 

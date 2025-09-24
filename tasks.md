@@ -127,6 +127,37 @@
 
 **Résultat**: Système de récupération des métriques live ads 7d et 30d opérationnel et testé.
 
+### T013: MVP V2 – Solution 4 (Browser Restart) – Validation et intégration [P0] – TERMINÉ
+**Type**: Feature / Stabilisation  
+**Dependencies**: Aucune  
+**Files**: `trendtrack-scraper-final/src/mvp/mvp-browser-manager.js`, `trendtrack-scraper-final/src/mvp/mvp-retry-handler.js`, `trendtrack-scraper-final/src/mvp/mvp-scraper.js`  
+**Description**: Implémenter et valider la Solution 4 (redémarrage navigateur) pour gérer la fermeture complète du navigateur Playwright et assurer la reprise automatique.  
+**Implémentation**:  
+- [x] Créer `MVPBrowserManager` (détection, restart, relogin, exécution avec redémarrage)  
+- [x] Intégrer dans `MVPRetryHandler` (détection et orchestration retry)  
+- [x] Intégrer dans `MVPScraper` (initialisation et usage)  
+- [x] Campagne de test (10 boutiques, lots de 3)  
+**Validation**:  
+- [x] 10/10 boutiques traitées (100% succès)  
+- [x] Aucune erreur de fermeture navigateur bloquante  
+- [x] `details_extracted` écrit pour 10 nouvelles boutiques  
+**Résultat**: Solution 4 validée et opérationnelle.  
+
+### T014: MVP V2 – Amélioration extraction AOV [P1] – EN COURS
+**Type**: Feature  
+**Dependencies**: Aucune  
+**Files**: `trendtrack-scraper-final/src/extractors/trendtrack-extractor.js`  
+**Description**: Améliorer `extractAOV()` pour atteindre ≥70% de valeurs non nulles.  
+**Implémentation**:  
+- [ ] Ajouter sélecteurs supplémentaires (blocs KPI spécifiques, data-attributes)  
+- [ ] Améliorer `parseAOVValue()` (suffixes K/M, devises, décimales locales)  
+- [ ] Ajouter un fallback via analyse de patterns chiffrés par sections  
+- [ ] Test ciblé AOV sur 10 boutiques et mesure du taux  
+**Validation**:  
+- [ ] Taux AOV non-nul ≥70% sur l’échantillon  
+- [ ] Logs détaillés (sélecteurs essayés, valeur retenue)  
+**Résultat attendu**: Critère de conformité AOV atteint.  
+
 ### T002: Désactivation système de locks dans l'environnement test [P0]
 **Type**: Bug Fix  
 **Dependencies**: Aucune  
@@ -596,3 +627,118 @@ Exécuter ces commandes quand la base de données est bloquée par un lock.
 - **Validation**: Test des credentials sur les endpoints critiques
 - **Notification**: Logs + alertes système
 - **Rollback**: Retour automatique vers sam.mytoolsplan.xyz si sam2 échoue
+
+### T015: Migration Base de Données - Nouveaux Champs de Statut [P0] - EN COURS
+**Type**: Infrastructure  
+**Dependencies**: Aucune  
+**Files**: `trendtrack-scraper-final/data/trendtrack.db`, scripts de migration  
+**Description**: Ajouter les colonnes `table_scraping_status` et `details_scraping_status` dans la table `shops` pour un suivi granulaire des phases de scraping.
+
+**Objectif**: Permettre un monitoring précis des phases de scraping avec séparation des statuts Phase 2 (table) et Phase 3 (détails).
+
+**Implémentation**:
+- [ ] Créer un script de migration SQL pour ajouter les nouvelles colonnes
+- [ ] Ajouter `table_scraping_status TEXT` dans la table `shops`
+- [ ] Ajouter `details_scraping_status TEXT` dans la table `shops`
+- [ ] Tester la migration sur une copie de la base de données
+- [ ] Valider la compatibilité avec le code existant
+- [ ] Mettre à jour le schéma dans `schema.js`
+
+**Validation**:
+- [ ] Les nouvelles colonnes sont ajoutées sans perte de données
+- [ ] Les valeurs par défaut sont correctement définies
+- [ ] Le code existant continue de fonctionner
+- [ ] Les requêtes SQL sont compatibles
+
+**Critères de succès**:
+- ✅ Colonnes `table_scraping_status` et `details_scraping_status` ajoutées
+- ✅ Migration réussie sans perte de données
+- ✅ Compatibilité maintenue avec le code existant
+- ✅ Schéma mis à jour dans tous les fichiers
+
+### T016: Modification du Code - Nouveau Workflow des Statuts [P0] - EN COURS
+**Type**: Bug Fix / Feature  
+**Dependencies**: T015  
+**Files**: `trendtrack-scraper-final/src/extractors/trendtrack-extractor.js`, `trendtrack-scraper-final/update-database-mvp.js`  
+**Description**: Modifier le code pour utiliser le nouveau système de statuts avec séparation Phase 2/Phase 3 et suppression des mises à jour analytics.
+
+**Objectif**: Implémenter le nouveau workflow de statuts et supprimer toute mise à jour de la table `analytics` depuis le scraper MVP.
+
+**Implémentation**:
+- [ ] **Ligne 424** : Remplacer `shopData.scraping_status = 'table_extracted'` par `shopData.table_scraping_status = 'table_extracted'`
+- [ ] **Ligne 862** : Remplacer `scraping_status: 'details_extracted'` par `details_scraping_status: 'details_extracted'`
+- [ ] **Ligne 874** : Garder `scraping_status: 'failed'` (statut final)
+- [ ] **Ligne 886** : Garder `scraping_status: 'failed'` (statut final)
+- [ ] **Ligne 226** : Modifier `updateShopStatus()` pour utiliser `table_scraping_status`
+- [ ] **Ligne 373** : Supprimer `(detailData.analytics_status || detailData.scraping_status || 'details_extracted')`
+- [ ] **Ligne 549** : Supprimer `analyticsData.scraping_status || 'completed'`
+
+**Validation**:
+- [ ] Le nouveau workflow de statuts fonctionne correctement
+- [ ] Aucune mise à jour de la table `analytics` n'est effectuée
+- [ ] Les statuts Phase 2 et Phase 3 sont correctement mis à jour
+- [ ] Les tests passent avec le nouveau système
+
+**Critères de succès**:
+- ✅ Nouveau workflow de statuts implémenté
+- ✅ Suppression complète des mises à jour analytics
+- ✅ Statuts Phase 2 et Phase 3 fonctionnels
+- ✅ Tests de validation passants
+- ✅ Réduction des erreurs dans les logs
+
+### T017: Tests et Validation du Nouveau Système [P1] - EN ATTENTE
+**Type**: Testing  
+**Dependencies**: T015, T016  
+**Files**: Scripts de test, logs de validation  
+**Description**: Tester et valider le nouveau système de gestion des statuts avec les nouvelles colonnes et le workflow modifié.
+
+**Objectif**: S'assurer que le nouveau système fonctionne correctement et réduit les erreurs dans les logs.
+
+**Implémentation**:
+- [ ] Tester la migration de base de données
+- [ ] Tester le nouveau workflow de statuts sur 10 boutiques
+- [ ] Vérifier qu'aucune mise à jour analytics n'est effectuée
+- [ ] Valider la réduction des erreurs dans les logs
+- [ ] Tester la cohérence des statuts entre les phases
+- [ ] Vérifier les performances du nouveau système
+
+**Validation**:
+- [ ] 100% de succès sur les tests de statuts
+- [ ] 0 erreur de mise à jour analytics
+- [ ] Réduction significative des erreurs de logs
+- [ ] Cohérence des statuts entre phases
+- [ ] Performances maintenues ou améliorées
+
+**Critères de succès**:
+- ✅ Tests de migration réussis
+- ✅ Nouveau workflow validé
+- ✅ Aucune mise à jour analytics
+- ✅ Logs propres (réduction des erreurs)
+- ✅ Performances maintenues
+
+### T018: Documentation du Nouveau Système [P2] - EN ATTENTE
+**Type**: Documentation  
+**Dependencies**: T015, T016, T017  
+**Files**: `.specify/v2-scraper-trendtrack-mvp.md`, `specs/001-name-trendtrack-scraper/plan/data-model.md`  
+**Description**: Mettre à jour la documentation pour refléter le nouveau système de gestion des statuts.
+
+**Objectif**: Documenter clairement le nouveau workflow et les changements apportés au système.
+
+**Implémentation**:
+- [x] Mettre à jour `.specify/v2-scraper-trendtrack-mvp.md` avec le nouveau workflow
+- [x] Mettre à jour `specs/001-name-trendtrack-scraper/plan/data-model.md` avec les nouvelles colonnes
+- [ ] Documenter les changements dans le code
+- [ ] Créer un guide de migration
+- [ ] Mettre à jour la documentation API si nécessaire
+
+**Validation**:
+- [ ] Documentation cohérente avec l'implémentation
+- [ ] Workflow clairement expliqué
+- [ ] Guide de migration disponible
+- [ ] Documentation API mise à jour
+
+**Critères de succès**:
+- ✅ Documentation mise à jour et cohérente
+- ✅ Workflow clairement documenté
+- ✅ Guide de migration disponible
+- ✅ Documentation API cohérente

@@ -4,6 +4,7 @@
  */
 
 import { BaseExtractor } from './base-extractor.js';
+import { DataFormatter } from '../utils/data-formatter.js';
 // import { MarketTrafficExtractor } from './market-traffic-extractor.js';
 // import { MarketTrafficPythonBridge } from './market-traffic-python-bridge.js';
 // import { AdditionalMetricsPythonBridge } from './additional-metrics-python-bridge.js';
@@ -36,11 +37,11 @@ export class TrendTrackExtractor extends BaseExtractor {
         multiple: false
       },
       
-      // Catégorie
-      category: {
-        selector: 'td:nth-child(4) div div',
-        multiple: false
-      },
+      // Catégorie (supprimé - non persistée selon la documentation)
+      // category: {
+      //   selector: 'td:nth-child(4) div div',
+      //   multiple: false
+      // },
       
       // Visites mensuelles (supprimé comme demandé)
       // monthlyVisits: {
@@ -60,9 +61,9 @@ export class TrendTrackExtractor extends BaseExtractor {
       //   multiple: false
       // },
       
-      // Nombre d'ads live
+      // Nombre d'ads live (selon documentation: 5e td → p.font-bold)
       liveAds: {
-        selector: 'td div.flex.items-center.justify-center.font-semibold p',
+        selector: 'td:nth-child(5) p.font-bold',
         multiple: false
       },
       
@@ -333,8 +334,7 @@ export class TrendTrackExtractor extends BaseExtractor {
         console.log('⚠️ Catégorie non trouvée');
       }
 
-      // Visites mensuelles (supprimé comme demandé)
-      // shopData.monthly_visits = null;
+      // Visites mensuelles: récupérées en Phase 3 (détails), pas en Phase 1
 
       // Revenus mensuels (supprimé comme demandé)
       // shopData.monthly_revenue = null;
@@ -352,44 +352,72 @@ export class TrendTrackExtractor extends BaseExtractor {
         console.log('⚠️ Nombre de produits non trouvé');
       }
 
-      // Live ads 7d et 30d - Extrait en Phase 3 (page de détail) selon la spécification
-      // Ces métriques ne sont PAS extraites en Phase 1
-      shopData.live_ads_7d = 0;  // Valeur par défaut, sera mise à jour en Phase 3
-      shopData.live_ads_30d = 0; // Valeur par défaut, sera mise à jour en Phase 3
+      // Live ads 7d et 30d - Extrait UNIQUEMENT en Phase 3 (page de détail) selon la spécification
+      // Ces métriques ne sont PAS extraites en Phase 1 - elles seront ajoutées en Phase 3
 
-      // 🆕 Extraction de l'année de fondation (Phase 1 - page de liste)
+      // 🆕 Extraction de l'année de fondation (Phase 1 - page de liste) - V2 AMÉLIORÉE
       try {
-        console.log(`🔍 Extraction année de fondation pour ${shopData.shop_name}...`);
+        console.log(`🔍 Extraction année de fondation V2 pour ${shopData.shop_name}...`);
         
-        // Utiliser le sélecteur précis (2e td > p)
-        const yearElement = await cells[1].locator('p.text-\\[11px\\]').first();
-        if (await yearElement.count() > 0) {
-          const yearText = await yearElement.textContent();
-          console.log(`📅 Texte année trouvé: ${yearText}`);
-          
-          // Extraire l'année du format "17/09/2021"
-          const yearMatch = yearText.match(/(\d{4})/);
-          if (yearMatch) {
-            const year = parseInt(yearMatch[1]);
-            if (year >= 1990 && year <= new Date().getFullYear()) {
-              shopData.year_founded = year;
-              console.log(`✅ Année de fondation extraite: ${year}`);
-        } else {
-              console.log(`⚠️ Année invalide: ${year}`);
-              shopData.year_founded = null;
+        // Sélecteurs multiples pour year_founded (V2)
+        const yearSelectors = [
+          'p.text-\\[11px\\]',  // Sélecteur principal (échappement CSS)
+          'p[class*="text-11px"]',
+          'p[class*="text-xs"]',
+          'span[class*="text-11px"]',
+          'div[class*="text-11px"]'
+        ];
+        
+        let yearFound = false;
+        
+        for (const selector of yearSelectors) {
+          try {
+            console.log(`🔍 Tentative year_founded avec sélecteur: ${selector}`);
+            const yearElement = await cells[1].locator(selector).first();
+            
+            if (await yearElement.count() > 0) {
+              const yearText = await yearElement.textContent();
+              console.log(`📅 Texte année trouvé: "${yearText}"`);
+              
+              // Formatage via le module dédié
+              const formattedData = DataFormatter.formatYearFounded(yearText);
+              if (formattedData !== null) {
+                shopData.year_founded = formattedData.year_founded;
+                shopData.creation_date = formattedData.creation_date;
+                console.log(`✅ Année de fondation extraite: ${formattedData.year_founded}, Date: ${formattedData.creation_date}`);
+                yearFound = true;
+                break;
+              }
             }
-          } else {
-            console.log(`⚠️ Aucune année trouvée dans le texte: ${yearText}`);
-            shopData.year_founded = null;
+          } catch (selectorError) {
+            console.log(`⚠️ Sélecteur year_founded échoué: ${selector}`);
+            continue;
           }
-        } else {
-          console.log(`⚠️ Élément année de fondation non trouvé`);
+        }
+        
+        // Fallback: recherche dans tout le contenu de la cellule
+        if (!yearFound) {
+          console.log('🔍 Fallback: recherche year_founded dans tout le contenu de la cellule...');
+          const cellContent = await cells[1].textContent();
+          const formattedData = DataFormatter.formatYearFounded(cellContent);
+          if (formattedData !== null) {
+            shopData.year_founded = formattedData.year_founded;
+            shopData.creation_date = formattedData.creation_date;
+            console.log(`✅ Année de fondation extraite via fallback: ${formattedData.year_founded}, Date: ${formattedData.creation_date}`);
+            yearFound = true;
+          }
+        }
+        
+        if (!yearFound) {
+          console.log(`⚠️ Année de fondation non trouvée pour ${shopData.shop_name}`);
           shopData.year_founded = null;
+          shopData.creation_date = null;
         }
         
       } catch (error) {
-        console.error(`⚠️ Erreur extraction année de fondation pour ${shopData.shop_name}:`, error.message);
+        console.error(`❌ Erreur extraction année de fondation pour ${shopData.shop_name}:`, error.message);
         shopData.year_founded = null;
+        shopData.creation_date = null;
       }
 
       // Ajouter les métadonnées
@@ -811,6 +839,7 @@ export class TrendTrackExtractor extends BaseExtractor {
         
         // Année de fondation (extraite en Phase 1, pas en Phase 3)
         year_founded: null,
+        creation_date: null,
         
         // AOV (Average Order Value)
         aov: await this.extractAOV(),
@@ -1010,19 +1039,307 @@ export class TrendTrackExtractor extends BaseExtractor {
    */
   async extractAOV() {
     try {
-      // Implémentation basique - à adapter selon la structure de la page
-      const selector = 'text=AOV';
+      console.log('🔍 Extraction AOV (V2 - calcul revenu/commandes puis fallback)...');
+
+      // 0) Calcul direct: AOV = revenue / orders
+      try {
+        const { revenue, orders } = await this.extractRevenueAndOrders();
+        if (typeof revenue === 'number' && revenue > 0 && typeof orders === 'number' && orders > 0) {
+          const computedAov = revenue / orders;
+          if (computedAov >= 1 && computedAov <= 10000) {
+            console.log(`✅ AOV calculé: ${computedAov.toFixed(2)} (revenue=${revenue}, orders=${orders})`);
+            return Number(computedAov.toFixed(2));
+          }
+        }
+      } catch (calcErr) {
+        console.log(`⚠️ Calcul AOV via revenu/commandes échoué: ${calcErr.message}`);
+      }
+      
+      // Sélecteurs multiples pour AOV (V2)
+      const aovSelectors = [
+        // Sélecteur 1: Recherche par texte "AOV" ou "Average Order Value"
+        'text=AOV',
+        'text=Average Order Value',
+        'text=Order Value',
+        // Sélecteur 2: Recherche par pattern de prix
+        '[class*="aov"]',
+        '[class*="order-value"]',
+        // Sélecteur 3: Recherche dans les métriques
+        '.metrics [class*="aov"]',
+        '.stats [class*="aov"]',
+        // Sélecteur 4: Recherche par contenu contenant des prix
+        'text=/\\$[0-9,]+/',
+        'text=/€[0-9,]+/',
+        'text=/£[0-9,]+/'
+      ];
+      
+      for (const selector of aovSelectors) {
+        try {
+          console.log(`🔍 Tentative AOV avec sélecteur: ${selector}`);
       const element = await this.page.locator(selector).first();
+          
       if (await element.count() > 0) {
         const value = await element.textContent();
-        return this.parseNumber(value);
+            console.log(`📊 AOV trouvé: "${value}"`);
+            
+            // Parsing robuste de la valeur AOV
+            const parsedValue = DataFormatter.formatAOV(value);
+            if (parsedValue !== null) {
+              console.log(`✅ AOV extrait avec succès: ${parsedValue}`);
+              return parsedValue;
+            }
+          }
+        } catch (selectorError) {
+          console.log(`⚠️ Sélecteur AOV échoué: ${selector}`);
+          continue;
+        }
       }
+      
+      // Fallback: Recherche dans tout le contenu de la page
+      console.log('🔍 Fallback: recherche AOV dans tout le contenu...');
+      const pageContent = await this.page.content();
+      const aovPatterns = [
+        /AOV[:\s]*\$?([0-9,]+\.?[0-9]*)/i,
+        /Average Order Value[:\s]*\$?([0-9,]+\.?[0-9]*)/i,
+        /Order Value[:\s]*\$?([0-9,]+\.?[0-9]*)/i,
+        /\$([0-9,]+\.?[0-9]*)\s*(?:AOV|per order)/i
+      ];
+      
+      for (const pattern of aovPatterns) {
+        const match = pageContent.match(pattern);
+        if (match && match[1]) {
+          const parsedValue = DataFormatter.formatAOV(match[1]);
+          if (parsedValue !== null) {
+            console.log(`✅ AOV extrait via fallback: ${parsedValue}`);
+            return parsedValue;
+          }
+        }
+      }
+      
+      console.log('⚠️ AOV non trouvé avec tous les sélecteurs');
       return null;
+      
     } catch (error) {
-      console.log('⚠️ AOV non trouvé');
+      console.log(`❌ Erreur extraction AOV: ${error.message}`);
       return null;
     }
   }
+
+  /**
+   * Extrait les visites mensuelles depuis la page de détail (Phase 3)
+   * - Capture la valeur affichée, sélectionne le premier nombre valide (support K/M)
+   */
+  async extractMonthlyVisitsDetail() {
+    try {
+      // Cible potentielle sur la page de détail (ex. bloc KPI à proximité des live ads)
+      // 1) Tentative directe sur un éventuel p de headline
+      const headline = this.page.locator('p.text-2xl.font-medium').first();
+      if (await headline.count() > 0) {
+        const t = (await headline.textContent())?.trim() || '';
+        const m = t.match(/([0-9][0-9.,]*)([kKmM]?)/);
+        if (m) {
+          return `${m[1]}${m[2] || ''}`;
+        }
+      }
+      // 2) Fallback: chercher le premier <p> numérique globalement dans un bloc métrique
+      const ps = await this.page.locator('p').all();
+      for (const p of ps) {
+        const t = (await p.textContent())?.trim() || '';
+        if (/^[0-9][0-9.,]*[kKmM]?$/.test(t)) {
+          return t;
+        }
+      }
+      return null;
+    } catch (e) {
+      console.log(`⚠️ Erreur extraction visits détail: ${e.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Extrait revenue et orders depuis la page détail (heuristiques, contenu)
+   */
+  async extractRevenueAndOrders() {
+    let revenue = null;
+    let orders = null;
+    try {
+      // 0) CIBLAGE PRÉCIS DU KPI "Revenu mensuel estimé" (ou EN: Estimated monthly revenue)
+      try {
+        const revenueCard = this.page.locator('div.rounded-xl', {
+          has: this.page.getByText(/Revenu mensuel estimé|Estimated monthly revenue/i)
+        }).first();
+        if (await revenueCard.count() > 0) {
+          const valueEl = revenueCard.locator('p.text-2xl.font-medium').first();
+          if (await valueEl.count() > 0) {
+            const raw = (await valueEl.textContent())?.trim() || '';
+            const range = this.parseRevenueRange(raw);
+            if (range && typeof range.avg === 'number' && range.avg > 0) {
+              revenue = range.avg;
+              console.log(`✅ Revenu KPI extrait: "${raw}" → avg=${revenue}`);
+            } else {
+              console.log(`⚠️ Plage de revenu non reconnue (KPI): "${raw}"`);
+            }
+          }
+        }
+      } catch (e) {
+        console.log(`⚠️ Erreur ciblage KPI Revenu: ${e.message}`);
+      }
+
+      // 0.b) Si pas trouvé via KPI, éviter le headline des visits (mauvais bloc)
+      // On ne lit PAS 'p.text-2xl.font-medium' globalement sans filtrer par label.
+
+      // 0) Sélecteur direct pour la plage de revenu (ex: "597.9K$ - 1.8M$")
+      try {
+        const revenueLocator = this.page.locator('p.text-2xl.font-medium').first();
+        if (await revenueLocator.count() > 0) {
+          const raw = (await revenueLocator.textContent()) || '';
+          const parsedRange = this.parseRevenueRange(raw);
+          if (parsedRange && typeof parsedRange.avg === 'number' && parsedRange.avg > 0) {
+            revenue = parsedRange.avg;
+            console.log(`✅ Revenu extrait via sélecteur p.text-2xl.font-medium: "${raw.trim()}" → avg=${revenue}`);
+          } else {
+            console.log(`⚠️ Plage de revenu non reconnue: "${raw.trim()}"`);
+          }
+        }
+      } catch (e) {
+        console.log(`⚠️ Erreur sélecteur revenu: ${e.message}`);
+      }
+
+      const html = await this.page.content();
+      // Revenue patterns (montants avec devise, suffixes K/M acceptés)
+      const revenuePatterns = [
+        /(Revenue|Sales|GMV)[^\n\r$£€]*([$€£]\s?[0-9,.]+[KM]?)/i,
+        /([$€£]\s?[0-9,.]+[KM]?).{0,20}(Revenue|Sales|GMV)/i
+      ];
+      for (const rp of revenuePatterns) {
+        const m = html.match(rp);
+        if (m) {
+          const raw = m[2] || m[1];
+          const parsed = this.parseCurrencyToNumber(raw);
+          if (parsed && parsed > 0) { revenue = parsed; break; }
+        }
+      }
+      // Orders patterns (entiers proches des libellés)
+      const ordersPatterns = [
+        /(Orders|Commandes|Purchases)[:\s]*([0-9,\.]+)/i,
+        /([0-9,\.]+)\s*(Orders|Commandes|Purchases)/i
+      ];
+      for (const op of ordersPatterns) {
+        const m = html.match(op);
+        if (m) {
+          const raw = m[2] || m[1];
+          const parsed = this.parseIntegerFromText(raw);
+          if (parsed && parsed > 0) { orders = parsed; break; }
+        }
+      }
+    } catch (e) {
+      console.log(`⚠️ Fallback contenu revenu/commandes échoué: ${e.message}`);
+    }
+
+    // Si manquant, courte tentative par sélecteurs texte
+    if (revenue === null) {
+      try {
+        const loc = this.page.locator('text=/Revenue|Sales|GMV/i').first();
+        if (await loc.count() > 0) {
+          const txt = await loc.textContent();
+          const parsed = this.parseCurrencyToNumber(txt || '');
+          if (parsed && parsed > 0) revenue = parsed;
+        }
+      } catch {}
+    }
+    if (orders === null) {
+      try {
+        const loc = this.page.locator('text=/Orders|Commandes|Purchases/i').first();
+        if (await loc.count() > 0) {
+          const txt = await loc.textContent();
+          const parsed = this.parseIntegerFromText(txt || '');
+          if (parsed && parsed > 0) orders = parsed;
+        }
+      } catch {}
+    }
+    console.log(`🔎 Revenue/Orders: revenue=${revenue}, orders=${orders}`);
+    return { revenue, orders };
+  }
+
+  /**
+   * Parse une plage de revenu au format "597.9K$ - 1.8M$" et retourne {min, max, avg}
+   */
+  parseRevenueRange(text) {
+    if (!text) return null;
+    try {
+      const priceRegex = /^\s*[\d.,]+[KMB]*\$\s*-\s*[\d.,]+[KMB]*\$\s*$/i;
+      const s = String(text).trim();
+      if (!priceRegex.test(s)) return null;
+      const parts = s.split('-').map(p => p.trim());
+      if (parts.length !== 2) return null;
+      const min = this.parseAmountWithSuffix(parts[0]);
+      const max = this.parseAmountWithSuffix(parts[1]);
+      if (typeof min === 'number' && typeof max === 'number' && min > 0 && max > 0) {
+        const avg = (min + max) / 2;
+        return { min, max, avg };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Parse un token monétaire avec symbole en suffixe (ex: "597.9K$", "1.8M$")
+   */
+  parseAmountWithSuffix(token) {
+    if (!token) return null;
+    try {
+      let t = String(token).trim();
+      // Retirer symboles monétaires où qu'ils soient
+      t = t.replace(/[$€£\s]/g, '');
+      const m = t.match(/^([0-9][0-9.,]*)([kKmMbB]?)$/);
+      if (!m) return null;
+      const base = parseFloat(m[1].replace(/,/g, ''));
+      if (isNaN(base)) return null;
+      const suf = (m[2] || '').toLowerCase();
+      if (suf === 'k') return base * 1_000;
+      if (suf === 'm') return base * 1_000_000;
+      if (suf === 'b') return base * 1_000_000_000;
+      return base;
+    } catch {
+      return null;
+    }
+  }
+
+  parseCurrencyToNumber(text) {
+    try {
+      if (!text) return null;
+      let s = String(text).trim();
+      const m = s.match(/([$€£]?\s*)([0-9,.]+)\s*([kKmM]?)/);
+      if (!m) return null;
+      let num = m[2].replace(/,/g, '');
+      let value = parseFloat(num);
+      if (isNaN(value)) return null;
+      const suffix = (m[3] || '').toLowerCase();
+      if (suffix === 'k') value *= 1000;
+      if (suffix === 'm') value *= 1000000;
+      return value;
+    } catch {
+      return null;
+    }
+  }
+
+  parseIntegerFromText(text) {
+    try {
+      if (!text) return null;
+      const m = String(text).match(/([0-9][0-9,\.]*)/);
+      if (!m) return null;
+      const cleaned = m[1].replace(/[,\.]/g, '');
+      const n = parseInt(cleaned, 10);
+      return isNaN(n) ? null : n;
+    } catch {
+      return null;
+    }
+  }
+
+  // Fonction parseYearFounded supprimée - remplacée par DataFormatter.formatYearFounded()
+  // Fonction parseAOVValue supprimée - remplacée par DataFormatter.formatAOV()
 
   /**
    * Extrait le trafic de recherche payante
