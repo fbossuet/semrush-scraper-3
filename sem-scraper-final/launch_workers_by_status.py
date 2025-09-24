@@ -18,6 +18,49 @@ from typing import Dict, List, Optional
 # Configuration du logging
 logger = logging.getLogger(__name__)
 
+def check_and_setup_credentials():
+    """Vérifie et configure les credentials si nécessaire (logique originale préservée)"""
+    try:
+        # Vérifier si les credentials sont définis dans les variables d'environnement
+        if not os.getenv('SAM_USER_ID') or not os.getenv('SAM_API_KEY'):
+            logger.info("🔐 Credentials non définis dans les variables d'environnement")
+            
+            # Essayer de charger depuis config.env (logique originale)
+            config_path = Path(__file__).parent / "config.env"
+            if config_path.exists():
+                logger.info("📁 Chargement des credentials depuis config.env...")
+                
+                # Charger le fichier config.env
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            if key == 'SAM_USER_ID':
+                                os.environ['SAM_USER_ID'] = value
+                            elif key == 'SAM_API_KEY':
+                                os.environ['SAM_API_KEY'] = value
+                
+                # Vérifier si les credentials sont maintenant définis
+                if os.getenv('SAM_USER_ID') and os.getenv('SAM_API_KEY'):
+                    logger.info("✅ Credentials chargés depuis config.env")
+                    logger.info(f"   SAM_USER_ID: {os.getenv('SAM_USER_ID')}")
+                    logger.info(f"   SAM_API_KEY: {os.getenv('SAM_API_KEY')[:8]}...")
+                else:
+                    logger.error("❌ Credentials manquants dans config.env")
+                    logger.error("   Utilisez: python3 setup_credentials.py")
+                    sys.exit(1)
+            else:
+                logger.error("❌ Fichier config.env non trouvé")
+                logger.error("   Utilisez: python3 setup_credentials.py")
+                sys.exit(1)
+        else:
+            logger.info("✅ Credentials déjà définis dans les variables d'environnement")
+            
+    except Exception as e:
+        logger.error(f"❌ Erreur lors de la vérification des credentials: {e}")
+        sys.exit(1)
+
 def setup_logging():
     """Configure le logging"""
     logger = logging.getLogger()
@@ -197,7 +240,7 @@ class WorkersByStatusLauncher:
             placeholders = ','.join(['?' for _ in shop_ids])
             
             cursor.execute(f"""
-                SELECT id, shop_name, shop_url, category, scraping_status, updated_at
+                SELECT id, shop_name, shop_url, scraping_status, updated_at
                 FROM shops 
                 WHERE id IN ({placeholders})
             """, shop_ids)
@@ -217,7 +260,7 @@ class WorkersByStatusLauncher:
                         'id': shop_id,
                         'shop_name': shop_detail[1],  # Vrai nom
                         'shop_url': shop_detail[2],   # Vraie URL
-                        'category': shop_detail[3],   # Vraie catégorie
+                        'category': 'Unknown',        # Pas de catégorie dans la table
                         'scraping_status': row[11],   # Statut depuis analytics
                         'updated_at': row[12],        # Updated_at depuis analytics
                         # Métriques existantes depuis analytics
@@ -271,14 +314,14 @@ class WorkersByStatusLauncher:
             if self.status == "partial":
                 # Pour 'partial', récupérer depuis la table analytics
                 target_shops = self.get_shops_with_analytics_status('partial')
+            elif self.status == "empty":
+                # Pour 'empty', récupérer depuis la table analytics
+                target_shops = self.get_shops_with_analytics_status('empty')
             else:
                 # Pour les autres statuts, utiliser la méthode normale
                 all_shops = api.get_all_shops()
                 
-                if self.status == "empty":
-                    # Boutiques sans statut ou avec statut vide
-                    target_shops = [shop for shop in all_shops if not shop.get('scraping_status') or shop.get('scraping_status') == '']
-                elif self.status == "failed":
+                if self.status == "failed":
                     # Boutiques avec statut failed
                     target_shops = [shop for shop in all_shops if shop.get('scraping_status') == 'failed']
                 elif self.status == "pending":
@@ -291,7 +334,7 @@ class WorkersByStatusLauncher:
                     logger.error(f"❌ Statut invalide: {self.status}")
                     return []
             
-            if self.status != "partial":
+            if self.status not in ["partial", "empty"]:
                 logger.info(f"📊 Total boutiques: {len(all_shops)}")
             logger.info(f"🎯 Boutiques avec statut '{self.status}': {len(target_shops)}")
             
@@ -513,6 +556,9 @@ def show_help():
 async def main():
     """Fonction principale"""
     setup_logging()
+    
+    # Vérifier et configurer les credentials avant de commencer
+    check_and_setup_credentials()
     
     if len(sys.argv) < 2:
         show_help()

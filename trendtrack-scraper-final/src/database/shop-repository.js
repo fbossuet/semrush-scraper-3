@@ -68,14 +68,13 @@ export class ShopRepository {
       
       const db = this._getConnection();
       
-      // 1. Insérer dans la table shops avec mapping dynamique
+      // 1. Insérer dans la table shops avec mapping dynamique (colonnes existantes uniquement)
       const shopColumns = [
         'shop_name', 'shop_url', 'scraping_status', 'scraping_last_update', 'updated_at',
-        'creation_date', 'monthly_visits', 'monthly_revenue', 'live_ads', 'live_ads_7d', 'live_ads_30d', 'page_number',
+        'creation_date', 'monthly_visits', 'monthly_revenue', 'live_ads', 'page_number',
         'scraped_at', 'project_source', 'external_id', 'metadata', 'year_founded',
         'total_products', 'pixel_google', 'pixel_facebook', 'aov',
-        'market_us', 'market_uk', 'market_de', 'market_ca', 'market_au', 'market_fr',
-        'category'
+        'market_us', 'market_uk', 'market_de', 'market_ca', 'market_au', 'market_fr'
       ];
       
       // Mapping dynamique des données
@@ -89,8 +88,6 @@ export class ShopRepository {
         'monthly_visits': shopData.monthlyVisits || null,
         'monthly_revenue': shopData.monthlyRevenue || '',
         'live_ads': shopData.liveAds || '',
-        'live_ads_7d': shopData.liveAds7d || 0,
-        'live_ads_30d': shopData.liveAds30d || 0,
         'page_number': shopData.page || 1,
         'scraped_at': shopData.scrapedAt || null,
         'project_source': shopData.projectSource || 'trendtrack',
@@ -106,8 +103,7 @@ export class ShopRepository {
         'market_de': shopData.marketDe || null,
         'market_ca': shopData.marketCa || null,
         'market_au': shopData.marketAu || null,
-        'market_fr': shopData.marketFr || null,
-        'category': shopData.category || ''
+        'market_fr': shopData.marketFr || null
       };
       
       // Construire la requête dynamiquement
@@ -390,6 +386,7 @@ export class ShopRepository {
         UPDATE shops SET
           market_us = ?, market_uk = ?, market_de = ?, market_ca = ?, market_au = ?, market_fr = ?,
           pixel_google = ?, pixel_facebook = ?, year_founded = ?, aov = ?,
+          live_ads_7d = ?, live_ads_30d = ?,
           scraping_status = ?, updated_at = ?
         WHERE id = ?
       `);
@@ -405,6 +402,8 @@ export class ShopRepository {
         detailData.pixel_facebook || "non",
         detailData.year_founded || null,
         detailData.aov || null,
+        detailData.live_ads_7d || 0,
+        detailData.live_ads_30d || 0,
         detailData.scraping_status || 'details_extracted',
         new Date().toISOString(),
         id
@@ -584,6 +583,26 @@ export class ShopRepository {
     } catch (error) {
       console.error('❌ Erreur recherche:', error.message);
       return [];
+    }
+  }
+
+  /**
+   * Met à jour le statut de scraping d'une boutique
+   */
+  async updateShopStatus(id, status) {
+    try {
+      const db = this._getConnection();
+      const stmt = db.prepare('UPDATE shops SET scraping_status = ?, updated_at = ? WHERE id = ?');
+      const result = stmt.run(status, new Date().toISOString(), id);
+      
+      // Invalider le cache
+      this._clearCache();
+      
+      console.log(`✅ Statut mis à jour: boutique ${id} -> ${status}`);
+      return result.changes > 0;
+    } catch (error) {
+      console.error('❌ Erreur updateShopStatus:', error.message);
+      return false;
     }
   }
 }

@@ -50,3 +50,4 @@ print(f"Signature: {signature}")
 print(f"Paramètres: {list(signature.parameters.keys())}")
 
 
+

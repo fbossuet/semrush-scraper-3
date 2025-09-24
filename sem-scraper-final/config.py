@@ -62,5 +62,6 @@ def get_mytoolsplan_credentials():
     """Get MyToolsPlan credentials from environment variables"""
     return MYTOOLSPLAN_USERNAME, MYTOOLSPLAN_PASSWORD
 
+
 # Instance globale de configuration
 config = Config() 

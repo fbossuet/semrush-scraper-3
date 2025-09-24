@@ -29,14 +29,12 @@ class APICredentials:
             user_id = os.getenv('SAM_USER_ID') or os.getenv('MYTOOLSPLAN_USER_ID')
             api_key = os.getenv('SAM_API_KEY') or os.getenv('MYTOOLSPLAN_API_KEY')
             
-            # Fallbacks sécurisés (credentials fonctionnels du 15 septembre)
+            # Validation des credentials (pas de fallback)
             if not user_id:
-                user_id = '27073915'  # Credential fonctionnel du 15 septembre
-                logger.warning("⚠️ SAM_USER_ID non défini, utilisation du fallback")
+                raise ValueError("SAM_USER_ID non défini. Utilisez setup_credentials.py pour configurer les credentials.")
             
             if not api_key:
-                api_key = 'f11f04e4184a3d54c7c42eae3aa71d40'  # Credential fonctionnel du 15 septembre
-                logger.warning("⚠️ SAM_API_KEY non définie, utilisation du fallback")
+                raise ValueError("SAM_API_KEY non définie. Utilisez setup_credentials.py pour configurer les credentials.")
             
             # Validation des credentials
             try:
@@ -59,13 +57,7 @@ class APICredentials:
             
         except Exception as e:
             logger.error(f"❌ Erreur lors du chargement des credentials: {e}")
-            # Fallback d'urgence (credentials fonctionnels du 15 septembre)
-            self._credentials = {
-                'userId': 27073915,
-                'apiKey': 'f11f04e4184a3d54c7c42eae3aa71d40',
-                'source': 'emergency_fallback'
-            }
-            logger.warning("🚨 Utilisation du fallback d'urgence")
+            raise ValueError(f"Impossible de charger les credentials: {e}. Utilisez setup_credentials.py pour configurer les credentials.")
     
     def get_credentials(self) -> Dict[str, Any]:
         """

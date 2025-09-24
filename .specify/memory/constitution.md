@@ -26,7 +26,7 @@ Validation des métriques par comptage dynamique (pas de hardcoding); Logique é
 - **SQLite** pour le stockage des données
 - **FastAPI** pour les endpoints de test (Port 8001, URL: http://37.59.102.7:8001)
 - **Système de workers parallèles** pour la performance
-- **Endpoint principal**: /test/shops/with-analytics-ordered (structure standardisée 25 champs)
+- **Endpoint principal**: /albert (structure standardisée 28 champs)
 
 ### Standards de Performance
 - **Timeout adaptatif** : Ne pas insister sur les métriques non récupérables
@@ -36,15 +36,6 @@ Validation des métriques par comptage dynamique (pas de hardcoding); Logique é
 
 ## Workflow de Développement
 
-### Processus de Modification
-1. **Lecture obligatoire** du guide de développement
-2. **Backup** du fichier à modifier
-3. **Téléchargement** du fichier du VPS
-4. **Modification locale** avec outils appropriés (search_replace, MultiEdit)
-5. **Vérification syntaxe** Python (py_compile)
-6. **Upload** sur le VPS
-7. **Vérification déploiement** sur le VPS
-8. **Test utilisateur** et validation
 
 ### Contrôles Qualité
 - **Vérification des effets de bord** avant toute modification
@@ -64,10 +55,11 @@ Les amendements nécessitent une documentation complète, une validation utilisa
 
 ## Structure de l'Endpoint Standardisé
 
-### Endpoint Principal: /test/shops/with-analytics-ordered
-**Structure de retour standardisée (25 champs)**:
+### Endpoint Principal: /albert
+**Structure de retour standardisée (28 champs)**:
 - **Identité**: id, shop_name, shop_url, category
 - **Métriques de base**: monthly_visits, year_founded, total_products, aov
+- **Live Ads**: live_ads, live_ads_7d, live_ads_30d
 - **Pixels**: pixel_google, pixel_facebook
 - **Trafic**: organic_traffic, bounce_rate, avg_visit_duration, visits
 - **Analytics**: branded_traffic, percent_branded_traffic, paid_search_traffic, cpc, conversion_rate
@@ -75,7 +67,6 @@ Les amendements nécessitent une documentation complète, une validation utilisa
 
 ### Bases de Données
 - **Production**: trendtrack.db (structure de base, types TEXT)
-- **Test**: trendtrack_test.db (structure optimisée, types INTEGER/DATE)
 - **Endpoint utilise**: trendtrack.db (données de production)
 
-**Version**: 1.1.0 | **Ratifié**: 2025-09-16 | **Dernière modification**: 2025-09-18
+**Version**: 1.2.0 | **Ratifié**: 2025-09-16 | **Dernière modification**: 2025-01-23

@@ -23,36 +23,42 @@ export class TrendTrackExtractor extends BaseExtractor {
     this.selectors = {
       // Informations de la boutique
       shopName: {
-        selector: 'td p.text-sm.font-semibold',
+        selector: 'td:nth-child(2) div:first-child p.text-sm.font-semibold',
         multiple: false
       },
       shopUrl: {
-        selector: 'td a[href*="http"]',
+        selector: 'td:nth-child(2) a[href*="http"]',
         attribute: 'href',
         multiple: false
       },
       shopDomain: {
-        selector: 'td a[href*="http"]',
+        selector: 'td:nth-child(2) a[href*="http"]',
         multiple: false
       },
       
       // Catégorie
       category: {
-        selector: 'td div.h-full.w-full.flex.items-center.justify-center.text-center.flex-col.font-semibold div',
+        selector: 'td:nth-child(4) div div',
         multiple: false
       },
       
-      // Visites mensuelles
-      monthlyVisits: {
-        selector: 'td p.font-bold',
+      // Visites mensuelles (supprimé comme demandé)
+      // monthlyVisits: {
+      //   selector: 'td:nth-child(5) div.h-full.w-full.flex.flex-col.items-center.justify-center.gap-1 p.font-bold',
+      //   multiple: false
+      // },
+      
+      // Année de fondation
+      yearFounded: {
+        selector: 'td:nth-child(2) p.text-\\[11px\\]',
         multiple: false
       },
       
-      // Revenus mensuels
-      monthlyRevenue: {
-        selector: 'td div.h-full.w-full.flex.flex-col.items-center.justify-center p.font-bold',
-        multiple: false
-      },
+      // Revenus mensuels (supprimé comme demandé)
+      // monthlyRevenue: {
+      //   selector: 'td div.h-full.w-full.flex.flex-col.items-center.justify-center p.font-bold',
+      //   multiple: false
+      // },
       
       // Nombre d'ads live
       liveAds: {
@@ -283,61 +289,64 @@ export class TrendTrackExtractor extends BaseExtractor {
       // Extraction des données de base du tableau en utilisant les méthodes existantes
       const shopData = {};
       
-      // Nom de la boutique
+      // UUID de la boutique (attribut id du <tr>)
       try {
-        const nameElement = await cells[0].locator('p.text-sm.font-semibold').first();
+        const rowId = await row.getAttribute('id');
+        if (rowId) {
+          shopData.external_id = rowId;
+          console.log(`✅ UUID de boutique extrait: ${shopData.external_id}`);
+        }
+      } catch (error) {
+        console.log('⚠️ UUID de boutique non trouvé');
+      }
+      
+      // Nom de la boutique (2e td > 1er div > p)
+      try {
+        const nameElement = await cells[1].locator('div:first-child p.text-sm.font-semibold').first();
         if (await nameElement.count() > 0) {
           shopData.shop_name = (await nameElement.textContent())?.trim();
+          console.log(`✅ Nom de boutique extrait: ${shopData.shop_name}`);
         }
       } catch (error) {
         console.log('⚠️ Nom de boutique non trouvé');
       }
 
-      // URL de la boutique
+      // URL de la boutique (2e td)
       try {
-        const urlElement = await cells[0].locator('a[href*="http"]').first();
+        const urlElement = await cells[1].locator('a[href*="http"]').first();
         if (await urlElement.count() > 0) {
           shopData.shop_url = await urlElement.getAttribute('href');
+          console.log(`✅ URL de boutique extraite: ${shopData.shop_url}`);
         }
       } catch (error) {
         console.log('⚠️ URL de boutique non trouvée');
       }
 
-      // Catégorie
+      // Catégorie (4e td)
       try {
-        const categoryElement = await cells[1].locator('div').first();
+        const categoryElement = await cells[3].locator('div div').first();
         if (await categoryElement.count() > 0) {
           shopData.category = (await categoryElement.textContent())?.trim();
+          console.log(`✅ Catégorie extraite: ${shopData.category}`);
         }
       } catch (error) {
         console.log('⚠️ Catégorie non trouvée');
       }
 
-      // Visites mensuelles
-      try {
-        const visitsElement = await cells[2].locator('p.font-bold').first();
-        if (await visitsElement.count() > 0) {
-          shopData.monthly_visits = this.parseNumber(await visitsElement.textContent());
-        }
-      } catch (error) {
-        console.log('⚠️ Visites mensuelles non trouvées');
-      }
+      // Visites mensuelles (supprimé comme demandé)
+      // shopData.monthly_visits = null;
 
-      // Revenus mensuels
-      try {
-        const revenueElement = await cells[3].locator('p.font-bold').first();
-        if (await revenueElement.count() > 0) {
-          shopData.monthly_revenue = this.parseNumber(await revenueElement.textContent());
-        }
-      } catch (error) {
-        console.log('⚠️ Revenus mensuels non trouvés');
-      }
+      // Revenus mensuels (supprimé comme demandé)
+      // shopData.monthly_revenue = null;
 
-      // Nombre de produits
+      // Nombre de produits (3e td)
       try {
-        const productsElement = await cells[4].locator('p.font-bold').first();
+        const productsElement = await cells[2].locator('p.text-sm.font-semibold').first();
         if (await productsElement.count() > 0) {
-          shopData.total_products = this.parseNumber(await productsElement.textContent());
+          const productsText = await productsElement.textContent();
+          const match = productsText.match(/\d[\d\s.,]*/);
+          shopData.total_products = match ? Number(match[0].replace(/[^\d]/g, "")) : null;
+          console.log(`✅ Nombre de produits extrait: ${shopData.total_products}`);
         }
       } catch (error) {
         console.log('⚠️ Nombre de produits non trouvé');
@@ -347,6 +356,41 @@ export class TrendTrackExtractor extends BaseExtractor {
       // Ces métriques ne sont PAS extraites en Phase 1
       shopData.live_ads_7d = 0;  // Valeur par défaut, sera mise à jour en Phase 3
       shopData.live_ads_30d = 0; // Valeur par défaut, sera mise à jour en Phase 3
+
+      // 🆕 Extraction de l'année de fondation (Phase 1 - page de liste)
+      try {
+        console.log(`🔍 Extraction année de fondation pour ${shopData.shop_name}...`);
+        
+        // Utiliser le sélecteur précis (2e td > p)
+        const yearElement = await cells[1].locator('p.text-\\[11px\\]').first();
+        if (await yearElement.count() > 0) {
+          const yearText = await yearElement.textContent();
+          console.log(`📅 Texte année trouvé: ${yearText}`);
+          
+          // Extraire l'année du format "17/09/2021"
+          const yearMatch = yearText.match(/(\d{4})/);
+          if (yearMatch) {
+            const year = parseInt(yearMatch[1]);
+            if (year >= 1990 && year <= new Date().getFullYear()) {
+              shopData.year_founded = year;
+              console.log(`✅ Année de fondation extraite: ${year}`);
+        } else {
+              console.log(`⚠️ Année invalide: ${year}`);
+              shopData.year_founded = null;
+            }
+          } else {
+            console.log(`⚠️ Aucune année trouvée dans le texte: ${yearText}`);
+            shopData.year_founded = null;
+          }
+        } else {
+          console.log(`⚠️ Élément année de fondation non trouvé`);
+          shopData.year_founded = null;
+        }
+        
+      } catch (error) {
+        console.error(`⚠️ Erreur extraction année de fondation pour ${shopData.shop_name}:`, error.message);
+        shopData.year_founded = null;
+      }
 
       // Ajouter les métadonnées
       shopData.scraping_status = 'table_extracted';

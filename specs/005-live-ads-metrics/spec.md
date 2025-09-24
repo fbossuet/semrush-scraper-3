@@ -26,8 +26,8 @@ Récupérer les métriques de progression des live ads pour une analyse temporel
 - **Description** : Récupération des métriques depuis la page de liste et de détail TrendTrack
 - **Source** : 
   - live_ads : Cellule 7 du tableau (Phase 1 - page de liste)
-  - live_ads_7d : Cellule 5 du tableau (Phase 3 - page de détail)
-  - live_ads_30d : Cellule 6 du tableau (Phase 3 - page de détail)
+  - live_ads_7d : Sélecteur `.flex.items-center.gap-2` (Phase 3 - page de détail)
+  - live_ads_30d : Sélecteur `.flex.items-center.gap-2` (Phase 3 - page de détail)
 - **Format** : Valeurs numériques entières
 
 ### Fonctionnalité 2 : Sauvegarde en Base de Données
@@ -43,10 +43,9 @@ Récupérer les métriques de progression des live ads pour une analyse temporel
 
 ### Contraintes de Source
 - **live_ads** : Extraite dans extractShopDataFromTable (Phase 1 - page de liste)
-- **live_ads_7d** : Extraite dans extractShopDetails (Phase 3 - page de détail)
-- **live_ads_30d** : Extraite dans extractShopDetails (Phase 3 - page de détail)
-- La cellule 6 (live_ads_30d) a une structure HTML différente (pas d'élément <p>)
-- Seule la cellule 5 (live_ads_7d) contient des données dans un format extractible
+- **live_ads_7d** : Extraite dans extractShopDetails (Phase 3 - page de détail) avec sélecteur `.flex.items-center.gap-2`
+- **live_ads_30d** : Extraite dans extractShopDetails (Phase 3 - page de détail) avec sélecteur `.flex.items-center.gap-2`
+- Les métriques 7d et 30d utilisent le même sélecteur avec parsing de texte pour différencier les périodes
 
 ### Contraintes de Performance
 - Extraction en parallèle avec les autres métriques de la page de détail
@@ -57,8 +56,8 @@ Récupérer les métriques de progression des live ads pour une analyse temporel
 
 ### Critère 1 : Extraction
 - [x] La métrique `live_ads` est extraite depuis la cellule 7 (Phase 1)
-- [x] La métrique `live_ads_7d` est extraite depuis la cellule 5 (Phase 3)
-- [x] La métrique `live_ads_30d` est tentée depuis la cellule 6 (structure HTML différente)
+- [x] La métrique `live_ads_7d` est extraite avec le sélecteur `.flex.items-center.gap-2` (Phase 3)
+- [x] La métrique `live_ads_30d` est extraite avec le sélecteur `.flex.items-center.gap-2` (Phase 3)
 - [x] Les valeurs sont correctement parsées en entiers
 
 ### Critère 2 : Sauvegarde
@@ -103,7 +102,7 @@ Récupérer les métriques de progression des live ads pour une analyse temporel
   - `live_ads_30d` : **Phase 3** (page de détail) - Sélecteur `.flex.items-center.gap-2`
 - **Source** : Cellule 7 du tableau + éléments `.flex.items-center.gap-2` sur page de détail
 - **Mapping** : Les IDs des boutiques sont extraits en Phase 1 et utilisés en Phase 3
-- **Structure HTML** : Les métriques 7d/30d sont dans des éléments flex avec parsing de texte
+- **Structure HTML** : Les métriques 7d/30d sont dans des éléments flex avec parsing de texte pour différencier les périodes
 
 ## Nouveaux Sélecteurs Live Ads (2025-01-23)
 

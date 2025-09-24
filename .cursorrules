@@ -20,8 +20,6 @@
 
 ## 🗄️ BASES DE DONNÉES
 - **Production**: trendtrack-scraper-final/data/trendtrack.db (chemin relatif)
-- **Test**: trendtrack-scraper-final/data/trendtrack_test.db (chemin relatif)
-- **Structure**: trendtrack_test.db a une structure optimisée (INTEGER, DATE) vs trendtrack.db (TEXT)
 - **Endpoint principal**: Utilise trendtrack.db (production) pour les données réelles
 - **Scraper TrendTrack**: Utilise la base de production (trendtrack.db)
 
@@ -30,7 +28,6 @@
 - **Port**: 8001
 - **URL**: http://37.59.102.7:8001
 - **Endpoint principal**: /albert
-- **Structure de retour**: 25 champs dans l'ordre spécifié (id, shop_name, category, etc.)
 - **Lancement**: Depuis /home/ubuntu/projects/shopshopshops/test/ avec chemins relatifs
 
 ## 🔧 COMMANDES DE VÉRIFICATION
@@ -45,24 +42,7 @@
 - **Types**: Bug Fix, Feature, Infrastructure, Documentation, Refactoring
 - **Statuts**: En cours, En attente, Terminée, Annulée
 
-## 🛠️ WORKFLOW DE DÉVELOPPEMENT
-1. **Lecture obligatoire** du guide de développement
-2. **Backup** du fichier à modifier
-3. **Téléchargement** du fichier du VPS
-4. **Modification locale** avec outils appropriés (search_replace, MultiEdit)
-5. **Vérification syntaxe** Python (py_compile)
-6. **Upload** sur le VPS
-7. **Vérification déploiement** sur le VPS
-8. **Test utilisateur** et validation
 
-## 🎯 STRUCTURE DE L'ENDPOINT FINAL
-L'endpoint /albert doit retourner exactement:
-- id, shop_name, shop_url, category
-- monthly_visits, year_founded, total_products, aov
-- pixel_google, pixel_facebook
-- organic_traffic, bounce_rate, avg_visit_duration, visits
-- branded_traffic, percent_branded_traffic, paid_search_traffic, cpc, conversion_rate
-- market_us, market_uk, market_de, market_ca, market_au, market_fr
 
 ## ⚠️ RÈGLES DE SÉCURITÉ
 - **Backup obligatoire** avant toute modification
