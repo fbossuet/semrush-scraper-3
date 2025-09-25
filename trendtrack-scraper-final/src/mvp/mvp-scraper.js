@@ -401,8 +401,8 @@ export class MVPScraper {
           pixelFacebook: pixelFacebook ? 'oui' : 'non',
           liveAds7d: liveAds7d || 0,
           liveAds30d: liveAds30d || 0,
-          aov: aov || null,
-          monthly_visits: monthlyVisits || null,
+          // aov: aov || null,  // DÉSACTIVÉ - Option 1
+          // monthly_visits: monthlyVisits || null,  // DÉSACTIVÉ - Option 1
           analytics_status: analyticsStatus,
           ...geoData,
           lastUpdated: new Date().toISOString()

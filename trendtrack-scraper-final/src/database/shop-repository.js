@@ -85,7 +85,7 @@ export class ShopRepository {
         'scraping_last_update': shopData.scrapingLastUpdate || null,
         'updated_at': new Date().toISOString(),
         'creation_date': shopData.creationDate || '',
-        'monthly_visits': shopData.monthlyVisits || null,
+        // 'monthly_visits': shopData.monthlyVisits || null,  // DÉSACTIVÉ - Option 1
         'monthly_revenue': shopData.monthlyRevenue || '',
         'live_ads': shopData.liveAds || '',
         'page_number': shopData.page || 1,
@@ -97,7 +97,7 @@ export class ShopRepository {
         'total_products': shopData.totalProducts || null,
         'pixel_google': shopData.pixelGoogle || "non",
         'pixel_facebook': shopData.pixelFacebook || "non",
-        'aov': shopData.aov || null,
+        // 'aov': shopData.aov || null,  // DÉSACTIVÉ - Option 1
         'market_us': shopData.marketUs || null,
         'market_uk': shopData.marketUk || null,
         'market_de': shopData.marketDe || null,
