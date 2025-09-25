@@ -117,7 +117,8 @@ Initialiser le scraper Noxtools (stealth headless), s'authentifier, naviguer ver
 #### P0 - Critique (À faire immédiatement)
 1. **Résoudre session expirée Semrush** : Implémenter retry avec re-authentification
 2. ✅ **Créer ServerManager** : Système dynamique de gestion des serveurs
-3. **Tester URLs Semrush** : Vérifier semrush1 vs semrush3
+3. ✅ **Tester URLs Semrush** : Vérifier semrush1 vs semrush3
+4. 🔄 **Créer script final main.py** : Orchestrer tous les modules selon la spec
 
 #### P1 - Important (À faire ensuite)
 1. **Harmoniser URLs** : Utiliser semrush1 comme dans la documentation
@@ -218,7 +219,8 @@ Optimiser les performances et paralléliser le scraping avec monitoring et limit
 #### P0 - Critique (À faire immédiatement)
 1. **Résoudre session expirée Semrush** : Implémenter retry avec re-authentification
 2. ✅ **Créer ServerManager** : Système dynamique de gestion des serveurs
-3. **Tester URLs Semrush** : Vérifier semrush1 vs semrush3
+3. ✅ **Tester URLs Semrush** : Vérifier semrush1 vs semrush3
+4. 🔄 **Créer script final main.py** : Orchestrer tous les modules selon la spec
 
 #### P1 - Important (À faire ensuite)
 1. **Harmoniser URLs** : Utiliser semrush1 comme dans la documentation

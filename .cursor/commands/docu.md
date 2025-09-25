@@ -1,6 +1,3 @@
-DOCU, il estime si c'est une évolution ou un fix ensuite il regarde la documentation, fais une analyse de comment tout ca doit s'intégrer à la documentation (niveau de précision de l'info, contradictions possibles, etc.), il fait la modif de doc + il ajoute un résumé de tout le chat et de ce qu'il a touché au code dans un dossier historique ou il nomme le .md pareil que le commit avec le mot FIX ou EVOL au début et la date. Ensuite il commit.
-Et je fais un chat par sujet, évol ou fix et à la fin de chaque chat quand je suis satisfait j'écris DOCU.
-
 1. le code développé est il un fix ou une évolution ?
 2. de nouveaux éléments ont ils été ajoutés par rapport à la doc ? 
     2.1. si non vérifier la conformité avec la doc
