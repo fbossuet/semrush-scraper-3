@@ -24,6 +24,10 @@ from utils.url_params import build_date_range
 
 logger = logging.getLogger(__name__)
 
+class SessionExpiredError(Exception):
+    """Exception raised when session is expired and redirected to logout."""
+    pass
+
 @dataclass
 class MetricsConfig:
     """Configuration for metrics extraction from Noxtools."""
@@ -133,6 +137,76 @@ class MetricsExtractor:
         # Normaliser l'URL avec le serveur actuel
         base_url = self.server_manager.normalize_url_to_current_server(self.config.overview_base_url)
         return f"{base_url}?{query_string}"
+    
+    async def _is_session_expired(self, page: Page) -> bool:
+        """Détecter si la session est expirée (redirection vers logout).
+        
+        Args:
+            page: Playwright page instance
+            
+        Returns:
+            bool: True si session expirée, False sinon
+        """
+        try:
+            current_url = page.url
+            logger.debug(f"🔍 Vérification session - URL actuelle: {current_url}")
+            
+            # Vérifier les patterns de redirection vers logout
+            logout_patterns = [
+                '/sso/logout',
+                '/login/disable_hard',
+                'backurl=/login/disable_hard',
+                'session expired',
+                'access again from dashboard'
+            ]
+            
+            # Vérifier l'URL
+            for pattern in logout_patterns:
+                if pattern in current_url.lower():
+                    logger.warning(f"🚨 Pattern de logout détecté dans URL: {pattern}")
+                    return True
+            
+            # Vérifier le contenu de la page
+            page_content = await page.evaluate('document.body.innerText')
+            page_content_lower = page_content.lower()
+            
+            # Vérifier les messages d'erreur de session
+            session_error_patterns = [
+                'session expired',
+                'access again from dashboard',
+                'please login',
+                'authentication required',
+                'unauthorized',
+                'forbidden',
+                'this url is protected by proxy'
+            ]
+            
+            for pattern in session_error_patterns:
+                if pattern in page_content_lower:
+                    logger.warning(f"🚨 Message d'erreur de session détecté: {pattern}")
+                    return True
+            
+            # Vérifier si la page est vide (pas d'éléments de recherche)
+            search_elements = await page.evaluate('''
+                () => {
+                    const inputs = document.querySelectorAll('input').length;
+                    const buttons = document.querySelectorAll('button').length;
+                    const forms = document.querySelectorAll('form').length;
+                    return { inputs, buttons, forms };
+                }
+            ''')
+            
+            # Si aucun élément de recherche n'est présent, probablement une page de logout
+            if search_elements['inputs'] == 0 and search_elements['buttons'] == 0:
+                logger.warning("🚨 Aucun élément de recherche détecté - possible page de logout")
+                return True
+            
+            logger.debug("✅ Session valide détectée")
+            return False
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur lors de la vérification de session: {e}")
+            return True  # En cas d'erreur, considérer comme expirée
         
     async def extract_metrics(self, page: Page, playwright_manager: PlaywrightManager, 
                             session_manager: SessionManager, shop_url: str = None) -> ExtractedMetrics:
@@ -147,6 +221,10 @@ class MetricsExtractor:
         Returns:
             ExtractedMetrics: Extracted metrics data
         """
+        # Vérifier si la session est valide (détection de logout)
+        if await self._is_session_expired(page):
+            logger.warning("🚨 Session expirée détectée - redirection vers logout")
+            raise SessionExpiredError("Session expirée - redirection vers logout détectée")
         metrics = ExtractedMetrics()
         
         try:
