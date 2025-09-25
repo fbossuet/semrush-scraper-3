@@ -120,6 +120,10 @@ class MetricsExtractor:
             logger.warning(f"⚠️ Error extracting domain from {shop_url}: {e}")
             return ""  # Fallback: retourner une chaîne vide
     
+    def _extract_domain_from_shop_url(self, shop_url: str) -> str:
+        """Extrait le domaine d'une URL de shop (alias pour compatibilité)."""
+        return self._extract_domain_from_url(shop_url)
+    
     def _build_overview_url(self, domain: str) -> str:
         """Construit l'URL overview avec le domaine et la date calculée."""
         date_range = build_date_range()
@@ -138,343 +142,120 @@ class MetricsExtractor:
         base_url = self.server_manager.normalize_url_to_current_server(self.config.overview_base_url)
         return f"{base_url}?{query_string}"
         
-    async def extract_metrics(self, page: Page, playwright_manager: PlaywrightManager, 
-                            session_manager: SessionManager, shop_url: str = None) -> ExtractedMetrics:
-        """Extract metrics from the Noxtools analytics page.
+    def _build_market_overview_url(self, domain: str) -> str:
+        """Construit l'URL Market-Overview avec le domaine."""
+        params = {
+            'searchType': 'domain',
+            'q': domain,
+            'db': 'us'
+        }
         
-        Args:
-            page: Playwright page instance
-            playwright_manager: PlaywrightManager instance
-            session_manager: SessionManager instance
-            shop_url: Shop URL to extract domain for CPC extraction
-            
-        Returns:
-            ExtractedMetrics: Extracted metrics data
-        """
-        metrics = ExtractedMetrics()
-        
+        query_string = urlencode(params)
+        # Normaliser l'URL avec le serveur actuel
+        base_url = self.server_manager.normalize_url_to_current_server(self.config.base_metrics_url)
+        return f"{base_url}?{query_string}"
+    
+    async def _navigate_to_dashboard(self, page: Page, playwright_manager: PlaywrightManager) -> bool:
+        """Navigue vers le dashboard pour rafraîchir la session."""
         try:
-            logger.info("📊 Starting metrics extraction from Noxtools...")
-            logger.info(f"📍 Base metrics URL: {self.config.base_metrics_url}")
+            logger.info("📊 Navigating to Dashboard...")
+            await playwright_manager.navigate_with_retry(page, self.config.dashboard_url)
+            await asyncio.sleep(1.0)
+            logger.info("✅ Dashboard navigation successful")
+            return True
+        except Exception as e:
+            logger.warning(f"⚠️ Dashboard navigation failed: {e}")
+            return False
+    
+    async def _navigate_to_overview(self, page: Page, overview_url: str) -> bool:
+        """Navigue vers la page Overview pour l'extraction CPC."""
+        try:
+            logger.info(f"🔗 Navigating to Overview: {overview_url}")
+            await page.goto(overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+            await page.wait_for_load_state('networkidle', timeout=self.config.timeout_ms)
+            await asyncio.sleep(2.0)  # Extra time for SAP React
+            logger.info("✅ Overview navigation successful")
+            return True
+        except Exception as e:
+            logger.warning(f"⚠️ Overview navigation failed: {e}")
+            return False
+    
+    async def _navigate_to_market_overview(self, page: Page, domain: str) -> bool:
+        """Navigue vers la page Market-Overview pour l'extraction des autres métriques."""
+        try:
+            # First, try to access the bridge if needed
+            await self._ensure_bridge_access(page)
             
-            # Extract domain from shop_url for navigation
-            domain = self._extract_domain_from_shop_url(shop_url) if shop_url else "cakesbody.com"
-            logger.info(f"🌐 Using domain for navigation: {domain}")
+            # Build Market-Overview URL
+            market_overview_url = self._build_market_overview_url(domain)
+            logger.info(f"🔗 Navigating to Market-Overview: {market_overview_url}")
             
-            # WORKFLOW RESTAURÉ: Accès direct d'abord, bridge en fallback
-            logger.info("🔄 Restoring working workflow: Direct access first, bridge as fallback")
+            await page.goto(market_overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+            await page.wait_for_load_state('networkidle', timeout=self.config.timeout_ms)
+            await asyncio.sleep(3.0)  # Extra time for SAP React
             
-            # Step 1: Navigate to Dashboard (https://noxtools.com/secure/member)
-            logger.info("📊 Step 1: Navigating to Dashboard...")
-            try:
-                await playwright_manager.navigate_with_retry(page, self.config.dashboard_url)
-                await asyncio.sleep(1.0)
-                logger.info("✅ Dashboard navigation successful")
-            except Exception as e:
-                logger.warning(f"⚠️ Dashboard navigation failed: {e}")
-            
-            # Step 2: Test direct access to Semrush (comme dans l'ancien code qui marchait)
-            logger.info("🧪 Step 2: Testing direct access to Semrush...")
-            direct_access_success = False
-            try:
-                # Test direct access to market overview
-                direct_url = f"https://semrush1.semrush.pw/analytics/traffic/market-overview"
-                await page.goto(direct_url, referer=self.config.dashboard_url, timeout=5000)
-                await page.wait_for_load_state('domcontentloaded', timeout=5000)
-                
-                # Check if direct access worked
-                current_url = page.url
-                page_title = await page.evaluate('document.title')
-                
-                if "403" not in page_title and "forbidden" not in page_title.lower():
-                    logger.info("✅ Direct server access successful, no bridge needed")
-                    direct_access_success = True
-                else:
-                    logger.info("⚠️ Direct access failed, will use bridge")
-                    
-            except Exception as e:
-                logger.info(f"⚠️ Direct access failed: {e}, will use bridge")
-            
-            # Step 3: Use bridge only if direct access failed
-            if not direct_access_success:
-                logger.info("🌉 Step 3: Using bridge as fallback...")
-                bridge_url = self.server_manager.get_current_bridge_url()
-                logger.info(f"🌉 Using bridge URL: {bridge_url}")
-                try:
-                    await page.goto(bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
-                    await page.wait_for_load_state('domcontentloaded', timeout=10000)
-                    await asyncio.sleep(1.0)
-                    logger.info("✅ Bridge URL visited successfully")
-                except Exception as e:
-                    logger.warning(f"⚠️ Bridge URL visit failed: {e}")
-            
-            # Step 4: Navigate to Overview (https://semrush1.semrush.pw/analytics/overview/...)
-            overview_url = self._build_overview_url(domain)
-            logger.info(f"🔗 Step 4: Navigating to Overview: {overview_url}")
-            try:
-                await page.goto(overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
-                await page.wait_for_load_state('networkidle', timeout=10000)
-                await asyncio.sleep(2.0)  # Extra time for SAP React
-                logger.info("✅ Overview navigation successful")
-                navigation_success = True
-            except Exception as e:
-                logger.warning(f"⚠️ Overview navigation failed: {e}")
-                navigation_success = False
-            
-            if not navigation_success:
-                metrics.error_message = "Failed to navigate to overview page"
-                logger.error("❌ Failed to navigate to overview page")
-                return metrics
-                
-            # Check for session expired before waiting
-            page_content = await page.content()
-            if "session expired" in page_content.lower():
-                logger.warning("⚠️ Session expired detected on metrics page")
-                metrics.error_message = "Session expired detected on metrics page"
-                logger.error("❌ Failed to extract metrics from page")
-                return metrics
-            
-            # Wait for SAP React to load (reduced delay)
-            await asyncio.sleep(3.0)  # Reduced from 5s to 3s
-            logger.info("⏳ Waiting for SAP React to load...")
-            
-            # DEBUG: Capture URL and page content
+            # Check if we're on the right page
             current_url = page.url
-            logger.info(f"🔍 DEBUG - Current URL: {current_url}")
-            
-            # Get page content for debugging
-            try:
-                page_content = await page.evaluate('document.body.innerText')
-                logger.info(f"🔍 DEBUG - Page content (first 500 chars): {page_content[:500]}")
-                
-                # Check for specific elements
-                title = await page.evaluate('document.title')
-                logger.info(f"🔍 DEBUG - Page title: {title}")
-                
-                # Check for error messages
-                error_elements = await page.query_selector_all('[class*="error"], [class*="Error"], [data-testid*="error"]')
-                if error_elements:
-                    logger.warning(f"🔍 DEBUG - Found {len(error_elements)} error elements")
-                    for i, elem in enumerate(error_elements[:3]):  # First 3 errors
-                        try:
-                            error_text = await elem.inner_text()
-                            logger.warning(f"🔍 DEBUG - Error {i+1}: {error_text[:200]}")
-                        except:
-                            pass
-                
-            except Exception as e:
-                logger.warning(f"🔍 DEBUG - Error getting page content: {e}")
-            
-            # Check again for session expired after waiting
-            page_content = await page.content()
-            if "session expired" in page_content.lower():
-                logger.warning("⚠️ Session expired detected after waiting")
-                metrics.error_message = "Session expired detected after waiting"
-                logger.error("❌ Failed to extract metrics from page")
-                return metrics
-            
-            # Wait for page to stabilize (reduced delay)
-            await asyncio.sleep(2.0)  # Reduced from 3s to 2s
-            
-            # Try network capture assisted extraction first
-            network_data = await self._capture_network_metrics(page)
-
-            if network_data:
-                self._populate_metrics_from_network(metrics, network_data)
-                metrics.success = True
-                logger.info("✅ Metrics extracted from network responses")
-                self._log_extracted_metrics(metrics)
-                return metrics
-
-            # Fallback: Extract from DOM
-            extraction_success = await self._extract_metrics_from_page(page, metrics)
-            
-            if extraction_success:
-                metrics.success = True
-                logger.info("✅ Metrics extraction successful")
-                
-                # Calculate CPC directly from already extracted metrics (no re-navigation needed)
-                cpc_value = await self._calculate_cpc_from_extracted_metrics(page, metrics)
-                if cpc_value is not None:
-                    metrics.cpc = str(cpc_value)
-                    logger.info(f"✅ CPC calculated from extracted metrics: {metrics.cpc}")
-                else:
-                    logger.warning("⚠️ CPC calculation failed from extracted metrics")
-                    metrics.cpc = "0.0"
-                
-                self._log_extracted_metrics(metrics)
+            if 'analytics/traffic/market-overview' in current_url:
+                logger.info("✅ Market-Overview navigation successful")
+                return True
             else:
-                metrics.error_message = "Failed to extract metrics from page"
-                logger.error("❌ Failed to extract metrics from page")
+                logger.warning(f"⚠️ Not on Market-Overview page: {current_url}")
+                return False
                 
         except Exception as e:
-            metrics.error_message = str(e)
-            logger.error(f"❌ Metrics extraction error: {e}")
-            
-        return metrics
-
-    async def extract_cpc_best_ratio(self, page: Page, playwright_manager: PlaywrightManager,
-                                     session_manager: SessionManager, domain: str) -> Optional[Dict[str, Any]]:
-        """Extract CPC based on max(volume/traffic) from overview grid.
-        Returns dict: { keyword, ratio, cpc, cpcRaw }
-        """
+            logger.warning(f"⚠️ Market-Overview navigation failed: {e}")
+            return False
+    
+    async def _ensure_bridge_access(self, page: Page) -> bool:
+        """S'assure que l'accès bridge est disponible."""
         try:
-            # Step 1: Use the same session refresh flow as metrics extraction
-            # Navigate to dashboard first to refresh session
-            try:
-                await playwright_manager.navigate_with_retry(page, self.config.dashboard_url)
-                await asyncio.sleep(1.0)
-            except Exception as e:
-                logger.warning(f"⚠️ Unable to visit dashboard before CPC extraction: {e}")
-
-            # Step 2: Hit the Noxtools → Semrush bridge (server3 only)
-            try:
-                logger.info(f"🌉 Visiting bridge URL for CPC: {self.config.bridge_url}")
-                await page.goto(self.config.bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
-                await page.wait_for_load_state('domcontentloaded', timeout=10000)
-                await asyncio.sleep(1.0)
-                logger.info("✅ Bridge URL visited successfully for CPC")
-            except Exception as e:
-                logger.warning(f"⚠️ Bridge URL visit failed for CPC: {e}")
-
-            # Step 3: Build and navigate to overview URL with domain
-            overview_url = self._build_overview_url(domain)
-            logger.info(f"🔗 Navigating to overview URL: {overview_url}")
+            # Test direct access first
+            direct_url = f"https://semrush1.semrush.pw/analytics/traffic/market-overview"
+            await page.goto(direct_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+            await page.wait_for_load_state('domcontentloaded', timeout=self.config.timeout_ms)
             
-            # Use the same approach as _navigate_to_metrics_page for consistency
-            navigation_success = False
-            try:
-                # First try session manager for cross-domain navigation
-                navigation_success = await session_manager.navigate_cross_domain(
-                    page, playwright_manager, overview_url
-                )
-            except Exception as e:
-                logger.warning(f"⚠️ Cross-domain navigation error for CPC: {e}")
-
-            # If session manager failed, try direct navigation with referer
-            if not navigation_success:
-                try:
-                    await page.goto(overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
-                    navigation_success = True
-                    logger.info("✅ Direct navigation to CPC page with referer succeeded")
-                except Exception as e:
-                    logger.warning(f"⚠️ Direct navigation with referer failed for CPC: {e}")
+            # Check if direct access worked
+            page_title = await page.evaluate('document.title')
+            if "403" not in page_title and "forbidden" not in page_title.lower():
+                logger.info("✅ Direct server access successful, no bridge needed")
+                return True
+            else:
+                logger.info("⚠️ Direct access failed, using bridge")
+                
+        except Exception as e:
+            logger.info(f"⚠️ Direct access failed: {e}, using bridge")
+        
+        # Use bridge if direct access failed
+        try:
+            bridge_url = self.server_manager.get_current_bridge_url()
+            logger.info(f"🌉 Using bridge URL: {bridge_url}")
+            await page.goto(bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+            await page.wait_for_load_state('domcontentloaded', timeout=self.config.timeout_ms)
+            await asyncio.sleep(1.0)
+            logger.info("✅ Bridge URL visited successfully")
+            return True
+        except Exception as e:
+            logger.warning(f"⚠️ Bridge URL visit failed: {e}")
+            return False
+    
+    async def _extract_cpc_from_overview(self, page: Page) -> Optional[float]:
+        """Extrait le CPC depuis la page Overview."""
+        try:
+            logger.info("📊 Extracting CPC from Overview page...")
             
-            if not navigation_success:
-                logger.error("❌ Failed to navigate to CPC page")
+            # Wait for grid to be present
+            try:
+                await page.wait_for_selector('div[data-ui-name="Body.Row"]', timeout=self.config.timeout_ms)
+                logger.info("✅ Body.Row elements found for CPC extraction")
+            except Exception as e:
+                logger.warning(f"⚠️ Body.Row not found: {e}")
                 return None
             
-            # Log current URL to debug session issues
-            current_url = page.url
-            logger.info(f"📍 Current URL after CPC navigation: {current_url}")
+            # Scroll to ensure all rows are rendered
+            await self._scroll_grid_for_rendering(page)
             
-            # Check if we got session expired message
-            try:
-                page_content = await page.content()
-                if "Session expired" in page_content or "access again from Dashboard" in page_content:
-                    logger.error("❌ Session expired on CPC page - need to refresh session")
-                    return None
-            except Exception as e:
-                logger.warning(f"⚠️ Could not check page content: {e}")
-            
-            # Network settle + extra RAFs for SAP React
-            try:
-                await page.wait_for_load_state('networkidle', timeout=10000)
-            except Exception as e:
-                logger.warning(f"⚠️ Network idle wait failed for CPC page: {e}")
-            await asyncio.sleep(2.0)
-
-            # Step 2b: Wait grid presence
-            try:
-                await page.wait_for_selector('div[data-ui-name="Body.Row"]', timeout=10000)
-                logger.info("✅ Found Body.Row elements for CPC extraction")
-            except Exception as e:
-                logger.warning(f"⚠️ Body.Row not found, trying volume cells: {e}")
-                try:
-                    await page.wait_for_selector('div[name="volume"][role="gridcell"] [data-at="value-volume"]', timeout=8000)
-                    logger.info("✅ Found volume cells for CPC extraction")
-                except Exception as e2:
-                    logger.warning(f"⚠️ Volume cells not found either: {e2}")
-
-            # Helper: scroll to force virtualization to render rows
-            async def _scroll_grid():
-                try:
-                    await page.evaluate("""
-                        () => {
-                          const cont = document.querySelector('[data-ui-name="Body"]') || document.scrollingElement || document.body;
-                          let y = 0; let steps = 0;
-                          const max = (cont.scrollHeight || 0) - (cont.clientHeight || 0);
-                          while (y < max && steps < 8) { y += Math.max(200, (cont.clientHeight||0)/2); cont.scrollTo(0, y); steps++; }
-                          return true;
-                        }
-                    """)
-                    logger.info("✅ Grid scrolled using container method")
-                except Exception as e:
-                    logger.warning(f"⚠️ Container scroll failed, using window scroll: {e}")
-                    for _ in range(6):
-                        await page.evaluate('window.scrollBy(0, Math.max(300, window.innerHeight/2))')
-                        await asyncio.sleep(0.25)
-                    logger.info("✅ Grid scrolled using window method")
-
-            # Step 3: Evaluate table-like grid with retries
-            eval_script = r"""
-            () => {
-              const parseNum = (s) => {
-                if (!s) return NaN;
-                const t = s.trim().replace(/[,%]/g,'').replace(/[, ]/g,'');
-                const m = t.match(/^([\d.]+)([KkMm])?$/);
-                if (!m) {
-                  const v = parseFloat(t);
-                  return isFinite(v) ? v : NaN;
-                }
-                const n = parseFloat(m[1]);
-                const mul = m[2] ? (m[2].toLowerCase()==='k' ? 1e3 : 1e6) : 1;
-                return n * mul;
-              };
-              let best = null;
-              const rows = document.querySelectorAll('div[data-ui-name="Body.Row"]');
-              rows.forEach(row => {
-                const q = (sel) => row.querySelector(sel)?.textContent?.trim() ?? '';
-                const kw   = q('div[name="phrase"] a');
-                const vol  = parseNum(q('div[name="volume"][role="gridcell"] [data-at="value-volume"]'));
-                const traf = parseNum(q('div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]'));
-                const cpcT = q('div[name="cpc"][role="gridcell"] [data-at="value-cpc"]');
-                const cpc  = parseNum(cpcT);
-                if (!isFinite(vol) || !isFinite(traf) || traf <= 0) return;
-                const ratio = vol / traf;
-                if (!best || ratio > best.ratio) best = { keyword: kw, ratio, cpc, cpcRaw: cpcT };
-              });
-              return best;
-            }
-            """
-            best = None
-            for attempt in range(3):
-                try:
-                    best = await page.evaluate(eval_script)
-                    logger.info(f"CPC evaluation attempt {attempt + 1}: {best}")
-                except Exception as e:
-                    logger.warning(f"⚠️ CPC evaluation attempt {attempt + 1} failed: {e}")
-                    best = None
-                if best and best.get('cpc') is not None:
-                    logger.info(f"✅ CPC found on attempt {attempt + 1}: {best}")
-                    break
-                if attempt < 2:  # Don't scroll on last attempt
-                    await _scroll_grid()
-                    await asyncio.sleep(0.5)
-            
-            if not best or best.get('cpc') is None:
-                logger.warning("⚠️ No CPC data found after all attempts")
-            return best
-        except Exception as e:
-            logger.error(f"❌ CPC extraction error: {e}")
-            return None
-    
-    async def _calculate_cpc_from_extracted_metrics(self, page: Page, metrics: ExtractedMetrics) -> Optional[float]:
-        """Calculate CPC from already extracted metrics without re-navigation."""
-        try:
-            logger.info("📊 Calculating CPC from extracted metrics...")
-            
-            # Use the same evaluation script as extract_cpc_best_ratio but without navigation
+            # Extract CPC using the same logic as before
             eval_script = r"""
             () => {
               const parseNum = (s) => {
@@ -506,199 +287,206 @@ class MetricsExtractor:
             }
             """
             
-            # Wait for grid to be present (should already be loaded)
-            try:
-                await page.wait_for_selector('div[data-ui-name="Body.Row"]', timeout=5000)
-                logger.info("✅ Body.Row elements found for CPC calculation")
-            except Exception as e:
-                logger.warning(f"⚠️ Body.Row not found for CPC calculation: {e}")
-                return None
-            
-            # Scroll to ensure all rows are rendered
-            try:
-                await page.evaluate("""
-                    () => {
-                      const cont = document.querySelector('[data-ui-name="Body"]') || document.scrollingElement || document.body;
-                      let y = 0; let steps = 0;
-                      const max = (cont.scrollHeight || 0) - (cont.clientHeight || 0);
-                      while (y < max && steps < 8) { y += Math.max(200, (cont.clientHeight||0)/2); cont.scrollTo(0, y); steps++; }
-                      return true;
-                    }
-                """)
-                logger.info("✅ Grid scrolled for CPC calculation")
-            except Exception as e:
-                logger.warning(f"⚠️ Grid scroll failed for CPC calculation: {e}")
-            
             # Calculate CPC with retries
             best = None
             for attempt in range(3):
                 try:
                     best = await page.evaluate(eval_script)
                     if best and best.cpc:
-                        logger.info(f"✅ CPC calculation attempt {attempt + 1} successful: {best}")
+                        logger.info(f"✅ CPC extraction attempt {attempt + 1} successful: {best}")
                         return best.cpc
                     else:
-                        logger.warning(f"⚠️ CPC calculation attempt {attempt + 1} returned no data")
+                        logger.warning(f"⚠️ CPC extraction attempt {attempt + 1} returned no data")
                 except Exception as e:
-                    logger.warning(f"⚠️ CPC calculation attempt {attempt + 1} failed: {e}")
+                    logger.warning(f"⚠️ CPC extraction attempt {attempt + 1} failed: {e}")
                 
                 if attempt < 2:  # Don't sleep on last attempt
                     await asyncio.sleep(1.0)
             
-            logger.warning("⚠️ All CPC calculation attempts failed")
+            logger.warning("⚠️ All CPC extraction attempts failed")
             return None
             
         except Exception as e:
-            logger.error(f"❌ Error calculating CPC from extracted metrics: {e}")
+            logger.error(f"❌ Error extracting CPC from Overview: {e}")
             return None
     
-    async def _navigate_to_metrics_page(self, page: Page, playwright_manager: PlaywrightManager,
-                                      session_manager: SessionManager) -> bool:
-        """Navigate to the metrics page with automatic server fallback."""
-        max_server_attempts = len(self.server_manager.get_available_servers())
-        
-        for attempt in range(max_server_attempts):
-            current_server = self.server_manager.get_current_server_name()
-            logger.info(f"🔄 Tentative {attempt + 1}/{max_server_attempts} avec serveur: {current_server}")
+    async def _extract_metrics_from_market_overview(self, page: Page, metrics: ExtractedMetrics) -> bool:
+        """Extrait les autres métriques depuis la page Market-Overview."""
+        try:
+            logger.info("🔍 Extracting other metrics from Market-Overview page...")
             
+            # Wait for React to fully load
             try:
-                logger.info("🌐 Navigating to metrics page...")
-                
-                # Step 1: Ensure dashboard is visited to refresh session (referer source)
-                try:
-                    await playwright_manager.navigate_with_retry(page, self.config.dashboard_url)
-                    await asyncio.sleep(1.0)
+                await page.wait_for_load_state('networkidle', timeout=self.config.timeout_ms)
+                logger.info("✅ Page network idle state reached")
                 except Exception as e:
-                    logger.warning(f"⚠️ Unable to visit dashboard before metrics: {e}")
-
-                # Step 2: Test server availability and use bridge only if needed
+                logger.warning(f"⚠️ Network idle timeout: {e}")
+            
+            # Additional wait for React components
+            await asyncio.sleep(2.0)
+            
+            # Extract each metric using the selectors
+            extraction_results = {}
+            
+            for metric_name, selector in self.config.selectors.items():
+                # Skip CPC as it's already extracted from Overview
+                if metric_name == 'cpc':
+                    continue
+                    
                 try:
-                    # Get current server bridge URL from ServerManager
-                    current_bridge_url = self.server_manager.get_current_bridge_url()
-                    logger.info(f"🌉 Current server bridge: {current_bridge_url}")
+                    value = await self._extract_single_metric(page, selector, metric_name)
+                    extraction_results[metric_name] = value
                     
-                    # Test if we can access the target server directly first
-                    target_url = self.config.base_metrics_url
-                    logger.info(f"🧪 Testing direct access to: {target_url}")
-                    
-                    # Try direct navigation first (without bridge)
-                    try:
-                        await page.goto(target_url, referer=self.config.dashboard_url, timeout=5000)
-                        await page.wait_for_load_state('domcontentloaded', timeout=5000)
+                    # Set the value in the metrics object
+                    if hasattr(metrics, metric_name):
+                        setattr(metrics, metric_name, value)
                         
-                        # Check if we got a valid response (not session expired immediately)
-                        page_content = await page.content()
-                        if "session expired" not in page_content.lower() and len(page_content) > 1000:
-                            logger.info("✅ Direct server access successful, no bridge needed")
-                            return True
-                        else:
-                            logger.info("⚠️ Direct access failed, will use bridge")
                     except Exception as e:
-                        logger.info(f"⚠️ Direct access failed: {e}, will use bridge")
-                    
-                    # If direct access failed, use bridge
-                    logger.info(f"🌉 Using bridge URL: {current_bridge_url}")
-                    await page.goto(current_bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
-                    await page.wait_for_load_state('domcontentloaded', timeout=10000)
-                    await asyncio.sleep(1.0)
-                    logger.info("✅ Bridge URL visited successfully")
-                    
-                    # If we reach here, navigation was successful
+                    logger.warning(f"⚠️ Failed to extract {metric_name}: {e}")
+                    extraction_results[metric_name] = None
+            
+            # Log extraction results
+            logger.info("📊 Market-Overview metrics extraction results:")
+            for metric_name, value in extraction_results.items():
+                if value:
+                    logger.info(f"  ✅ {metric_name}: {value}")
+                else:
+                    logger.warning(f"  ❌ {metric_name}: Not found")
+            
+            # Check if we extracted at least one metric
+            successful_extractions = sum(1 for v in extraction_results.values() if v is not None)
+            if successful_extractions > 0:
+                logger.info(f"✅ Successfully extracted {successful_extractions}/{len(extraction_results)} metrics from Market-Overview")
                     return True
-                    
-                except Exception as e:
-                    logger.warning(f"⚠️ Bridge URL visit failed on {current_server}: {e}")
-                    # Mark server as failed and switch to next server immediately
-                    self.server_manager.mark_server_failed(f"Bridge access failed: {e}", switch_immediately=True)
-                    
-                    # Check if we can try next server
-                    if attempt < max_server_attempts - 1:
-                        logger.info(f"🔄 Tentative avec le serveur suivant...")
-                        continue
                     else:
-                        logger.error("❌ Tous les serveurs ont échoué")
+                logger.error("❌ No metrics extracted from Market-Overview")
                         return False
                         
             except Exception as e:
-                logger.error(f"❌ Erreur lors de la tentative {attempt + 1}: {e}")
-                # Mark server as failed and switch to next server immediately
-                self.server_manager.mark_server_failed(f"Navigation error: {e}", switch_immediately=True)
-                
-                # Check if we can try next server
-                if attempt < max_server_attempts - 1:
-                    logger.info(f"🔄 Tentative avec le serveur suivant...")
-                    continue
-                else:
-                    logger.error("❌ Tous les serveurs ont échoué")
+            logger.error(f"❌ Market-Overview metrics extraction error: {e}")
                     return False
 
-        # Step 3: Prefer clicking the actual dashboard link to Semrush (carries auth context)
+    async def _scroll_grid_for_rendering(self, page: Page) -> None:
+        """Scroll the grid to ensure all rows are rendered."""
         try:
-            # Try to locate the semrush link on dashboard
-            link_selector = 'a[href*="semrush1.semrush.pw/analytics/traffic/market-overview"], a[href*="/analytics/traffic/market-overview"]'
-            link = await page.query_selector(link_selector)
-            if link:
-                href = await link.get_attribute('href')
-                logger.info(f"🔗 Found metrics link on dashboard: {href}")
-                try:
-                    await link.click()
-                    await page.wait_for_load_state('domcontentloaded', timeout=self.config.timeout_ms)
-                    logger.info("✅ Clicked dashboard link to metrics page")
-                    return True
+            await page.evaluate("""
+                () => {
+                  const cont = document.querySelector('[data-ui-name="Body"]') || document.scrollingElement || document.body;
+                  let y = 0; let steps = 0;
+                  const max = (cont.scrollHeight || 0) - (cont.clientHeight || 0);
+                  while (y < max && steps < 8) { y += Math.max(200, (cont.clientHeight||0)/2); cont.scrollTo(0, y); steps++; }
+                  return true;
+                }
+            """)
+            logger.info("✅ Grid scrolled for rendering")
                 except Exception as e:
-                    logger.warning(f"⚠️ Click navigation failed, trying location change: {e}")
-                    if href:
-                        await page.evaluate("url => window.location.href = url", href)
-                        await page.wait_for_load_state('domcontentloaded', timeout=self.config.timeout_ms)
-                        logger.info("✅ Navigated via window.location to metrics page")
-                        return True
-        except Exception as e:
-            logger.warning(f"Dashboard link navigation attempt failed: {e}")
-
-        # Step 4: Navigate to target URL with server fallback
-        navigation_success = False
-        max_retries = 3
+            logger.warning(f"⚠️ Grid scroll failed: {e}")
+            # Fallback: use window scroll
+            for _ in range(6):
+                await page.evaluate('window.scrollBy(0, Math.max(300, window.innerHeight/2))')
+                await asyncio.sleep(0.25)
+            logger.info("✅ Grid scrolled using window method")
         
-        for attempt in range(max_retries):
-            try:
-                # Get current server URL (may have changed due to fallback)
-                current_target_url = self.server_manager.normalize_url_to_current_server(self.config.base_metrics_url)
-                logger.info(f"🎯 Attempt {attempt + 1}: Navigating to {current_target_url}")
-                
-                # Use session manager for cross-domain navigation
-                navigation_success = await session_manager.navigate_cross_domain(
-                    page, playwright_manager, current_target_url
-                )
-                
-                if navigation_success:
-                    logger.info(f"✅ Navigation successful on attempt {attempt + 1}")
-                    break
+    async def extract_metrics(self, page: Page, playwright_manager: PlaywrightManager, 
+                            session_manager: SessionManager, shop_url: str = None) -> ExtractedMetrics:
+        """Extract metrics from Noxtools using the correct 2-step workflow.
+        
+        WORKFLOW CORRECT:
+        1. Step 1: Overview → CPC uniquement
+        2. Step 2: Market-Overview → FID + autres métriques (visits, organic, paid, etc.)
+        
+        Args:
+            page: Playwright page instance
+            playwright_manager: PlaywrightManager instance
+            session_manager: SessionManager instance
+            shop_url: Shop URL to extract domain for navigation
+            
+        Returns:
+            ExtractedMetrics: Extracted metrics data
+        """
+        metrics = ExtractedMetrics()
+        
+        try:
+            logger.info("📊 Starting CORRECTED metrics extraction workflow...")
+            logger.info("🔄 WORKFLOW: Overview (CPC) → Market-Overview (autres métriques)")
+            
+            # Extract domain from shop_url for navigation
+            domain = self._extract_domain_from_shop_url(shop_url) if shop_url else "cakesbody.com"
+            logger.info(f"🌐 Using domain for navigation: {domain}")
+            
+            # ========================================
+            # STEP 1: OVERVIEW → CPC UNIQUEMENT
+            # ========================================
+            logger.info("🎯 STEP 1: Extracting CPC from Overview page...")
+            
+            # Navigate to dashboard first
+            await self._navigate_to_dashboard(page, playwright_manager)
+            
+            # Navigate to Overview page for CPC extraction
+            overview_url = self._build_overview_url(domain)
+            logger.info(f"🔗 Navigating to Overview: {overview_url}")
+            
+            overview_success = await self._navigate_to_overview(page, overview_url)
+            if not overview_success:
+                metrics.error_message = "Failed to navigate to overview page"
+                logger.error("❌ Failed to navigate to overview page")
+                return metrics
+            
+            # Extract CPC from Overview page
+            cpc_value = await self._extract_cpc_from_overview(page)
+            if cpc_value is not None:
+                metrics.cpc = str(cpc_value)
+                logger.info(f"✅ CPC extracted from Overview: {metrics.cpc}")
                 else:
-                    logger.warning(f"⚠️ Navigation failed on attempt {attempt + 1}")
-                    # Mark current server as failed and try next
-                    self.server_manager.mark_server_failed("Navigation failed")
-                        
-            except Exception as e:
-                logger.warning(f"⚠️ Navigation error on attempt {attempt + 1}: {e}")
-                self.server_manager.mark_server_failed(f"Navigation error: {e}")
-        
-        if not navigation_success:
-            logger.error("❌ All navigation attempts failed")
-            return False
-        
-        # Check for session expired after navigation
-        page_content = await page.content()
-        if "session expired" in page_content.lower():
-            logger.warning("⚠️ Session expired detected after navigation")
-            # Try session refresh
-            if await session_manager.refresh_session_if_expired(page, playwright_manager, self.config.base_metrics_url, self.server_manager):
-                logger.info("✅ Session refreshed successfully")
+                logger.warning("⚠️ CPC extraction failed from Overview")
+                metrics.cpc = "0.0"
+            
+            # ========================================
+            # STEP 2: MARKET-OVERVIEW → AUTRES MÉTRIQUES
+            # ========================================
+            logger.info("🎯 STEP 2: Extracting other metrics from Market-Overview page...")
+            
+            # Navigate to Market-Overview page
+            market_overview_success = await self._navigate_to_market_overview(page, domain)
+            if not market_overview_success:
+                logger.warning("⚠️ Failed to navigate to Market-Overview")
+                # No fallback - Market-Overview is required for other metrics
+                extraction_success = False
             else:
-                logger.error("❌ Session refresh failed")
-                return False
-        
-        logger.info("✅ Successfully navigated to metrics page")
-        return True
+                # Extract other metrics from Market-Overview page
+                extraction_success = await self._extract_metrics_from_market_overview(page, metrics)
+            
+            # Set success only if both CPC and other metrics were extracted successfully
+            cpc_success = metrics.cpc and metrics.cpc != "0.0"
+            
+            if extraction_success and cpc_success:
+                metrics.success = True
+                logger.info("✅ All metrics extraction successful")
+                self._log_extracted_metrics(metrics)
+            elif extraction_success and not cpc_success:
+                metrics.success = False
+                metrics.error_message = "CPC extraction failed from Overview page"
+                logger.error("❌ CPC extraction failed from Overview page")
+            elif not extraction_success and cpc_success:
+                metrics.success = False
+                metrics.error_message = "Failed to extract other metrics from Market-Overview page"
+                logger.error("❌ Failed to extract other metrics from Market-Overview page")
+            else:
+                metrics.success = False
+                metrics.error_message = "Failed to extract both CPC and other metrics"
+                logger.error("❌ Failed to extract both CPC and other metrics")
+                
+        except Exception as e:
+            metrics.error_message = str(e)
+            logger.error(f"❌ Metrics extraction error: {e}")
+            
+        return metrics
+
+    # REMOVED: extract_cpc_best_ratio() - Functionality integrated into _extract_cpc_from_overview()
+    
+    # REMOVED: _calculate_cpc_from_extracted_metrics() - CPC now extracted directly from Overview page
+    
+    # REMOVED: _navigate_to_metrics_page() - Obsolete method replaced by _navigate_to_market_overview()
     
     async def _extract_metrics_from_page(self, page: Page, metrics: ExtractedMetrics) -> bool:
         """Extract metrics from the current page."""
@@ -747,7 +535,7 @@ class MetricsExtractor:
                 
             # Wait for React to fully load
             try:
-                await page.wait_for_load_state('networkidle', timeout=10000)
+                await page.wait_for_load_state('networkidle', timeout=self.config.timeout_ms)
                 logger.info("✅ Page network idle state reached")
             except Exception as e:
                 logger.warning(f"⚠️ Network idle timeout: {e}")
@@ -930,7 +718,7 @@ class MetricsExtractor:
 
             # 1) Direct selector
             try:
-                element = await page.wait_for_selector(selector, timeout=5000, state='attached')
+                element = await page.wait_for_selector(selector, timeout=self.config.timeout_ms, state='attached')
                 if element:
                     text = await read_element_text(element)
                     if text:

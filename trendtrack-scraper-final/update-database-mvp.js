@@ -126,7 +126,12 @@ async function executePhase1MVP(mvpScraper, shopRepo) {
     
     // PHASE 3 MVP: Extraction des détails
     logProgress('🔄 PHASE 3 MVP: Extraction des détails depuis la page de liste...');
-    await executePhase3MVP(mvpScraper, shopRepo, allTableData);
+    
+    // CORRECTION: Récupérer les boutiques depuis la base avec leurs IDs
+    const savedShops = await shopRepo.findByTableScrapingStatus('pending');
+    logProgress(`🔍 Récupéré ${savedShops.length} boutiques depuis la base pour Phase 3`);
+    
+    await executePhase3MVP(mvpScraper, shopRepo, savedShops);
     
   } catch (error) {
     logProgress(`❌ Erreur Phase 1 MVP: ${error.message}`);
