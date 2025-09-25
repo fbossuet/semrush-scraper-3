@@ -1,3 +1,3 @@
-2025/09/25-10:49:41.806 27e6a Reusing MANIFEST /home/ubuntu/projects/shopshopshops/test/scraper-noxtools-final/session-profiles/noxtools-session/Default/shared_proto_db/metadata/MANIFEST-000001
-2025/09/25-10:49:41.806 27e6a Recovering log #3
-2025/09/25-10:49:41.806 27e6a Reusing old log /home/ubuntu/projects/shopshopshops/test/scraper-noxtools-final/session-profiles/noxtools-session/Default/shared_proto_db/metadata/000003.log 
+2025/09/25-16:51:41.991 5941 Reusing MANIFEST /workspace/scraper-noxtools-final/session-profiles/noxtools-session/Default/shared_proto_db/metadata/MANIFEST-000001
+2025/09/25-16:51:41.992 5941 Recovering log #3
+2025/09/25-16:51:41.992 5941 Reusing old log /workspace/scraper-noxtools-final/session-profiles/noxtools-session/Default/shared_proto_db/metadata/000003.log 

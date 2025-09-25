@@ -154,12 +154,8 @@ class NoxtoolsScraper:
             # Le MetricsExtractor gère maintenant la navigation avec FID dynamique
             logger.info(f"🌐 Navigation vers métriques avec FID dynamique...")
             
-            # Extraire les métriques
-            metrics = await self.metrics_extractor.extract_metrics(
-                self.current_page,
-                self.playwright_manager,
-                self.session_manager
-            )
+            # Extraire les métriques avec retry en cas de session expirée
+            metrics = await self._extract_metrics_with_retry(domain)
             
             if metrics and metrics.success:
                 logger.info(f"✅ Métriques extraites pour {domain}")
@@ -176,6 +172,63 @@ class NoxtoolsScraper:
         except Exception as e:
             logger.error(f"❌ Erreur lors du scraping de {domain}: {e}")
             return None
+    
+    async def _extract_metrics_with_retry(self, domain: str, max_retries: int = 3):
+        """Extraire les métriques avec retry en cas de session expirée.
+        
+        Args:
+            domain: Domaine à scraper
+            max_retries: Nombre maximum de tentatives
+            
+        Returns:
+            ExtractedMetrics ou None
+        """
+        from core.metrics_extractor import SessionExpiredError
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"🔄 Tentative {attempt + 1}/{max_retries} pour {domain}")
+                
+                # Extraire les métriques
+                metrics = await self.metrics_extractor.extract_metrics(
+                    self.current_page,
+                    self.playwright_manager,
+                    self.session_manager,
+                    domain
+                )
+                
+                if metrics and metrics.success:
+                    logger.info(f"✅ Métriques extraites avec succès pour {domain}")
+                    return metrics
+                else:
+                    logger.warning(f"⚠️ Aucune métrique extraite pour {domain}")
+                    return None
+                    
+            except SessionExpiredError as e:
+                logger.warning(f"🚨 Session expirée détectée (tentative {attempt + 1}/{max_retries}): {e}")
+                
+                if attempt < max_retries - 1:  # Pas la dernière tentative
+                    logger.info("🔄 Re-authentification en cours...")
+                    
+                    # Re-authentification complète
+                    auth_success = await self.authenticate()
+                    if not auth_success:
+                        logger.error("❌ Re-authentification échouée")
+                        continue
+                    
+                    logger.info("✅ Re-authentification réussie, retry...")
+                    await asyncio.sleep(2)  # Délai avant retry
+                else:
+                    logger.error(f"❌ Échec après {max_retries} tentatives pour {domain}")
+                    return None
+                    
+            except Exception as e:
+                logger.error(f"❌ Erreur inattendue lors de l'extraction pour {domain}: {e}")
+                if attempt == max_retries - 1:  # Dernière tentative
+                    return None
+                await asyncio.sleep(1)  # Délai avant retry
+        
+        return None
     
     async def scrape_multiple_shops(self, domains: List[str]) -> List[Dict[str, Any]]:
         """Scrape les métriques pour plusieurs domaines."""

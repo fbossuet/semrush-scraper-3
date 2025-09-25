@@ -92,10 +92,18 @@ class PlaywrightManager:
         return page
     
     async def navigate_with_retry(self, page: Page, url: str, max_retries: int = 3) -> bool:
-        """Navigate to URL with retry logic and timeout handling."""
+        """Navigate to URL with retry logic, session validation and logout detection."""
         for attempt in range(max_retries):
             try:
                 logger.info(f"🌐 Navigating to {url} (attempt {attempt + 1}/{max_retries})")
+                
+                # Vérifier la validité des cookies avant navigation
+                if not await self._validate_session_cookies(page):
+                    logger.warning("🚨 Cookies de session invalides détectés")
+                    if attempt < max_retries - 1:
+                        logger.info("🔄 Tentative de re-authentification...")
+                        # Ici on pourrait déclencher une re-authentification
+                        # mais pour l'instant on continue avec la navigation
                 
                 # Set timeout based on config (30 seconds default)
                 timeout = 30000  # 30 seconds in milliseconds
@@ -103,6 +111,17 @@ class PlaywrightManager:
                 
                 # Wait for page to be ready
                 await page.wait_for_load_state('networkidle', timeout=10000)
+                
+                # Vérifier si on a été redirigé vers logout
+                if await self._is_redirected_to_logout(page):
+                    logger.warning("🚨 Redirection vers logout détectée")
+                    if attempt < max_retries - 1:
+                        logger.info("🔄 Retry avec nouvelle session...")
+                        await asyncio.sleep(2)
+                        continue
+                    else:
+                        logger.error("❌ Redirection vers logout persistante")
+                        return False
                 
                 logger.info(f"✅ Successfully navigated to {url}")
                 return True
@@ -116,6 +135,80 @@ class PlaywrightManager:
                     return False
         
         return False
+    
+    async def _validate_session_cookies(self, page: Page) -> bool:
+        """Vérifier la validité des cookies de session.
+        
+        Args:
+            page: Playwright page instance
+            
+        Returns:
+            bool: True si cookies valides, False sinon
+        """
+        try:
+            cookies = await page.context.cookies()
+            
+            # Vérifier la présence des cookies essentiels
+            essential_cookies = ['PHPSESSID', 'amember_nr', 'proxy_token']
+            found_cookies = {cookie['name'] for cookie in cookies}
+            
+            missing_cookies = set(essential_cookies) - found_cookies
+            if missing_cookies:
+                logger.warning(f"🚨 Cookies manquants: {missing_cookies}")
+                return False
+            
+            # Vérifier l'expiration des cookies
+            current_time = asyncio.get_event_loop().time()
+            for cookie in cookies:
+                if cookie.get('expires', -1) > 0:
+                    if cookie['expires'] < current_time:
+                        logger.warning(f"🚨 Cookie expiré: {cookie['name']}")
+                        return False
+            
+            logger.debug("✅ Cookies de session valides")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur lors de la validation des cookies: {e}")
+            return False
+    
+    async def _is_redirected_to_logout(self, page: Page) -> bool:
+        """Détecter si la page a été redirigée vers logout.
+        
+        Args:
+            page: Playwright page instance
+            
+        Returns:
+            bool: True si redirection vers logout, False sinon
+        """
+        try:
+            current_url = page.url.lower()
+            
+            # Patterns de redirection vers logout
+            logout_patterns = [
+                '/sso/logout',
+                '/login/disable_hard',
+                'backurl=/login/disable_hard',
+                'session expired',
+                'access again from dashboard'
+            ]
+            
+            for pattern in logout_patterns:
+                if pattern in current_url:
+                    logger.warning(f"🚨 Redirection vers logout détectée: {pattern}")
+                    return True
+            
+            # Vérifier le contenu de la page
+            page_content = await page.evaluate('document.body.innerText')
+            if 'this url is protected by proxy' in page_content.lower():
+                logger.warning("🚨 Page protégée par proxy détectée")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"❌ Erreur lors de la détection de redirection: {e}")
+            return True  # En cas d'erreur, considérer comme redirection
     
     async def cleanup(self) -> None:
         """Clean up Playwright resources."""
