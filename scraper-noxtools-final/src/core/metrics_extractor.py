@@ -164,12 +164,28 @@ class MetricsExtractor:
                 logger.error("❌ Failed to navigate to metrics page")
                 return metrics
                 
-            # Wait for SAP React to load
-            await asyncio.sleep(self.config.react_load_delay_ms / 1000.0)
+            # Check for session expired before waiting
+            page_content = await page.content()
+            if "session expired" in page_content.lower():
+                logger.warning("⚠️ Session expired detected on metrics page")
+                metrics.error_message = "Session expired detected on metrics page"
+                logger.error("❌ Failed to extract metrics from page")
+                return metrics
+            
+            # Wait for SAP React to load (reduced delay)
+            await asyncio.sleep(3.0)  # Reduced from 5s to 3s
             logger.info("⏳ Waiting for SAP React to load...")
             
-            # Wait for page to stabilize
-            await asyncio.sleep(self.config.stabilization_delay_ms / 1000.0)
+            # Check again for session expired after waiting
+            page_content = await page.content()
+            if "session expired" in page_content.lower():
+                logger.warning("⚠️ Session expired detected after waiting")
+                metrics.error_message = "Session expired detected after waiting"
+                logger.error("❌ Failed to extract metrics from page")
+                return metrics
+            
+            # Wait for page to stabilize (reduced delay)
+            await asyncio.sleep(2.0)  # Reduced from 3s to 2s
             
             # Try network capture assisted extraction first
             network_data = await self._capture_network_metrics(page)
@@ -426,6 +442,19 @@ class MetricsExtractor:
                 navigation_success = True
             except Exception as e:
                 logger.warning(f"⚠️ Direct navigation with referer failed: {e}")
+            
+            # Check for session expired after navigation
+            if navigation_success:
+                page_content = await page.content()
+                if "session expired" in page_content.lower():
+                    logger.warning("⚠️ Session expired detected after navigation")
+                    # Try session refresh
+                    if await session_manager.refresh_session_if_expired(page, playwright_manager, self.config.metrics_url):
+                        logger.info("✅ Session refreshed successfully")
+                        navigation_success = True
+                    else:
+                        logger.error("❌ Session refresh failed")
+                        navigation_success = False
             
             if navigation_success:
                 logger.info("✅ Successfully navigated to metrics page")

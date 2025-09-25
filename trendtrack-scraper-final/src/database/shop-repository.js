@@ -546,14 +546,6 @@ export class ShopRepository {
    */
   async updateShopDetailsMVP(shopId, detailData) {
     try {
-      console.log(`🔍 DEBUG MVP - shopId:`, shopId);
-      console.log(`🔍 DEBUG MVP - detailData type:`, typeof detailData);
-      console.log(`🔍 DEBUG MVP - detailData:`, detailData);
-      console.log(`🔍 DEBUG MVP - detailData keys:`, Object.keys(detailData || {}));
-      console.log(`🔍 DEBUG MVP - AOV:`, detailData?.aov);
-      console.log(`🔍 DEBUG MVP - live_ads_7d:`, detailData?.live_ads_7d);
-      console.log(`🔍 DEBUG MVP - live_ads_30d:`, detailData?.live_ads_30d);
-      
       const db = this._getConnection();
       
       // MVP: Seulement mettre à jour la table shops avec les champs de base
@@ -564,19 +556,13 @@ export class ShopRepository {
         WHERE id = ?
       `);
       
-      console.log(`🔍 DEBUG MVP - Juste avant paramètres SQL:`);
-      console.log(`🔍 DEBUG MVP - detailData.live_ads_7d:`, detailData.live_ads_7d);
-      console.log(`🔍 DEBUG MVP - detailData.live_ads_30d:`, detailData.live_ads_30d);
-      
       const shopsParams = [
-        detailData.aov || null,
-        detailData.live_ads_7d || null,
-        detailData.live_ads_30d || null,
-        detailData.details_scraping_status || 'details_extracted',
+        detailData.aov ?? null,
+        detailData.live_ads_7d ?? null,
+        detailData.live_ads_30d ?? null,
+        detailData.details_scraping_status ?? 'details_extracted',
         shopId
       ];
-      
-      console.log(`🔍 DEBUG MVP - Paramètres SQL:`, shopsParams);
       
       shopsStmt.run(shopsParams);
       this._clearCache();

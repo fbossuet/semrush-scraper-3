@@ -151,6 +151,16 @@ class SessionManager:
             
             current_url = page.url.lower()
             
+            # Check for session expired in page content
+            try:
+                page_content = await page.content()
+                if "session expired" in page_content.lower():
+                    indicators['is_authenticated'] = False
+                    indicators['reason'] = 'Session expired detected in page content'
+                    return indicators
+            except Exception as e:
+                logger.warning(f"⚠️ Could not check page content: {e}")
+            
             # Check URL-based indicators
             if domain == self.config.noxtools_domain:
                 # Noxtools authentication indicators
@@ -205,6 +215,65 @@ class SessionManager:
             
         except Exception as e:
             logger.error(f"❌ Current session validation error: {e}")
+            return False
+    
+    async def keep_alive_session(self, page: Page, playwright_manager: PlaywrightManager) -> bool:
+        """Keep session alive by visiting dashboard and bridge URLs."""
+        try:
+            logger.info("🔄 Keeping session alive...")
+            
+            # Step 1: Visit dashboard to refresh Noxtools session
+            dashboard_url = "https://noxtools.com/secure/member"
+            logger.info(f"📊 Visiting dashboard: {dashboard_url}")
+            await playwright_manager.navigate_with_retry(page, dashboard_url, 2)
+            await asyncio.sleep(1.0)
+            
+            # Step 2: Visit bridge to refresh Semrush session
+            bridge_url = "https://semrush.noxtools.com/server3.php"
+            logger.info(f"🌉 Visiting bridge: {bridge_url}")
+            await page.goto(bridge_url, referer=dashboard_url, timeout=10000)
+            await page.wait_for_load_state('domcontentloaded', timeout=10000)
+            await asyncio.sleep(1.0)
+            
+            logger.info("✅ Session keep-alive completed")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Session keep-alive failed: {e}")
+            return False
+    
+    async def refresh_session_if_expired(self, page: Page, playwright_manager: PlaywrightManager, 
+                                       target_url: str) -> bool:
+        """Refresh session if expired and retry navigation."""
+        try:
+            logger.info("🔄 Attempting session refresh...")
+            
+            # Try keep-alive first
+            if await self.keep_alive_session(page, playwright_manager):
+                # Retry navigation to target
+                logger.info(f"🔄 Retrying navigation to: {target_url}")
+                navigation_success = await playwright_manager.navigate_with_retry(page, target_url, 2)
+                
+                if navigation_success:
+                    # Validate session after retry
+                    target_domain = urlparse(target_url).netloc
+                    session_valid = await self._validate_session_after_navigation(page, target_domain)
+                    
+                    if session_valid:
+                        logger.info("✅ Session refresh successful")
+                        return True
+                    else:
+                        logger.warning("⚠️ Session still invalid after refresh")
+                        return False
+                else:
+                    logger.error("❌ Navigation failed after session refresh")
+                    return False
+            else:
+                logger.error("❌ Session keep-alive failed")
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Session refresh error: {e}")
             return False
     
     async def get_session_info(self, page: Page) -> Dict[str, Any]:
