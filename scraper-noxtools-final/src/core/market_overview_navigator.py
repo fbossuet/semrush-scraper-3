@@ -101,19 +101,24 @@ class MarketOverviewNavigator:
                         continue
                     
                     # Step 4: Check for paywall
+                    # LOGIQUE CORRIGÉE: Fallback SEULEMENT si paywall détecté
                     if await self._check_paywall(page):
                         current_server = self.server_manager.get_current_server_name()
                         logger.warning(f"⚠️ Paywall detected on server {current_server}")
                         self.server_manager.mark_server_failed("Paywall detected")
-                        continue
+                        continue  # Fallback vers serveur suivant
                     
                     # Step 5: Perform search
                     search_success = await self._perform_search(page, domain)
                     if not search_success:
                         current_server = self.server_manager.get_current_server_name()
-                        logger.warning(f"⚠️ Search failed on server {current_server}")
-                        self.server_manager.mark_server_failed("Search failed")
-                        continue
+                        logger.warning(f"⚠️ Search failed on server {current_server} - NO PAYWALL DETECTED")
+                        # CORRECTION: Pas de fallback si pas de paywall - juste retry ou erreur
+                        # Le fallback ne doit se déclencher QUE si paywall détecté
+                        logger.error(f"❌ Search failed without paywall - staying on server {current_server}")
+                        # Option 1: Retry sur le même serveur
+                        # Option 2: Raise exception pour arrêter le processus
+                        raise Exception(f"Search failed on server {current_server} without paywall - no fallback")
                     
                     # Step 6: Extract FID and build complete URL
                     complete_url = await self._extract_fid_and_build_url(page)

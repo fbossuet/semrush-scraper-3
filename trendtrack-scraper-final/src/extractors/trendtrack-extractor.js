@@ -1274,22 +1274,34 @@ export class TrendTrackExtractor extends BaseExtractor {
   }
 
   /**
-   * Parse une plage de revenu au format "597.9K$ - 1.8M$" et retourne {min, max, avg}
+   * Parse une plage de revenu au format "597.9K$ - 1.8M$" ou un nombre simple et retourne {min, max, avg}
    */
   parseRevenueRange(text) {
     if (!text) return null;
     try {
-      const priceRegex = /^\s*[\d.,]+[KMB]*\$\s*-\s*[\d.,]+[KMB]*\$\s*$/i;
       const s = String(text).trim();
-      if (!priceRegex.test(s)) return null;
-      const parts = s.split('-').map(p => p.trim());
-      if (parts.length !== 2) return null;
-      const min = this.parseAmountWithSuffix(parts[0]);
-      const max = this.parseAmountWithSuffix(parts[1]);
-      if (typeof min === 'number' && typeof max === 'number' && min > 0 && max > 0) {
-        const avg = (min + max) / 2;
-        return { min, max, avg };
+      
+      // 1. Essayer d'abord le format plage existant
+      const priceRegex = /^\s*[\d.,]+[KMB]*\$\s*-\s*[\d.,]+[KMB]*\$\s*$/i;
+      if (priceRegex.test(s)) {
+        const parts = s.split('-').map(p => p.trim());
+        if (parts.length === 2) {
+          const min = this.parseAmountWithSuffix(parts[0]);
+          const max = this.parseAmountWithSuffix(parts[1]);
+          if (typeof min === 'number' && typeof max === 'number' && min > 0 && max > 0) {
+            const avg = (min + max) / 2;
+            return { min, max, avg };
+          }
+        }
       }
+      
+      // 2. NOUVEAU: Essayer de parser un nombre simple
+      const simpleNumber = this.parseAmountWithSuffix(s);
+      if (typeof simpleNumber === 'number' && simpleNumber > 0) {
+        console.log(`✅ Revenu simple extrait: "${s}" → ${simpleNumber}`);
+        return { min: simpleNumber, max: simpleNumber, avg: simpleNumber };
+      }
+      
       return null;
     } catch {
       return null;

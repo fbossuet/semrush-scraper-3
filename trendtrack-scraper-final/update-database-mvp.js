@@ -45,7 +45,7 @@ const MVP_CONFIG = {
   batchPause: 5000,                // 5s entre lots
   
   // Limites MVP
-  maxShopsPerRun: 100,             // Limite pour MVP
+  maxShopsPerRun: 10000,           // Limite pour MVP
   maxPagesPerRun: 1,               // 1 page pour MVP
   batchSize: 5                     // 5 boutiques par lot
 };

@@ -157,14 +157,35 @@ class MetricsExtractor:
             logger.info("📊 Starting metrics extraction from Noxtools...")
             logger.info(f"📍 Base metrics URL: {self.config.base_metrics_url}")
             
-            # Navigate to metrics page (via dashboard referer, capture network)
-            navigation_success = await self._navigate_to_metrics_page(
-                page, playwright_manager, session_manager
-            )
+            # Extract domain from shop_url for navigation
+            domain = self._extract_domain_from_shop_url(shop_url) if shop_url else "example.com"
+            logger.info(f"🌐 Using domain for navigation: {domain}")
+            
+            # Navigate to overview page with correct URL (q=domain, date=calculated)
+            overview_url = self._build_overview_url(domain)
+            logger.info(f"🔗 Navigating to overview URL: {overview_url}")
+            
+            # Use session manager for cross-domain navigation
+            navigation_success = False
+            try:
+                navigation_success = await session_manager.navigate_cross_domain(
+                    page, playwright_manager, overview_url
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ Cross-domain navigation error: {e}")
+            
+            # If session manager failed, try direct navigation with referer
+            if not navigation_success:
+                try:
+                    await page.goto(overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                    navigation_success = True
+                    logger.info("✅ Direct navigation to overview page with referer succeeded")
+                except Exception as e:
+                    logger.warning(f"⚠️ Direct navigation with referer failed: {e}")
             
             if not navigation_success:
-                metrics.error_message = "Failed to navigate to metrics page"
-                logger.error("❌ Failed to navigate to metrics page")
+                metrics.error_message = "Failed to navigate to overview page"
+                logger.error("❌ Failed to navigate to overview page")
                 return metrics
                 
             # Check for session expired before waiting
@@ -178,6 +199,33 @@ class MetricsExtractor:
             # Wait for SAP React to load (reduced delay)
             await asyncio.sleep(3.0)  # Reduced from 5s to 3s
             logger.info("⏳ Waiting for SAP React to load...")
+            
+            # DEBUG: Capture URL and page content
+            current_url = page.url
+            logger.info(f"🔍 DEBUG - Current URL: {current_url}")
+            
+            # Get page content for debugging
+            try:
+                page_content = await page.evaluate('document.body.innerText')
+                logger.info(f"🔍 DEBUG - Page content (first 500 chars): {page_content[:500]}")
+                
+                # Check for specific elements
+                title = await page.evaluate('document.title')
+                logger.info(f"🔍 DEBUG - Page title: {title}")
+                
+                # Check for error messages
+                error_elements = await page.query_selector_all('[class*="error"], [class*="Error"], [data-testid*="error"]')
+                if error_elements:
+                    logger.warning(f"🔍 DEBUG - Found {len(error_elements)} error elements")
+                    for i, elem in enumerate(error_elements[:3]):  # First 3 errors
+                        try:
+                            error_text = await elem.inner_text()
+                            logger.warning(f"🔍 DEBUG - Error {i+1}: {error_text[:200]}")
+                        except:
+                            pass
+                
+            except Exception as e:
+                logger.warning(f"🔍 DEBUG - Error getting page content: {e}")
             
             # Check again for session expired after waiting
             page_content = await page.content()
@@ -542,8 +590,32 @@ class MetricsExtractor:
         try:
             logger.info("🔍 Extracting metrics from page...")
             
-            # Check if we're on the right page
+            # DEBUG: Detailed page analysis
             current_url = page.url
+            logger.info(f"🔍 DEBUG - Extracting from URL: {current_url}")
+            
+            # Get page title and content for debugging
+            try:
+                title = await page.evaluate('document.title')
+                logger.info(f"🔍 DEBUG - Page title: {title}")
+                
+                # Check for specific content indicators
+                page_text = await page.evaluate('document.body.innerText')
+                logger.info(f"🔍 DEBUG - Page contains 'market'? {'market' in page_text.lower()}")
+                logger.info(f"🔍 DEBUG - Page contains 'overview'? {'overview' in page_text.lower()}")
+                logger.info(f"🔍 DEBUG - Page contains 'traffic'? {'traffic' in page_text.lower()}")
+                
+                # Check for specific elements that should be present
+                grid_elements = await page.query_selector_all('[role="gridcell"]')
+                logger.info(f"🔍 DEBUG - Found {len(grid_elements)} gridcell elements")
+                
+                sap_elements = await page.query_selector_all('[data-ui-name]')
+                logger.info(f"🔍 DEBUG - Found {len(sap_elements)} SAP React elements")
+                
+            except Exception as e:
+                logger.warning(f"🔍 DEBUG - Error in page analysis: {e}")
+            
+            # Check if we're on the right page
             if 'analytics/traffic/market-overview' not in current_url:
                 logger.warning(f"⚠️ Not on metrics page: {current_url}")
                 return False

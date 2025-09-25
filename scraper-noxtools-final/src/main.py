@@ -240,7 +240,7 @@ async def main():
             return
         
         # 3. Test avec un domaine
-        test_domains = ["example.com", "google.com"]
+        test_domains = ["cakesbody.com"]
         logger.info(f"🧪 Test avec {len(test_domains)} domaines")
         
         results = await scraper.scrape_multiple_shops(test_domains)

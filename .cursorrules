@@ -21,6 +21,7 @@
 - **ZÉRO EXCEPTION** : Cette règle s'applique à TOUT : modifications, corrections, tests, commits
 - **LECTURE OBLIGATOIRE CURSORRULES** : TOUJOURS lire .cursorrules avant de faire quoi que ce soit
 - **LECTURE OBLIGATOIRE FIN DE SESSION** : TOUJOURS lire .cursorrules avant de rendre la main à l'utilisateur
+- **NE JAMAIS TUER UN PROCESSUS SANS MON ACCORD** : Ne jamais utiliser pkill, kill, ou arrêter des processus sans validation explicite
 
 ## ⚠️ RÈGLES DE SÉCURITÉ
 - **Backup obligatoire** avant toute modification
