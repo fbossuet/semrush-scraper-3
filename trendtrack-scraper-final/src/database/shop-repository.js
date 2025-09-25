@@ -564,6 +564,10 @@ export class ShopRepository {
         WHERE id = ?
       `);
       
+      console.log(`🔍 DEBUG MVP - Juste avant paramètres SQL:`);
+      console.log(`🔍 DEBUG MVP - detailData.live_ads_7d:`, detailData.live_ads_7d);
+      console.log(`🔍 DEBUG MVP - detailData.live_ads_30d:`, detailData.live_ads_30d);
+      
       const shopsParams = [
         detailData.aov || null,
         detailData.live_ads_7d || null,
