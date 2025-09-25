@@ -217,7 +217,8 @@ class SessionManager:
             logger.error(f"❌ Current session validation error: {e}")
             return False
     
-    async def keep_alive_session(self, page: Page, playwright_manager: PlaywrightManager) -> bool:
+    async def keep_alive_session(self, page: Page, playwright_manager: PlaywrightManager, 
+                                server_manager=None) -> bool:
         """Keep session alive by visiting dashboard and bridge URLs."""
         try:
             logger.info("🔄 Keeping session alive...")
@@ -228,12 +229,15 @@ class SessionManager:
             await playwright_manager.navigate_with_retry(page, dashboard_url, 2)
             await asyncio.sleep(1.0)
             
-            # Step 2: Visit bridge to refresh Semrush session
-            bridge_url = "https://semrush.noxtools.com/server3.php"
-            logger.info(f"🌉 Visiting bridge: {bridge_url}")
-            await page.goto(bridge_url, referer=dashboard_url, timeout=10000)
-            await page.wait_for_load_state('domcontentloaded', timeout=10000)
-            await asyncio.sleep(1.0)
+            # Step 2: Visit bridge to refresh Semrush session (only if server_manager provided)
+            if server_manager:
+                bridge_url = server_manager.get_current_bridge_url()
+                logger.info(f"🌉 Visiting bridge: {bridge_url}")
+                await page.goto(bridge_url, referer=dashboard_url, timeout=10000)
+                await page.wait_for_load_state('domcontentloaded', timeout=10000)
+                await asyncio.sleep(1.0)
+            else:
+                logger.info("⚠️ No server_manager provided, skipping bridge visit")
             
             logger.info("✅ Session keep-alive completed")
             return True
@@ -243,13 +247,13 @@ class SessionManager:
             return False
     
     async def refresh_session_if_expired(self, page: Page, playwright_manager: PlaywrightManager, 
-                                       target_url: str) -> bool:
+                                       target_url: str, server_manager=None) -> bool:
         """Refresh session if expired and retry navigation."""
         try:
             logger.info("🔄 Attempting session refresh...")
             
             # Try keep-alive first
-            if await self.keep_alive_session(page, playwright_manager):
+            if await self.keep_alive_session(page, playwright_manager, server_manager):
                 # Retry navigation to target
                 logger.info(f"🔄 Retrying navigation to: {target_url}")
                 navigation_success = await playwright_manager.navigate_with_retry(page, target_url, 2)

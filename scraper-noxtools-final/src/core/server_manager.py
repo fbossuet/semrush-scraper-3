@@ -185,6 +185,10 @@ class ServerManager:
         return [server for server in self.servers 
                 if server.failure_count < self.max_failures_per_server]
     
+    def are_all_servers_failed(self) -> bool:
+        """Vérifie si tous les serveurs ont échoué."""
+        return all(server.status == ServerStatus.FAILED for server in self.servers)
+    
     def get_server_status_summary(self) -> Dict[str, Any]:
         """Retourne un résumé du statut de tous les serveurs."""
         return {

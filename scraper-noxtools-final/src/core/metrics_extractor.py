@@ -31,8 +31,8 @@ class MetricsConfig:
     base_metrics_url: str = "https://semrush1.semrush.pw/analytics/traffic/market-overview"
     # URL dashboard (utilisée comme Referer pour réactiver la session)
     dashboard_url: str = "https://noxtools.com/secure/member"
-    # URL passerelle Noxtools → Semrush (réactive la session côté Semrush)
-    bridge_url: str = "https://semrush.noxtools.com/server3.php"
+    # URL passerelle Noxtools → Semrush (gérée dynamiquement par ServerManager)
+    bridge_url: str = ""  # Sera définie dynamiquement selon le serveur actuel
     # URL overview pour CPC (sera construite dynamiquement avec le domaine)
     overview_base_url: str = "https://semrush3.semrush.pw/analytics/overview/"
     
@@ -135,7 +135,7 @@ class MetricsExtractor:
         return f"{base_url}?{query_string}"
         
     async def extract_metrics(self, page: Page, playwright_manager: PlaywrightManager, 
-                            session_manager: SessionManager, shop_url: str) -> ExtractedMetrics:
+                            session_manager: SessionManager) -> ExtractedMetrics:
         """Extract metrics from the Noxtools analytics page.
         
         Args:
@@ -155,7 +155,7 @@ class MetricsExtractor:
             
             # Navigate to metrics page (via dashboard referer, capture network)
             navigation_success = await self._navigate_to_metrics_page(
-                page, playwright_manager, session_manager, shop_url
+                page, playwright_manager, session_manager
             )
             
             if not navigation_success:
@@ -380,7 +380,7 @@ class MetricsExtractor:
             return None
     
     async def _navigate_to_metrics_page(self, page: Page, playwright_manager: PlaywrightManager,
-                                      session_manager: SessionManager, shop_url: str) -> bool:
+                                      session_manager: SessionManager) -> bool:
         """Navigate to the metrics page."""
         try:
             logger.info("🌐 Navigating to metrics page...")
@@ -392,15 +392,43 @@ class MetricsExtractor:
             except Exception as e:
                 logger.warning(f"⚠️ Unable to visit dashboard before metrics: {e}")
 
-            # Step 2: Hit the Noxtools → Semrush bridge to refresh/carry session/token
+            # Step 2: Test server availability and use bridge only if needed
             try:
-                logger.info(f"🌉 Visiting bridge URL: {self.config.bridge_url}")
-                await page.goto(self.config.bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                # Get current server bridge URL from ServerManager
+                current_bridge_url = self.server_manager.get_current_bridge_url()
+                logger.info(f"🌉 Current server bridge: {current_bridge_url}")
+                
+                # Test if we can access the target server directly first
+                target_url = self.config.base_metrics_url
+                logger.info(f"🧪 Testing direct access to: {target_url}")
+                
+                # Try direct navigation first (without bridge)
+                try:
+                    await page.goto(target_url, referer=self.config.dashboard_url, timeout=5000)
+                    await page.wait_for_load_state('domcontentloaded', timeout=5000)
+                    
+                    # Check if we got a valid response (not session expired immediately)
+                    page_content = await page.content()
+                    if "session expired" not in page_content.lower() and len(page_content) > 1000:
+                        logger.info("✅ Direct server access successful, no bridge needed")
+                        return True
+                    else:
+                        logger.info("⚠️ Direct access failed, will use bridge")
+                except Exception as e:
+                    logger.info(f"⚠️ Direct access failed: {e}, will use bridge")
+                
+                # If direct access failed, use bridge
+                logger.info(f"🌉 Using bridge URL: {current_bridge_url}")
+                await page.goto(current_bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
                 await page.wait_for_load_state('domcontentloaded', timeout=10000)
                 await asyncio.sleep(1.0)
                 logger.info("✅ Bridge URL visited successfully")
+                
             except Exception as e:
                 logger.warning(f"⚠️ Bridge URL visit failed: {e}")
+                # Mark server as failed and try next server
+                self.server_manager.mark_server_failed(f"Bridge access failed: {e}")
+                return False
 
             # Step 3: Prefer clicking the actual dashboard link to Semrush (carries auth context)
             try:
@@ -425,33 +453,36 @@ class MetricsExtractor:
             except Exception as e:
                 logger.warning(f"Dashboard link navigation attempt failed: {e}")
 
-            # Step 4: Use Overview CPC interface (no FID required)
+            # Step 4: Navigate to target URL with server fallback
             navigation_success = False
-            try:
-                # Extract domain from shop_url for CPC interface
-                from urllib.parse import urlparse
-                parsed_url = urlparse(shop_url)
-                domain = parsed_url.netloc or parsed_url.path.strip('/')
-                
-                if not domain:
-                    logger.error("❌ Could not extract domain from shop_url")
-                    navigation_success = False
-                else:
-                    # Build overview URL (no FID needed)
-                    overview_url = self._build_overview_url(domain)
-                    logger.info(f"🔗 Navigating to overview URL (no FID): {overview_url}")
+            max_retries = 3
+            
+            for attempt in range(max_retries):
+                try:
+                    # Get current server URL (may have changed due to fallback)
+                    current_target_url = self.server_manager.normalize_url_to_current_server(self.config.base_metrics_url)
+                    logger.info(f"🎯 Attempt {attempt + 1}: Navigating to {current_target_url}")
                     
-                    # Navigate to overview URL
-                    await page.goto(overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
-                    await page.wait_for_load_state('domcontentloaded', timeout=10000)
-                    await asyncio.sleep(2.0)  # Wait for page to load
+                    # Use session manager for cross-domain navigation
+                    navigation_success = await session_manager.navigate_cross_domain(
+                        page, playwright_manager, current_target_url
+                    )
                     
-                    navigation_success = True
-                    logger.info("✅ Successfully navigated to overview interface (no FID required)")
-                    
-            except Exception as e:
-                logger.warning(f"⚠️ Overview navigation error: {e}")
-                navigation_success = False
+                    if navigation_success:
+                        logger.info(f"✅ Navigation successful on attempt {attempt + 1}")
+                        break
+                    else:
+                        logger.warning(f"⚠️ Navigation failed on attempt {attempt + 1}")
+                        # Mark current server as failed and try next
+                        self.server_manager.mark_server_failed("Navigation failed")
+                        
+                except Exception as e:
+                    logger.warning(f"⚠️ Navigation error on attempt {attempt + 1}: {e}")
+                    self.server_manager.mark_server_failed(f"Navigation error: {e}")
+            
+            if not navigation_success:
+                logger.error("❌ All navigation attempts failed")
+                return False
             
             # Check for session expired after navigation
             if navigation_success:
@@ -459,7 +490,7 @@ class MetricsExtractor:
                 if "session expired" in page_content.lower():
                     logger.warning("⚠️ Session expired detected after navigation")
                     # Try session refresh
-                    if await session_manager.refresh_session_if_expired(page, playwright_manager, self.config.base_metrics_url):
+                    if await session_manager.refresh_session_if_expired(page, playwright_manager, self.config.base_metrics_url, self.server_manager):
                         logger.info("✅ Session refreshed successfully")
                         navigation_success = True
                     else:
@@ -805,7 +836,7 @@ class MetricsExtractor:
     
     def get_metrics_url(self) -> str:
         """Get the metrics URL that will be navigated to."""
-        return self.config.metrics_url
+        return self.config.base_metrics_url
 
 # Convenience function for metrics extraction
 async def extract_noxtools_metrics(page: Page, playwright_manager: PlaywrightManager,

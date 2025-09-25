@@ -154,12 +154,11 @@ class NoxtoolsScraper:
             # Le MetricsExtractor gère maintenant la navigation avec FID dynamique
             logger.info(f"🌐 Navigation vers métriques avec FID dynamique...")
             
-            # Extraire les métriques (le MetricsExtractor gère maintenant la navigation)
+            # Extraire les métriques
             metrics = await self.metrics_extractor.extract_metrics(
                 self.current_page,
                 self.playwright_manager,
-                self.session_manager,
-                f"https://{domain}"  # URL du domaine pour l'extraction CPC
+                self.session_manager
             )
             
             if metrics and metrics.success:
