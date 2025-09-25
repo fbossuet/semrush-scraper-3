@@ -151,33 +151,15 @@ class NoxtoolsScraper:
             
             logger.info(f"📊 Scraping des métriques pour: {domain}")
             
-            # Construire l'URL des métriques
-            url_info = get_url_params_info()
-            current_server = self.server_manager.get_current_domain()
-            base_url = f"https://{current_server}/analytics/traffic/market-overview"
-            metrics_url = build_market_overview_url(
-                base_url,
-                "1355702",  # fid par défaut
-                url_info["date_range"]
-            )
+            # Le MetricsExtractor gère maintenant la navigation avec FID dynamique
+            logger.info(f"🌐 Navigation vers métriques avec FID dynamique...")
             
-            logger.info(f"🌐 Navigation vers: {metrics_url[:80]}...")
-            
-            # Navigation vers la page des métriques
-            await self.playwright_manager.navigate_with_retry(
-                self.current_page,
-                metrics_url
-            )
-            
-            # Attendre le chargement de la page
-            await asyncio.sleep(5)
-            
-            # Extraire les métriques
+            # Extraire les métriques (le MetricsExtractor gère maintenant la navigation)
             metrics = await self.metrics_extractor.extract_metrics(
                 self.current_page,
                 self.playwright_manager,
                 self.session_manager,
-                metrics_url
+                f"https://{domain}"  # URL du domaine pour l'extraction CPC
             )
             
             if metrics and metrics.success:

@@ -27,8 +27,8 @@ logger = logging.getLogger(__name__)
 @dataclass
 class MetricsConfig:
     """Configuration for metrics extraction from Noxtools."""
-    # URL des métriques (hardcodée pour Alpha)
-    metrics_url: str = "https://semrush1.semrush.pw/analytics/traffic/market-overview?searchType=domain&fid=1355702&dateRange=2025-07-01&country=us"
+    # URL de base des métriques (sans fid - sera construit dynamiquement)
+    base_metrics_url: str = "https://semrush1.semrush.pw/analytics/traffic/market-overview"
     # URL dashboard (utilisée comme Referer pour réactiver la session)
     dashboard_url: str = "https://noxtools.com/secure/member"
     # URL passerelle Noxtools → Semrush (réactive la session côté Semrush)
@@ -148,15 +148,14 @@ class MetricsExtractor:
             ExtractedMetrics: Extracted metrics data
         """
         metrics = ExtractedMetrics()
-        metrics.url = self.config.metrics_url
         
         try:
             logger.info("📊 Starting metrics extraction from Noxtools...")
-            logger.info(f"📍 Metrics URL: {self.config.metrics_url}")
+            logger.info(f"📍 Base metrics URL: {self.config.base_metrics_url}")
             
             # Navigate to metrics page (via dashboard referer, capture network)
             navigation_success = await self._navigate_to_metrics_page(
-                page, playwright_manager, session_manager
+                page, playwright_manager, session_manager, shop_url
             )
             
             if not navigation_success:
@@ -381,7 +380,7 @@ class MetricsExtractor:
             return None
     
     async def _navigate_to_metrics_page(self, page: Page, playwright_manager: PlaywrightManager,
-                                      session_manager: SessionManager) -> bool:
+                                      session_manager: SessionManager, shop_url: str) -> bool:
         """Navigate to the metrics page."""
         try:
             logger.info("🌐 Navigating to metrics page...")
@@ -426,22 +425,33 @@ class MetricsExtractor:
             except Exception as e:
                 logger.warning(f"Dashboard link navigation attempt failed: {e}")
 
-            # Step 4: Use session manager for cross-domain navigation with referer
+            # Step 4: Use Overview CPC interface (no FID required)
             navigation_success = False
             try:
-                # First jump to same domain context if needed
-                navigation_success = await session_manager.navigate_cross_domain(
-                    page, playwright_manager, self.config.metrics_url
-                )
+                # Extract domain from shop_url for CPC interface
+                from urllib.parse import urlparse
+                parsed_url = urlparse(shop_url)
+                domain = parsed_url.netloc or parsed_url.path.strip('/')
+                
+                if not domain:
+                    logger.error("❌ Could not extract domain from shop_url")
+                    navigation_success = False
+                else:
+                    # Build overview URL (no FID needed)
+                    overview_url = self._build_overview_url(domain)
+                    logger.info(f"🔗 Navigating to overview URL (no FID): {overview_url}")
+                    
+                    # Navigate to overview URL
+                    await page.goto(overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                    await page.wait_for_load_state('domcontentloaded', timeout=10000)
+                    await asyncio.sleep(2.0)  # Wait for page to load
+                    
+                    navigation_success = True
+                    logger.info("✅ Successfully navigated to overview interface (no FID required)")
+                    
             except Exception as e:
-                logger.warning(f"⚠️ Cross-domain navigation error: {e}")
-
-            # If already on target domain, enforce referer on direct goto
-            try:
-                await page.goto(self.config.metrics_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
-                navigation_success = True
-            except Exception as e:
-                logger.warning(f"⚠️ Direct navigation with referer failed: {e}")
+                logger.warning(f"⚠️ Overview navigation error: {e}")
+                navigation_success = False
             
             # Check for session expired after navigation
             if navigation_success:
@@ -449,7 +459,7 @@ class MetricsExtractor:
                 if "session expired" in page_content.lower():
                     logger.warning("⚠️ Session expired detected after navigation")
                     # Try session refresh
-                    if await session_manager.refresh_session_if_expired(page, playwright_manager, self.config.metrics_url):
+                    if await session_manager.refresh_session_if_expired(page, playwright_manager, self.config.base_metrics_url):
                         logger.info("✅ Session refreshed successfully")
                         navigation_success = True
                     else:
@@ -771,7 +781,7 @@ class MetricsExtractor:
             query_params = parse_qs(parsed_url.query)
             
             return {
-                'metrics_url': self.config.metrics_url,
+                'metrics_url': self.config.base_metrics_url,
                 'current_url': current_url,
                 'url_valid': 'analytics/traffic/market-overview' in current_url,
                 'query_parameters': {
