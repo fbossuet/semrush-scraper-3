@@ -548,18 +548,27 @@ export class ShopRepository {
     try {
       const db = this._getConnection();
       
-      // MVP: Seulement mettre à jour la table shops avec les champs de base
+      // MVP: Mettre à jour la table shops avec tous les champs de détails
       const shopsStmt = db.prepare(`
         UPDATE shops SET
-          aov = ?, live_ads_7d = ?, live_ads_30d = ?,
+          live_ads_7d = ?, live_ads_30d = ?,
+          pixel_google = ?, pixel_facebook = ?,
+          market_us = ?, market_uk = ?, market_de = ?, market_ca = ?, market_au = ?, market_fr = ?,
           details_scraping_status = ?
         WHERE id = ?
       `);
       
       const shopsParams = [
-        detailData.aov ?? null,
         detailData.live_ads_7d ?? null,
         detailData.live_ads_30d ?? null,
+        detailData.pixel_google ?? "non",
+        detailData.pixel_facebook ?? "non",
+        detailData.market_us ?? null,
+        detailData.market_uk ?? null,
+        detailData.market_de ?? null,
+        detailData.market_ca ?? null,
+        detailData.market_au ?? null,
+        detailData.market_fr ?? null,
         detailData.details_scraping_status ?? 'details_extracted',
         shopId
       ];

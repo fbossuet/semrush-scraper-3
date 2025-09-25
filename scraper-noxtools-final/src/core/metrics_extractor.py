@@ -293,20 +293,14 @@ class MetricsExtractor:
                 metrics.success = True
                 logger.info("✅ Metrics extraction successful")
                 
-                # Extract CPC using the domain from shop_url (if provided)
-                cpc_data = None
-                if shop_url:
-                    domain = self._extract_domain_from_url(shop_url)
-                    if domain:  # Vérifier que le domaine n'est pas vide
-                        cpc_data = await self.extract_cpc_best_ratio(page, playwright_manager, session_manager, domain)
-                    else:
-                        logger.warning("⚠️ Cannot extract CPC: domain is empty from shop_url")
-                
-                if cpc_data and cpc_data.get('cpc'):
-                    metrics.cpc = str(cpc_data['cpc'])
-                    logger.info(f"✅ CPC extracted: {metrics.cpc}")
+                # Calculate CPC directly from already extracted metrics (no re-navigation needed)
+                cpc_value = await self._calculate_cpc_from_extracted_metrics(page, metrics)
+                if cpc_value is not None:
+                    metrics.cpc = str(cpc_value)
+                    logger.info(f"✅ CPC calculated from extracted metrics: {metrics.cpc}")
                 else:
-                    logger.warning("⚠️ CPC extraction failed or no data found")
+                    logger.warning("⚠️ CPC calculation failed from extracted metrics")
+                    metrics.cpc = "0.0"
                 
                 self._log_extracted_metrics(metrics)
             else:
@@ -473,6 +467,89 @@ class MetricsExtractor:
             return best
         except Exception as e:
             logger.error(f"❌ CPC extraction error: {e}")
+            return None
+    
+    async def _calculate_cpc_from_extracted_metrics(self, page: Page, metrics: ExtractedMetrics) -> Optional[float]:
+        """Calculate CPC from already extracted metrics without re-navigation."""
+        try:
+            logger.info("📊 Calculating CPC from extracted metrics...")
+            
+            # Use the same evaluation script as extract_cpc_best_ratio but without navigation
+            eval_script = r"""
+            () => {
+              const parseNum = (s) => {
+                if (!s) return NaN;
+                const t = s.replace(/[^\d.KkMm]/g, '');
+                const m = t.match(/^([\d.]+)([KkMm])?$/);
+                if (!m) {
+                  const v = parseFloat(t);
+                  return isFinite(v) ? v : NaN;
+                }
+                const n = parseFloat(m[1]);
+                const mul = m[2] ? (m[2].toLowerCase()==='k' ? 1e3 : 1e6) : 1;
+                return n * mul;
+              };
+              let best = null;
+              const rows = document.querySelectorAll('div[data-ui-name="Body.Row"]');
+              rows.forEach(row => {
+                const q = (sel) => row.querySelector(sel)?.textContent?.trim() ?? '';
+                const kw   = q('div[name="phrase"] a');
+                const vol  = parseNum(q('div[name="volume"][role="gridcell"] [data-at="value-volume"]'));
+                const traf = parseNum(q('div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]'));
+                const cpcT = q('div[name="cpc"][role="gridcell"] [data-at="value-cpc"]');
+                const cpc  = parseNum(cpcT);
+                if (!isFinite(vol) || !isFinite(traf) || traf <= 0) return;
+                const ratio = vol / traf;
+                if (!best || ratio > best.ratio) best = { keyword: kw, ratio, cpc, cpcRaw: cpcT };
+              });
+              return best;
+            }
+            """
+            
+            # Wait for grid to be present (should already be loaded)
+            try:
+                await page.wait_for_selector('div[data-ui-name="Body.Row"]', timeout=5000)
+                logger.info("✅ Body.Row elements found for CPC calculation")
+            except Exception as e:
+                logger.warning(f"⚠️ Body.Row not found for CPC calculation: {e}")
+                return None
+            
+            # Scroll to ensure all rows are rendered
+            try:
+                await page.evaluate("""
+                    () => {
+                      const cont = document.querySelector('[data-ui-name="Body"]') || document.scrollingElement || document.body;
+                      let y = 0; let steps = 0;
+                      const max = (cont.scrollHeight || 0) - (cont.clientHeight || 0);
+                      while (y < max && steps < 8) { y += Math.max(200, (cont.clientHeight||0)/2); cont.scrollTo(0, y); steps++; }
+                      return true;
+                    }
+                """)
+                logger.info("✅ Grid scrolled for CPC calculation")
+            except Exception as e:
+                logger.warning(f"⚠️ Grid scroll failed for CPC calculation: {e}")
+            
+            # Calculate CPC with retries
+            best = None
+            for attempt in range(3):
+                try:
+                    best = await page.evaluate(eval_script)
+                    if best and best.cpc:
+                        logger.info(f"✅ CPC calculation attempt {attempt + 1} successful: {best}")
+                        return best.cpc
+                    else:
+                        logger.warning(f"⚠️ CPC calculation attempt {attempt + 1} returned no data")
+                except Exception as e:
+                    logger.warning(f"⚠️ CPC calculation attempt {attempt + 1} failed: {e}")
+                
+                if attempt < 2:  # Don't sleep on last attempt
+                    await asyncio.sleep(1.0)
+            
+            logger.warning("⚠️ All CPC calculation attempts failed")
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ Error calculating CPC from extracted metrics: {e}")
             return None
     
     async def _navigate_to_metrics_page(self, page: Page, playwright_manager: PlaywrightManager,
