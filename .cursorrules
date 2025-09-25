@@ -1,35 +1,6 @@
 # Règles de travail pour la branche test
 # ======================================
 
-## 🎯 PRINCIPES FONDAMENTAUX (NON-NÉGOCIABLES)
-- **Documentation-First**: TOUJOURS consulter la documentation avant toute action
-- **VPS-Only Development**: Développement exclusivement sur le VPS, jamais en local
-- **Validation Utilisateur**: L'utilisateur valide chaque modification via test sur le VPS
-- **Logs Immutables**: JAMAIS modifier les messages de logs existants
-- **Approche Adaptative**: Validation des métriques par comptage dynamique
-- **Pas de Scripts de Test**: JAMAIS créer de scripts de test - l'utilisateur teste directement sur le VPS
-- **Fix Reports Dynamiques**: Les fix reports doivent être mis à jour si l'utilisateur fait des modifs durant les tests
-- **Nettoyage Post-Validation**: Supprimer les fichiers de test/rapports après validation utilisateur
-- **Scripts de Modification Temporaires**: Supprimer tous les scripts de modification VPS après validation utilisateur
-
-## 📁 RÉPERTOIRE DE TRAVAIL
-- TOUJOURS travailler dans /home/ubuntu/projects/shopshopshops/test/
-- NE JAMAIS aller dans /home/ubuntu/trendtrack-scraper-final/ ou autres répertoires
-- **CHEMINS RELATIFS** : Utiliser os.getcwd() + chemins relatifs pour la portabilité
-- **RÉPERTOIRE DE BASE** : /home/ubuntu/projects/shopshopshops/test/ (répertoire de travail)
-
-## 🗄️ BASES DE DONNÉES
-- **Production**: trendtrack-scraper-final/data/trendtrack.db (chemin relatif)
-- **Endpoint principal**: Utilise trendtrack.db (production) pour les données réelles
-- **Scraper TrendTrack**: Utilise la base de production (trendtrack.db)
-
-## 🚀 API ET ENDPOINTS
-- **Fichier**: sem-scraper-final/api_server.py (chemin relatif)
-- **Port**: 8001
-- **URL**: http://37.59.102.7:8001
-- **Endpoint principal**: /albert
-- **Lancement**: Depuis /home/ubuntu/projects/shopshopshops/test/ avec chemins relatifs
-
 ## 🔧 COMMANDES DE VÉRIFICATION
 - Toujours commencer par: cd /home/ubuntu/projects/shopshopshops/test && pwd
 - Utiliser: python3 database_config.py pour vérifier les chemins
@@ -42,8 +13,6 @@
 - **Types**: Bug Fix, Feature, Infrastructure, Documentation, Refactoring
 - **Statuts**: En cours, En attente, Terminée, Annulée
 
-
-
 ## ⚠️ RÈGLES DE SÉCURITÉ
 - **Backup obligatoire** avant toute modification
 - **Test de compilation** Python avant upload (py_compile)
@@ -55,19 +24,12 @@
 - **Nettoyage post-validation** : Supprimer immédiatement les fichiers temporaires après usage
 - **Pas de pollution Git** : Ne jamais committer de fichiers de debug/test/temporaires
 
-## 🚀 DÉPLOIEMENT
-- Développer dans /test/
-- Déployer vers les autres branches quand prêt
-- Ne jamais modifier directement les autres branches
-- Utiliser le système de rollback en cas de problème
-
 ## 📦 GESTION GIT ET VERSIONING
-- **Fichiers à committer** : Code source principal, configurations, documentation (.md)
-- **Fichiers à EXCLURE** : Scripts de debug, de test, fichiers temporaires, logs
+- **Fichiers à committer** : Code source principal, configurations
+- **Fichiers à EXCLURE** : Scripts de debug, de test, fichiers temporaires, logs, documentation (.md), base de données
 - **Règle de commit** : Commiter après validation utilisateur d'un test réussi
 - **Timing des commits** : Quand l'utilisateur confirme qu'une modification fonctionne
 - **Nettoyage obligatoire** : Supprimer les fichiers temporaires après usage (voir règles de sécurité)
-- **Documentation** : TOUS les fichiers .md doivent être committés
 - **Code source** : Seulement les modifications validées et testées
 
 ## 📚 RÉFÉRENCES IMPORTANTES

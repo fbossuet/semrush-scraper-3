@@ -73,21 +73,27 @@ CREATE TABLE IF NOT EXISTS "shops" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     shop_name TEXT,
     shop_url TEXT UNIQUE NOT NULL,
-    scraping_status TEXT,
-    scraping_last_update TEXT,
-    updated_at TEXT,
-    creation_date TEXT,
-    monthly_visits TEXT,
+    total_products INTEGER,
+    monthly_visits INTEGER,
     monthly_revenue TEXT,
-    live_ads TEXT,
+    live_ads INTEGER,
+    aov NUMERIC,
     page_number TEXT,
     scraped_at TEXT,
     project_source TEXT,
     external_id TEXT,
-    metadata TEXT
-, year_founded TEXT);
+    metadata TEXT,
+    year_founded TEXT,
+    creation_date TEXT,
+    scraping_status TEXT,
+    live_ads_7d INTEGER,
+    live_ads_30d INTEGER,
+    table_scraping_status TEXT,
+    details_scraping_status TEXT
+);
 CREATE INDEX idx_shops_scraping_status ON shops(scraping_status);
-CREATE INDEX idx_shops_scraping_last_update ON shops(scraping_last_update);
+CREATE INDEX idx_shops_table_scraping_status ON shops(table_scraping_status);
+CREATE INDEX idx_shops_details_scraping_status ON shops(details_scraping_status);
 CREATE INDEX idx_shops_shop_url ON shops(shop_url);
 CREATE INDEX idx_shops_url ON shops(shop_url);
 CREATE INDEX idx_shops_live_ads ON shops(live_ads);

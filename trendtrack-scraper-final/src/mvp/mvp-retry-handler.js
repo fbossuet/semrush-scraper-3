@@ -2,8 +2,10 @@
  * MVP Retry Handler - Retry intelligent avec récupération automatique
  * 
  * Responsabilité: Gestion des retry avec récupération des erreurs critiques
- * Intègre les solutions MVP 1 et 3
+ * Intègre les solutions MVP 1, 3 et 4 (Browser Restart)
  */
+
+import { MVPBrowserManager } from './mvp-browser-manager.js';
 
 export class MVPRetryHandler {
   constructor(contextManager, sessionManager, extractor, config) {
@@ -11,6 +13,7 @@ export class MVPRetryHandler {
     this.sessionManager = sessionManager;
     this.extractor = extractor;
     this.config = config;
+    this.browserManager = new MVPBrowserManager(config);
     this.errorCounts = new Map();
     this.lastErrorTime = new Map();
   }
@@ -64,6 +67,24 @@ export class MVPRetryHandler {
       
     } catch (error) {
       console.log(`🔍 Analyse de l'erreur pour ${context}: ${error.message}`);
+      
+      // SOLUTION 4: Gestion de la fermeture du navigateur (PRIORITÉ)
+      if (this.browserManager.detectBrowserClosed(error)) {
+        console.log('🔄 Fermeture du navigateur détectée, redémarrage...');
+        
+        try {
+          const result = await this.browserManager.executeWithBrowserRestart(
+            operation, 
+            this.extractor, 
+            context
+          );
+          console.log('✅ Navigateur redémarré, opération réussie');
+          return result;
+        } catch (restartError) {
+          console.log(`❌ Échec du redémarrage du navigateur: ${restartError.message}`);
+          throw restartError;
+        }
+      }
       
       // SOLUTION 1: Gestion des contextes fermés
       if (this.contextManager.detectContextClosed(error)) {

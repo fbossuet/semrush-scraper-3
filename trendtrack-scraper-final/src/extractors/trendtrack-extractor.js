@@ -421,7 +421,7 @@ export class TrendTrackExtractor extends BaseExtractor {
       }
 
       // Ajouter les métadonnées
-      shopData.scraping_status = 'table_extracted';
+      shopData.table_scraping_status = 'table_extracted';
       shopData.last_updated = new Date().toISOString();
 
       // Vérifier qu'on a au moins le nom et l'URL
@@ -486,12 +486,16 @@ export class TrendTrackExtractor extends BaseExtractor {
       
       try {
         shopData.category = (await cells[3].textContent()).trim();
-        shopData.monthlyVisits = (await cells[4].textContent()).trim();
+        
+        // Utiliser DataFormatter pour monthly_visits
+        const monthlyVisitsText = (await cells[4].textContent()).trim();
+        shopData.monthlyVisits = DataFormatter.formatMonthlyVisits(monthlyVisitsText);
+        
         shopData.monthlyRevenue = (await cells[5].textContent()).trim();
       } catch (error) {
         console.error(`⚠️ Erreur extraction métriques de base: ${error.message}`);
         shopData.category = '';
-        shopData.monthlyVisits = '';
+        shopData.monthlyVisits = null;
         shopData.monthlyRevenue = '';
       }
       
@@ -859,7 +863,7 @@ export class TrendTrackExtractor extends BaseExtractor {
         live_ads_7d: await this.extractLiveAds7d(),
         live_ads_30d: await this.extractLiveAds30d(),
         
-        scraping_status: 'details_extracted',
+        details_scraping_status: 'details_extracted',
         last_updated: new Date().toISOString()
       };
       
@@ -1055,22 +1059,30 @@ export class TrendTrackExtractor extends BaseExtractor {
         console.log(`⚠️ Calcul AOV via revenu/commandes échoué: ${calcErr.message}`);
       }
       
-      // Sélecteurs multiples pour AOV (V2)
+      // Sélecteurs multiples pour AOV (V3 - Optimisés pour TrendTrack)
       const aovSelectors = [
-        // Sélecteur 1: Recherche par texte "AOV" ou "Average Order Value"
+        // Sélecteur 1: Spécifiques à TrendTrack (structure réelle)
+        '[data-testid*="aov"]',
+        '[data-testid*="order-value"]',
+        // Sélecteur 2: Classes CSS spécifiques TrendTrack
+        '.metric-card [class*="aov"]',
+        '.metric-card [class*="order-value"]',
+        '.stats-grid [class*="aov"]',
+        // Sélecteur 3: Recherche dans les sections métriques
+        'section:has-text("Average Order Value") p',
+        'section:has-text("AOV") p',
+        'div:has-text("Order Value") p',
+        // Sélecteur 4: Recherche par texte "AOV" ou "Average Order Value"
         'text=AOV',
         'text=Average Order Value',
         'text=Order Value',
-        // Sélecteur 2: Recherche par pattern de prix
+        // Sélecteur 5: Recherche par pattern de prix (plus spécifique)
+        'text=/\\$[0-9]+(?:\\.[0-9]{2})?/',
+        'text=/€[0-9]+(?:\\.[0-9]{2})?/',
+        'text=/£[0-9]+(?:\\.[0-9]{2})?/',
+        // Sélecteur 6: Fallback générique
         '[class*="aov"]',
-        '[class*="order-value"]',
-        // Sélecteur 3: Recherche dans les métriques
-        '.metrics [class*="aov"]',
-        '.stats [class*="aov"]',
-        // Sélecteur 4: Recherche par contenu contenant des prix
-        'text=/\\$[0-9,]+/',
-        'text=/€[0-9,]+/',
-        'text=/£[0-9,]+/'
+        '[class*="order-value"]'
       ];
       
       for (const selector of aovSelectors) {

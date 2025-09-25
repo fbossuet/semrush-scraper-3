@@ -1,0 +1,1 @@
+vérifie les erreurs de cette section du code puis sa cohérence avec le reste du code

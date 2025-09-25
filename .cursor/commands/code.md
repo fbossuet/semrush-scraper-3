@@ -1,0 +1,1 @@
+vérifie le code  que tu viensd de produit our détecter erreurs ou incohérences, problemes de syntaxe, erreurs techniques et autrs problemes qui peuvent affecter le fonctionnement du projet. vérifie aussi que ça ne cause pas d'effets de bord

@@ -14,8 +14,8 @@
 - DB: `trendtrack-scraper-final/data/trendtrack.db` (relatif), tables existantes; colonnes additionnelles validées (`live_ads_7d`, `live_ads_30d`); nouveaux champs de statut (`table_scraping_status`, `details_scraping_status`).
 
 ### 4) Données à extraire
-- Phase 1 (table): `shop_name`, `shop_url`, `total_products`, `year_founded` (si dispo), `creation_date` (timestamp ISO 8601 UTC), `external_id` (UUID via `<tr id>`), `live_ads` (texte tableau). `category` scrapable mais non persisté (hors schéma actuel).
-- Phase 3 (détails): `live_ads_7d`, `live_ads_30d`, `pixel_google`, `pixel_facebook`, marchés (`market_us`, `market_uk`, `market_de`, `market_ca`, `market_au`, `market_fr`), `aov`.
+- Phase 1 (table): `shop_name`, `shop_url`, `total_products`, `year_founded` (si dispo), `creation_date` (timestamp ISO 8601 UTC), `external_id` (UUID via `<tr id>`), `live_ads` (texte tableau), `monthly_visits`, `monthly_revenue`.
+- Phase 3 (détails): `live_ads_7d`, `live_ads_30d`, `aov`.
 
 ### 5) Gestion des Statuts de Scraping
 - **Table `shops` uniquement** : Le scraper MVP ne met jamais à jour la table `analytics`
@@ -59,8 +59,8 @@
 - Ajout V2: « mini-retry » de fin de run pour les `failed` (1 passage, borné).
 
 ### 10) Mapping Base de Données
-- Phase 1 upsert (table `shops`): `shop_name`, `shop_url` (UNIQUE), `external_id`, `year_founded`, `creation_date`, `total_products`, `live_ads`, `scraping_status='table_extracted'`.
-- Phase 3 update (table `shops`): `pixel_google`, `pixel_facebook`, `live_ads_7d`, `live_ads_30d`, `aov`, `market_*`, `scraping_status='details_extracted'`, `updated_at`.
+- Phase 1 upsert (table `shops`): `shop_name`, `shop_url` (UNIQUE), `external_id`, `year_founded`, `creation_date`, `total_products`, `live_ads`, `monthly_visits`, `monthly_revenue`, `table_scraping_status='table_extracted'`.
+- Phase 3 update (table `shops`): `live_ads_7d`, `live_ads_30d`, `aov`, `details_scraping_status='details_extracted'`.
 - Index: conserver existants (`shop_url`, `external_id`, etc.).
 
 ### 11) Critères de Conformité

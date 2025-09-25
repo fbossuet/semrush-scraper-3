@@ -80,8 +80,8 @@ async function main() {
     await mvpScraper.initialize();
     
     // Vérification de l'état de la base
-    const existingShops = await shopRepo.findByStatus('table_extracted');
-    logProgress(`🔍 Trouvé ${existingShops.length} boutiques avec statut: table_extracted`);
+    const existingShops = await shopRepo.findByTableScrapingStatus('table_extracted');
+    logProgress(`🔍 Trouvé ${existingShops.length} boutiques avec statut table_scraping_status: table_extracted`);
     
     if (existingShops.length === 0) {
       logProgress('🆕 Nouveau scraping MVP - Phase 1: Extraction du tableau');
@@ -149,6 +149,7 @@ async function executePhase3MVP(mvpScraper, shopRepo, shopsToProcess) {
   
   let totalSuccess = 0;
   let totalErrors = 0;
+  let allFailedShops = []; // Collecter toutes les boutiques en échec
   
   for (const [batchIndex, batch] of batches.entries()) {
     logProgress(`🔄 Lot ${batchIndex + 1}/${batches.length}: ${batch.length} boutiques`);
@@ -156,6 +157,11 @@ async function executePhase3MVP(mvpScraper, shopRepo, shopsToProcess) {
     const batchResult = await mvpScraper.processBatch(batch);
     totalSuccess += batchResult.success;
     totalErrors += batchResult.failed;
+    
+    // Collecter les boutiques en échec pour mini-retry
+    if (batchResult.failedShops && batchResult.failedShops.length > 0) {
+      allFailedShops = allFailedShops.concat(batchResult.failedShops);
+    }
     
     logProgress(`📊 Lot ${batchIndex + 1} terminé: ${batchResult.success} succès, ${batchResult.failed} erreurs`);
     
@@ -166,19 +172,30 @@ async function executePhase3MVP(mvpScraper, shopRepo, shopsToProcess) {
     }
   }
   
+  // MINI-RETRY GLOBAL DES BOUTIQUES EN ÉCHEC (V2)
+  if (allFailedShops.length > 0) {
+    logProgress(`🔄 MINI-RETRY GLOBAL: ${allFailedShops.length} boutiques en échec`);
+    
+    const miniRetryResult = await mvpScraper.miniRetryFailedShops(allFailedShops, 1);
+    totalSuccess += miniRetryResult.success;
+    totalErrors += miniRetryResult.failed;
+    
+    logProgress(`📊 Mini-retry terminé: ${miniRetryResult.success} succès supplémentaires, ${miniRetryResult.failed} échecs persistants`);
+  }
+  
   const successRate = (totalSuccess / limitedShops.length) * 100;
-  logProgress(`🎯 RÉSULTAT FINAL MVP: ${totalSuccess}/${limitedShops.length} boutiques (${successRate.toFixed(1)}% de succès)`);
+  logProgress(`🎯 RÉSULTAT FINAL MVP V2: ${totalSuccess}/${limitedShops.length} boutiques (${successRate.toFixed(1)}% de succès)`);
   
   if (successRate >= 90) {
-    logProgress('✅ MVP VALIDÉ: Taux de succès >90%');
+    logProgress('✅ MVP V2 VALIDÉ: Taux de succès >90%');
   } else {
-    logProgress(`⚠️ MVP À AMÉLIORER: Taux de succès ${successRate.toFixed(1)}% < 90%`);
+    logProgress(`⚠️ MVP V2 À AMÉLIORER: Taux de succès ${successRate.toFixed(1)}% < 90%`);
   }
 }
 
 // Sauvegarde des données du tableau (Phase 2 MVP)
 async function saveTableDataMVP(tableData, shopRepo) {
-  const batchSize = 50;
+  const batchSize = MVP_CONFIG.batchSize; // Utiliser la configuration MVP
   const batches = [];
   
   for (let i = 0; i < tableData.length; i += batchSize) {
@@ -198,15 +215,15 @@ async function saveTableDataMVP(tableData, shopRepo) {
           // monthlyVisits: shopData.monthly_visits, // Supprimé comme demandé
           totalProducts: shopData.total_products,
           yearFounded: shopData.year_founded,
-          liveAds7d: shopData.live_ads_7d,
-          liveAds30d: shopData.live_ads_30d,
+          // liveAds7d et liveAds30d: extraits UNIQUEMENT en Phase 3, pas en Phase 1
+          // Pas de métrique live_ads en Phase 1 selon la spécification
           scrapingStatus: shopData.scraping_status,
           projectSource: 'trendtrack',
-          externalId: shopData.external_id || shopData.id
+          externalId: shopData.external_id // UUID obligatoire, pas de fallback sur l'ID de base
         };
         
         await shopRepo.upsert(mappedShopData);
-        await shopRepo.updateShopStatus(mappedShopData.externalId, 'table_extracted');
+        // Le statut table_scraping_status est déjà défini dans mappedShopData
       } catch (error) {
         logProgress(`❌ Erreur sauvegarde ${shopData.shop_name}: ${error.message}`);
       }

@@ -88,8 +88,8 @@ export const QUERIES = {
   // Insérer ou mettre à jour une boutique
   UPSERT_SHOP: `
     INSERT OR REPLACE INTO shops 
-    (shop_name, shop_url, creation_date, category, monthly_visits, monthly_revenue, live_ads, live_ads_7d, live_ads_30d, page_number, updated_at, project_source, external_id, metadata, year_founded, total_products, pixel_google, pixel_facebook, aov, market_us, market_uk, market_de, market_ca, market_au, market_fr, scraping_status, scraping_last_update)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (shop_name, shop_url, total_products, monthly_visits, monthly_revenue, live_ads, aov, page_number, scraped_at, project_source, external_id, metadata, year_founded, creation_date, scraping_status, live_ads_7d, live_ads_30d, table_scraping_status, details_scraping_status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
 
   // Récupérer toutes les boutiques

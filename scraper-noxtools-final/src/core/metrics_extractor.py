@@ -18,6 +18,7 @@ from playwright.async_api import Page
 
 from .anti_detection import get_default_stealth_config, StealthConfig
 from .playwright_manager import PlaywrightManager
+from core.server_manager import get_server_manager
 from .session_manager import SessionManager
 from utils.url_params import build_date_range
 
@@ -99,6 +100,7 @@ class MetricsExtractor:
     def __init__(self, config: Optional[MetricsConfig] = None, stealth_config: Optional[StealthConfig] = None):
         self.config = config or MetricsConfig()
         self.stealth_config = stealth_config or get_default_stealth_config()
+        self.server_manager = get_server_manager()
     
     def _extract_domain_from_url(self, shop_url: str) -> str:
         """Extrait le domaine d'une URL de shop."""
@@ -128,7 +130,9 @@ class MetricsExtractor:
         }
         
         query_string = urlencode(params)
-        return f"{self.config.overview_base_url}?{query_string}"
+        # Normaliser l'URL avec le serveur actuel
+        base_url = self.server_manager.normalize_url_to_current_server(self.config.overview_base_url)
+        return f"{base_url}?{query_string}"
         
     async def extract_metrics(self, page: Page, playwright_manager: PlaywrightManager, 
                             session_manager: SessionManager, shop_url: str) -> ExtractedMetrics:
@@ -404,7 +408,7 @@ class MetricsExtractor:
                             logger.info("✅ Navigated via window.location to metrics page")
                             return True
             except Exception as e:
-                logger.info(f"Dashboard link navigation attempt failed: {e}")
+                logger.warning(f"Dashboard link navigation attempt failed: {e}")
 
             # Step 4: Use session manager for cross-domain navigation with referer
             navigation_success = False
@@ -453,7 +457,7 @@ class MetricsExtractor:
                     metrics.error_message = "Session expired on metrics page"
                     return False
             except Exception as e:
-                logger.info(f"Content check error: {e}")
+                logger.warning(f"Content check error: {e}")
                 
             # Wait for React to fully load
             try:
@@ -647,7 +651,7 @@ class MetricsExtractor:
                         logger.info(f"✅ Extracted {metric_name} (direct): {text}")
                         return text
             except Exception as e:
-                logger.info(f"Direct selector failed for {metric_name}: {e}")
+                logger.warning(f"Direct selector failed for {metric_name}: {e}")
 
             # 1b) Relaxed variants
             for sel in relaxed_variants:
@@ -659,7 +663,7 @@ class MetricsExtractor:
                             logger.info(f"✅ Extracted {metric_name} (relaxed): {text}")
                             return text
                 except Exception as e:
-                    logger.info(f"Relaxed selector failed for {metric_name}: {e}")
+                    logger.warning(f"Relaxed selector failed for {metric_name}: {e}")
 
             # 2) Attribute selector [name="..."]
             try:
@@ -673,7 +677,7 @@ class MetricsExtractor:
                             logger.info(f"✅ Extracted {metric_name} (attr): {text}")
                             return text
             except Exception as e:
-                logger.info(f"Attribute selector failed for {metric_name}: {e}")
+                logger.warning(f"Attribute selector failed for {metric_name}: {e}")
 
             # 3) Input value
             try:
@@ -687,7 +691,7 @@ class MetricsExtractor:
                             logger.info(f"✅ Extracted {metric_name} (input): {input_value.strip()}")
                             return input_value.strip()
             except Exception as e:
-                logger.info(f"Input selector failed for {metric_name}: {e}")
+                logger.warning(f"Input selector failed for {metric_name}: {e}")
 
             # 4) Span inside named container
             try:
@@ -701,13 +705,13 @@ class MetricsExtractor:
                             logger.info(f"✅ Extracted {metric_name} (span): {text_content.strip()}")
                             return text_content.strip()
             except Exception as e:
-                logger.info(f"Span selector failed for {metric_name}: {e}")
+                logger.warning(f"Span selector failed for {metric_name}: {e}")
 
             logger.warning(f"⚠️ {metric_name} not found with any approach (selector: {selector})")
             return None
 
         except Exception as e:
-            logger.info(f"⚠️ Error extracting {metric_name}: {e}")
+            logger.error(f"⚠️ Error extracting {metric_name}: {e}")
             return None
     
     def _log_extracted_metrics(self, metrics: ExtractedMetrics):
@@ -728,7 +732,268 @@ class MetricsExtractor:
         logger.info("=" * 50)
         logger.info(f"  Success: {metrics.success}")
         if metrics.error_message:
-            logger.info(f"  Error: {metrics.error_message}")
+            logger.error(f"  Error: {metrics.error_message}")
+            
+    async def get_metrics_info(self, page: Page) -> Dict[str, Any]:
+        """Get comprehensive metrics extraction information."""
+        try:
+            current_url = page.url
+            parsed_url = urlparse(current_url)
+            query_params = parse_qs(parsed_url.query)
+            
+            return {
+                'metrics_url': self.config.metrics_url,
+                'current_url': current_url,
+                'url_valid': 'analytics/traffic/market-overview' in current_url,
+                'query_parameters': {
+                    'searchType': query_params.get('searchType', [''])[0],
+                    'fid': query_params.get('fid', [''])[0],
+                    'dateRange': query_params.get('dateRange', [''])[0],
+                    'country': query_params.get('country', [''])[0]
+                },
+                'selectors': self.config.selectors,
+                'config': {
+                    'max_retries': self.config.max_retries,
+                    'timeout_ms': self.config.timeout_ms,
+                    'react_load_delay_ms': self.config.react_load_delay_ms,
+                    'stabilization_delay_ms': self.config.stabilization_delay_ms
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Metrics info error: {e}")
+            return {'error': str(e)}
+    
+    def get_metrics_url(self) -> str:
+        """Get the metrics URL that will be navigated to."""
+        return self.config.metrics_url
+
+# Convenience function for metrics extraction
+async def extract_noxtools_metrics(page: Page, playwright_manager: PlaywrightManager,
+                                 session_manager: SessionManager,
+                                 config: Optional[MetricsConfig] = None) -> ExtractedMetrics:
+    """Quick metrics extraction function."""
+    extractor = MetricsExtractor(config)
+    return await extractor.extract_metrics(page, playwright_manager, session_manager)
+
+
+        async def on_response(response):
+            try:
+                req = response.request
+                url = response.url
+                headers = {k.lower(): v for k, v in (response.headers or {}).items()}
+                if is_candidate_response(url, headers):
+                    data = None
+                    try:
+                        data = await response.json()
+                    except Exception:
+                        text = await response.text()
+                        data = {'_raw': text}
+                    collected.append({'url': url, 'data': data})
+            except Exception:
+                pass
+
+        page.on('response', on_response)
+
+        # Allow network to settle and collect responses
+        await asyncio.sleep(3.0)
+
+        # Stop listening
+        try:
+            page.off('response', on_response)
+        except Exception:
+            pass
+
+        # Try to extract metrics from collected responses
+        parsed: Dict[str, Any] = {}
+        keys_map = {
+            'visits': ['entrances', 'visits', 'sessions'],
+            'organic_search_traffic': ['entrancesSearchOrganic', 'organic', 'organicTraffic', 'organic_visits'],
+            'paid_search_traffic': ['entrancesSearchPaid', 'paid', 'paidTraffic', 'paid_visits'],
+            'purchase_conversion': ['purchasesPerVisit', 'conversion', 'convRate'],
+            'avg_visit_duration': ['avgVisitDuration', 'avgDuration', 'duration'],
+            'bounce_rate': ['bouncesPerVisit', 'bounce', 'bounceRate'],
+            'cpc': ['cpc']
+        }
+
+        def deep_find(obj: Any, targets: List[str]) -> Optional[str]:
+            try:
+                if isinstance(obj, dict):
+                    for k, v in obj.items():
+                        lk = str(k).lower()
+                        if any(t.lower() == lk for t in targets):
+                            if isinstance(v, (str, int, float)):
+                                return str(v)
+                        res = deep_find(v, targets)
+                        if res is not None:
+                            return res
+                elif isinstance(obj, list):
+                    for item in obj:
+                        res = deep_find(item, targets)
+                        if res is not None:
+                            return res
+                else:
+                    return None
+            except Exception:
+                return None
+            return None
+
+        for item in collected:
+            data = item.get('data')
+            if not data:
+                continue
+            for out_key, candidates in keys_map.items():
+                if out_key in parsed and parsed[out_key]:
+                    continue
+                val = deep_find(data, candidates)
+                if val is not None:
+                    parsed[out_key] = val
+
+        return parsed
+
+    def _populate_metrics_from_network(self, metrics: ExtractedMetrics, parsed: Dict[str, Any]) -> None:
+        """Populate metrics object from parsed network data."""
+        field_map = {
+            'visits': 'visits',
+            'organic_search_traffic': 'organic_search_traffic',
+            'paid_search_traffic': 'paid_search_traffic',
+            'purchase_conversion': 'purchase_conversion',
+            'avg_visit_duration': 'avg_visit_duration',
+            'bounce_rate': 'bounce_rate'
+        }
+        for src, dst in field_map.items():
+            val = parsed.get(src)
+            if val:
+                setattr(metrics, dst, val)
+    
+    async def _extract_single_metric(self, page: Page, selector: str, metric_name: str) -> Optional[str]:
+        """Extract a single metric using the provided selector (with relaxed fallbacks)."""
+        try:
+            # Try multiple approaches for React-rendered elements
+            value: Optional[str] = None
+
+            async def read_element_text(el) -> Optional[str]:
+                try:
+                    try:
+                        await el.scroll_into_view_if_needed()
+                    except Exception:
+                        pass
+                    txt = await el.text_content()
+                    if txt and txt.strip():
+                        return txt.strip()
+                    inner = await page.evaluate('(el)=>el.innerText', el)
+                    if inner and inner.strip():
+                        return inner.strip()
+                    aria = await el.get_attribute('aria-label')
+                    if aria and aria.strip():
+                        return aria.strip()
+                    title = await el.get_attribute('title')
+                    if title and title.strip():
+                        return title.strip()
+                except Exception:
+                    return None
+                return None
+
+            # Build relaxed selector variants for gridcells (drop tabindex/aria-colindex)
+            relaxed_variants: List[str] = []
+            if '[role="gridcell"]' in selector:
+                base = selector
+                import re
+                base = re.sub(r"\[tabindex=\"?-?\d+\"?\]", "", base)
+                base = re.sub(r"\[aria-colindex=\"?\d+\"?\]", "", base)
+                relaxed_variants.append(base)
+
+            # 1) Direct selector
+            try:
+                element = await page.wait_for_selector(selector, timeout=5000, state='attached')
+                if element:
+                    text = await read_element_text(element)
+                    if text:
+                        logger.info(f"✅ Extracted {metric_name} (direct): {text}")
+                        return text
+            except Exception as e:
+                logger.warning(f"Direct selector failed for {metric_name}: {e}")
+
+            # 1b) Relaxed variants
+            for sel in relaxed_variants:
+                try:
+                    element = await page.wait_for_selector(sel, timeout=4000, state='attached')
+                    if element:
+                        text = await read_element_text(element)
+                        if text:
+                            logger.info(f"✅ Extracted {metric_name} (relaxed): {text}")
+                            return text
+                except Exception as e:
+                    logger.warning(f"Relaxed selector failed for {metric_name}: {e}")
+
+            # 2) Attribute selector [name="..."]
+            try:
+                if 'name=' in selector:
+                    attr_name = selector.split('name="')[1].split('"')[0]
+                    attr_selector = f'[name="{attr_name}"]'
+                    element = await page.wait_for_selector(attr_selector, timeout=3000, state='attached')
+                    if element:
+                        text = await read_element_text(element)
+                        if text:
+                            logger.info(f"✅ Extracted {metric_name} (attr): {text}")
+                            return text
+            except Exception as e:
+                logger.warning(f"Attribute selector failed for {metric_name}: {e}")
+
+            # 3) Input value
+            try:
+                if 'name=' in selector:
+                    attr_name = selector.split('name="')[1].split('"')[0]
+                    input_selector = f'input[name="{attr_name}"]'
+                    element = await page.wait_for_selector(input_selector, timeout=3000, state='attached')
+                    if element:
+                        input_value = await element.input_value()
+                        if input_value and input_value.strip():
+                            logger.info(f"✅ Extracted {metric_name} (input): {input_value.strip()}")
+                            return input_value.strip()
+            except Exception as e:
+                logger.warning(f"Input selector failed for {metric_name}: {e}")
+
+            # 4) Span inside named container
+            try:
+                if 'name=' in selector and '> span' in selector:
+                    attr_name = selector.split('name="')[1].split('"')[0]
+                    span_selector = f'[name="{attr_name}"] span'
+                    element = await page.wait_for_selector(span_selector, timeout=3000, state='attached')
+                    if element:
+                        text_content = await element.text_content()
+                        if text_content and text_content.strip():
+                            logger.info(f"✅ Extracted {metric_name} (span): {text_content.strip()}")
+                            return text_content.strip()
+            except Exception as e:
+                logger.warning(f"Span selector failed for {metric_name}: {e}")
+
+            logger.warning(f"⚠️ {metric_name} not found with any approach (selector: {selector})")
+            return None
+
+        except Exception as e:
+            logger.error(f"⚠️ Error extracting {metric_name}: {e}")
+            return None
+    
+    def _log_extracted_metrics(self, metrics: ExtractedMetrics):
+        """Log the extracted metrics in a formatted way."""
+        logger.info("📊 EXTRACTED METRICS SUMMARY:")
+        logger.info("=" * 50)
+        
+        metrics_dict = metrics.to_dict()
+        for key, value in metrics_dict.items():
+            if key in ['success', 'error_message', 'extraction_timestamp', 'url']:
+                continue
+                
+            if value:
+                logger.info(f"  {key.replace('_', ' ').title()}: {value}")
+            else:
+                logger.warning(f"  {key.replace('_', ' ').title()}: Not found")
+                
+        logger.info("=" * 50)
+        logger.info(f"  Success: {metrics.success}")
+        if metrics.error_message:
+            logger.error(f"  Error: {metrics.error_message}")
             
     async def get_metrics_info(self, page: Page) -> Dict[str, Any]:
         """Get comprehensive metrics extraction information."""

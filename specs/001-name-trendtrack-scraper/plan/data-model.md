@@ -23,12 +23,14 @@
 - `details_scraping_status` (TEXT): Phase 3 details extraction status
   - Values: 'details_extracted', 'failed', 'pending'
   - Default: 'pending'
-- `scraping_last_update` (TEXT): ISO timestamp of last scraping attempt
-- `updated_at` (TEXT): ISO timestamp of last record update
 - `creation_date` (TEXT): ISO timestamp of record creation
+- `total_products` (INTEGER): Total number of products (format: 24750)
 - `monthly_visits` (INTEGER): Monthly visits data (format: 647600 for "647.6K")
 - `monthly_revenue` (TEXT): Monthly revenue data (format: "597.9K$ - 1.8M$")
 - `live_ads` (INTEGER): Live ads information (format: 7319)
+- `live_ads_7d` (INTEGER): Live ads for last 7 days
+- `live_ads_30d` (INTEGER): Live ads for last 30 days
+- `aov` (NUMERIC): Average Order Value (format: 50.0)
 - `page_number` (TEXT): Page number in source data
 - `scraped_at` (TEXT): ISO timestamp of last successful scraping
 - `project_source` (TEXT): Source of the website data
@@ -40,8 +42,10 @@
 **Validation Rules**:
 - `shop_url` must be a valid URL format
 - `scraping_status` must be one of the defined values
-- `scraping_last_update` must be valid ISO timestamp when not null
-- `updated_at` must be valid ISO timestamp when not null
+- `table_scraping_status` must be one of: 'table_extracted', 'failed', 'pending'
+- `details_scraping_status` must be one of: 'details_extracted', 'failed', 'pending'
+- `creation_date` must be valid ISO 8601 UTC timestamp when not null
+- `scraped_at` must be valid ISO timestamp when not null
 
 **State Transitions**:
 - `pending` → `partial` (partial data collected)
@@ -166,22 +170,23 @@ CREATE TABLE IF NOT EXISTS "shops" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     shop_name TEXT,
     shop_url TEXT UNIQUE NOT NULL,
-    scraping_status TEXT,
-    table_scraping_status TEXT,
-    details_scraping_status TEXT,
-    scraping_last_update TEXT,
-    updated_at TEXT,
-    creation_date TEXT,
-    monthly_visits TEXT,
+    total_products INTEGER,
+    monthly_visits INTEGER,
     monthly_revenue TEXT,
-    live_ads TEXT,
+    live_ads INTEGER,
+    aov NUMERIC,
     page_number TEXT,
     scraped_at TEXT,
     project_source TEXT,
     external_id TEXT,
     metadata TEXT,
     year_founded TEXT,
-    creation_date TEXT
+    creation_date TEXT,
+    scraping_status TEXT,
+    live_ads_7d INTEGER,
+    live_ads_30d INTEGER,
+    table_scraping_status TEXT,
+    details_scraping_status TEXT
 );
 ```
 

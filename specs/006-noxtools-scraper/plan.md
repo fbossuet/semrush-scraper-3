@@ -4,7 +4,7 @@
 **Input** : Spécification de fonctionnalité depuis `/specs/006-noxtools-scraper/spec.md`
 
 ## Résumé
-Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui reproduit les fonctionnalités du scraper SEM existant mais adapté pour Noxtools avec de nouveaux sélecteurs, une navigation vers un autre domaine, et des métriques spécifiques à Noxtools.
+Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui reproduit les fonctionnalités du scraper SEM existant mais adapté pour Noxtools avec de nouveaux sélecteurs, une navigation vers un autre domaine, et des métriques spécifiques à Noxtools. **Problèmes identifiés** : Session expirée Semrush, URLs incohérentes, ✅ système de fallback serveurs dynamique implémenté.
 
 ## Contexte Technique
 **Language/Version** : Python 3.x avec Playwright asyncio  
@@ -14,7 +14,7 @@ Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui 
 **Plateforme Cible** : Linux VPS avec Xvfb  
 **Type de Projet** : single (scraper autonome)  
 **Objectifs de Performance** : Scraping parallèle, gestion des timeouts adaptatifs  
-**Contraintes** : Anti-détection, navigation multi-domaines, session persistante  
+**Contraintes** : Anti-détection, navigation multi-domaines, session persistante, ✅ fallback serveurs dynamique implémenté  
 **Échelle/Portée** : Scraping de centaines de boutiques avec métriques Noxtools
 
 ## Roadmap des Versions
@@ -25,6 +25,9 @@ Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui 
 - Navigation vers Noxtools avec maintien de session/cookies inter-domaine
 - Scraping des métriques (sans enregistrement BDD)
 - Logs détaillés de validation
+- **Retry session** : Détection session expirée et re-authentification complète
+- ✅ **Fallback serveurs** : Système dynamique semrush1→semrush5 avec cohérence URLs (ServerManager implémenté)
+- **Éligibilité shops** : Critères précis (shops.scraping_status ≠ "failed", details_scraping_status = "details_extracted", analytics.scraping_status = NULL)
 
 ### Version Beta - Formatage et Enregistrement
 - Formatage des données selon standards
@@ -266,6 +269,25 @@ scraper-noxtools-final/
 
 ## Suivi des Progrès
 *Cette checklist est mise à jour pendant le flux d'exécution*
+
+**Statut des Phases** :
+- [x] Phase 0 : Recherche complète (commande /plan)
+- [x] Phase 1 : Design complet (commande /plan)
+- [x] Phase 2 : Planification des tâches complète (commande /plan - décrire approche seulement)
+- [ ] Phase 3 : Tâches générées (commande /tasks)
+- [ ] Phase 4 : Implémentation complète
+- [ ] Phase 5 : Validation passée
+
+**Statut des Portes** :
+- [x] Vérification Constitution Initiale : PASS
+- [x] Vérification Constitution Post-Design : PASS
+- [x] Toutes les inconnues résolues
+- [x] Déviances de complexité documentées
+
+---
+
+*Basé sur Constitution v2.1.1 - Voir `/memory/constitution.md`*
+
 
 **Statut des Phases** :
 - [x] Phase 0 : Recherche complète (commande /plan)

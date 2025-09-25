@@ -10,6 +10,7 @@ import { TrendTrackExtractor } from '../extractors/trendtrack-extractor.js';
 import { MVPContextManager } from './mvp-context-manager.js';
 import { MVPSessionManager } from './mvp-session-manager.js';
 import { MVPRetryHandler } from './mvp-retry-handler.js';
+import { MVPBrowserManager } from './mvp-browser-manager.js';
 
 export class MVPScraper {
   constructor(config, shopRepository = null) {
@@ -18,6 +19,7 @@ export class MVPScraper {
     this.contextManager = null;
     this.sessionManager = null;
     this.retryHandler = null;
+    this.browserManager = null;
     this.extractor = null;
     this.shopRepository = shopRepository;
     this.isInitialized = false;
@@ -47,7 +49,10 @@ export class MVPScraper {
         this.browser.errorHandler
       );
       
-      // 5. Créer le gestionnaire de retry
+      // 5. Créer le gestionnaire de navigateur
+      this.browserManager = new MVPBrowserManager(this.config);
+      
+      // 6. Créer le gestionnaire de retry
       this.retryHandler = new MVPRetryHandler(
         this.contextManager, 
         this.sessionManager, 
@@ -55,7 +60,7 @@ export class MVPScraper {
         this.config
       );
       
-      // 6. Connexion initiale à TrendTrack
+      // 7. Connexion initiale à TrendTrack
       await this.initialLogin();
       
       this.isInitialized = true;
@@ -135,7 +140,7 @@ export class MVPScraper {
   }
 
   /**
-   * Traite un lot de boutiques (Phase 3 MVP)
+   * Traite un lot de boutiques (Phase 3 MVP) - VERSION TOLÉRANTE AUX ERREURS
    */
   async processBatch(shops) {
     console.log(`🔄 Traitement lot MVP: ${shops.length} boutiques`);
@@ -143,25 +148,29 @@ export class MVPScraper {
     const batchResult = {
       success: 0,
       failed: 0,
-      errors: []
+      errors: [],
+      failedShops: [] // Nouveau: garder trace des boutiques en échec
     };
     
     for (const shop of shops) {
       try {
-        console.log(`🔍 Extraction détails: ${shop.shopName}`);
+        console.log(`🔍 Extraction détails: ${shop.shopName || shop.shop_name || 'Unknown'}`);
         
         const success = await this.processShop(shop);
         
         if (success) {
           batchResult.success++;
-          console.log(`✅ Détails extraits: ${shop.shopName}`);
+          console.log(`✅ Détails extraits: ${shop.shopName || shop.shop_name || 'Unknown'}`);
         } else {
           batchResult.failed++;
+          batchResult.failedShops.push(shop); // Garder la boutique pour retry ultérieur
           batchResult.errors.push({
-            shopName: shop.shopName,
+            shopName: shop.shopName || shop.shop_name || 'Unknown',
+            shopId: shop.id,
+            externalId: shop.external_id,
             error: 'Extraction échouée'
           });
-          console.log(`❌ Échec extraction: ${shop.shopName}`);
+          console.log(`❌ Échec extraction: ${shop.shopName || shop.shop_name || 'Unknown'}`);
         }
         
         // Pause entre les boutiques
@@ -171,16 +180,83 @@ export class MVPScraper {
         
       } catch (error) {
         batchResult.failed++;
+        batchResult.failedShops.push(shop); // Garder la boutique pour retry ultérieur
         batchResult.errors.push({
-          shopName: shop.shopName,
+          shopName: shop.shopName || shop.shop_name || 'Unknown',
+          shopId: shop.id,
+          externalId: shop.external_id,
           error: error.message
         });
-        console.log(`❌ Erreur traitement ${shop.shopName}: ${error.message}`);
+        console.log(`❌ Erreur traitement ${shop.shopName || shop.shop_name || 'Unknown'}: ${error.message}`);
+        
+        // CONTINUER même en cas d'erreur - ne pas interrompre le lot
+        console.log(`🔄 Continuation du lot malgré l'erreur...`);
       }
     }
     
-    console.log(`📊 Lot terminé: ${batchResult.success} succès, ${batchResult.failed} erreurs`);
+    const successRate = (batchResult.success / shops.length) * 100;
+    console.log(`📊 Lot terminé: ${batchResult.success} succès, ${batchResult.failed} erreurs (${successRate.toFixed(1)}% de succès)`);
+    
+    // Log des boutiques en échec pour retry ultérieur
+    if (batchResult.failedShops.length > 0) {
+      console.log(`🔄 ${batchResult.failedShops.length} boutiques en échec disponibles pour retry ultérieur`);
+    }
+    
     return batchResult;
+  }
+
+  /**
+   * Mini-retry global des boutiques en échec (V2)
+   */
+  async miniRetryFailedShops(failedShops, maxRetries = 1) {
+    if (!failedShops || failedShops.length === 0) {
+      console.log('🔄 Aucune boutique en échec à retry');
+      return { success: 0, failed: 0 };
+    }
+
+    console.log(`🔄 Mini-retry global: ${failedShops.length} boutiques en échec (max ${maxRetries} tentatives)`);
+    
+    const miniRetryResult = {
+      success: 0,
+      failed: 0,
+      errors: []
+    };
+
+    for (const shop of failedShops) {
+      try {
+        console.log(`🔄 Mini-retry: ${shop.shopName || shop.shop_name || 'Unknown'}`);
+        
+        const success = await this.processShop(shop);
+        
+        if (success) {
+          miniRetryResult.success++;
+          console.log(`✅ Mini-retry réussi: ${shop.shopName || shop.shop_name || 'Unknown'}`);
+        } else {
+          miniRetryResult.failed++;
+          miniRetryResult.errors.push({
+            shopName: shop.shopName || shop.shop_name || 'Unknown',
+            error: 'Mini-retry échoué'
+          });
+          console.log(`❌ Mini-retry échoué: ${shop.shopName || shop.shop_name || 'Unknown'}`);
+        }
+        
+        // Pause courte entre les mini-retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+      } catch (error) {
+        miniRetryResult.failed++;
+        miniRetryResult.errors.push({
+          shopName: shop.shopName || shop.shop_name || 'Unknown',
+          error: error.message
+        });
+        console.log(`❌ Erreur mini-retry ${shop.shopName || shop.shop_name || 'Unknown'}: ${error.message}`);
+      }
+    }
+
+    const miniRetryRate = (miniRetryResult.success / failedShops.length) * 100;
+    console.log(`📊 Mini-retry terminé: ${miniRetryResult.success} succès, ${miniRetryResult.failed} échecs (${miniRetryRate.toFixed(1)}% de succès)`);
+    
+    return miniRetryResult;
   }
 
   /**
@@ -191,13 +267,13 @@ export class MVPScraper {
       // Navigation vers la page de détail
       const navSuccess = await this.navigateToShopDetail(shop.external_id);
       if (!navSuccess) {
-        throw new Error(`Échec navigation vers ${shop.shopName}`);
+        throw new Error(`Échec navigation vers ${shop.shopName || shop.shop_name || 'Unknown'}`);
       }
       
       // Extraction des détails
       const details = await this.extractShopDetails(shop.external_id);
       if (!details) {
-        throw new Error(`Échec extraction détails pour ${shop.shopName}`);
+        throw new Error(`Échec extraction détails pour ${shop.shopName || shop.shop_name || 'Unknown'}`);
       }
       
       // Sauvegarde des détails (utiliser l'ID de la base, pas l'external_id)
@@ -214,7 +290,7 @@ export class MVPScraper {
       );
       
     } catch (error) {
-      console.log(`❌ Échec traitement ${shop.shopName}: ${error.message}`);
+      console.log(`❌ Échec traitement ${shop.shopName || shop.shop_name || 'Unknown'}: ${error.message}`);
       return false;
     }
   }
@@ -303,6 +379,20 @@ export class MVPScraper {
         console.log('🔍 Extraction AOV (Phase 3)...');
         const aov = await this.extractor.extractAOV();
         console.log(`📊 AOV extrait (Phase 3): ${aov}`);
+
+        // Extraction Visits (Phase 3)
+        console.log('🔍 Extraction visits (Phase 3)...');
+        const monthlyVisits = await this.extractor.extractMonthlyVisitsDetail();
+        console.log(`📊 Visits extrait (Phase 3): ${monthlyVisits}`);
+
+        // Déterminer le statut analytics en fonction des métriques manquantes
+        const liveAds7dValid = typeof liveAds7d === 'number' && !Number.isNaN(liveAds7d);
+        const liveAds30dValid = typeof liveAds30d === 'number' && !Number.isNaN(liveAds30d);
+        const aovValid = typeof aov === 'number' && !Number.isNaN(aov);
+        const visitsValid = typeof monthlyVisits === 'string' && monthlyVisits.trim().length > 0;
+        const analyticsStatus = (liveAds7dValid && liveAds30dValid && visitsValid && aovValid)
+          ? 'details_extracted'
+          : 'failed-trendtrack';
         
         console.log('✅ Détails de la boutique extraits');
         
@@ -312,6 +402,8 @@ export class MVPScraper {
           liveAds7d: liveAds7d || 0,
           liveAds30d: liveAds30d || 0,
           aov: aov || null,
+          monthly_visits: monthlyVisits || null,
+          analytics_status: analyticsStatus,
           ...geoData,
           lastUpdated: new Date().toISOString()
         };
@@ -421,3 +513,4 @@ export class MVPScraper {
     };
   }
 }
+
