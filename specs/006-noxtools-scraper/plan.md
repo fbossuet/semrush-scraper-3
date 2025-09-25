@@ -103,7 +103,7 @@ Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui 
 - Retry: 3 tentatives; délai entre requêtes: 2s
 - Rate limiting (parallel_config.py): 60 req/min, burst 10; backoff 1s ×2 max 10s
 
-### Schéma Analytics (specs/001-name-trendtrack-scraper/plan/prod_schema.sql)
+### Schéma Analytics (specs/001-name-trendtrack-scraper/plan/data-model.md)
 - Table `analytics` avec indexes `shop_id`, `scraping_status`, unique `shop_id`
 - Champs numériques typés (INTEGER/NUMERIC) pour performance/qualité
 

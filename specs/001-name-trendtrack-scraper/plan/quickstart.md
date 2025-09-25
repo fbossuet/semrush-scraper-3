@@ -316,9 +316,9 @@ sqlite3 /home/ubuntu/trendtrack-scraper-final/data/trendtrack.db "SELECT COUNT(*
 sqlite3 /home/ubuntu/trendtrack-scraper-final/data/trendtrack_test.db "SELECT COUNT(*) FROM shops;"
 
 # Compare database schemas
-sqlite3 /home/ubuntu/trendtrack-scraper-final/data/trendtrack.db ".schema" > prod_schema.sql
+sqlite3 /home/ubuntu/trendtrack-scraper-final/data/trendtrack.db ".schema" > current_schema.sql
 sqlite3 /home/ubuntu/trendtrack-scraper-final/data/trendtrack_test.db ".schema" > test_schema.sql
-diff prod_schema.sql test_schema.sql
+diff current_schema.sql test_schema.sql
 
 # Monitor worker processes
 ps aux | grep python

@@ -200,7 +200,7 @@ Optimiser les performances et paralléliser le scraping avec monitoring et limit
 
 ## 🔗 Références
 - Anti‑détection: `specs/002-headers-anti-detection/`
-- Schéma & validation BDD: `specs/001-name-trendtrack-scraper/plan/prod_schema.sql`
+- Schéma & validation BDD: `specs/001-name-trendtrack-scraper/plan/data-model.md`
 - Paramètres timeouts/retry: `sem-scraper-final/config.env`, `sem-scraper-final/parallel_config.py`
 
 ## 📝 Notes
@@ -302,7 +302,7 @@ Optimiser les performances et paralléliser le scraping avec monitoring et limit
 
 ## 🔗 Références
 - Anti‑détection: `specs/002-headers-anti-detection/`
-- Schéma & validation BDD: `specs/001-name-trendtrack-scraper/plan/prod_schema.sql`
+- Schéma & validation BDD: `specs/001-name-trendtrack-scraper/plan/data-model.md`
 - Paramètres timeouts/retry: `sem-scraper-final/config.env`, `sem-scraper-final/parallel_config.py`
 
 ## 📝 Notes

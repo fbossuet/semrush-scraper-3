@@ -104,21 +104,17 @@ class MetricsExtractor:
     
     def _extract_domain_from_url(self, shop_url: str) -> str:
         """Extrait le domaine d'une URL de shop."""
-        if not shop_url:
-            logger.warning("⚠️ shop_url is None or empty")
-            return ""
-        
         try:
             from urllib.parse import urlparse
             parsed = urlparse(shop_url)
             domain = parsed.netloc
             # Enlever www. si présent
-            if domain and domain.startswith('www.'):
+            if domain.startswith('www.'):
                 domain = domain[4:]
-            return domain or ""
+            return domain
         except Exception as e:
             logger.warning(f"⚠️ Error extracting domain from {shop_url}: {e}")
-            return ""  # Fallback: retourner une chaîne vide
+            return shop_url  # Fallback: utiliser l'URL complète
     
     def _build_overview_url(self, domain: str) -> str:
         """Construit l'URL overview avec le domaine et la date calculée."""
@@ -139,7 +135,7 @@ class MetricsExtractor:
         return f"{base_url}?{query_string}"
         
     async def extract_metrics(self, page: Page, playwright_manager: PlaywrightManager, 
-                            session_manager: SessionManager, shop_url: str = None) -> ExtractedMetrics:
+                            session_manager: SessionManager) -> ExtractedMetrics:
         """Extract metrics from the Noxtools analytics page.
         
         Args:
@@ -207,15 +203,9 @@ class MetricsExtractor:
                 metrics.success = True
                 logger.info("✅ Metrics extraction successful")
                 
-                # Extract CPC using the domain from shop_url (if provided)
-                cpc_data = None
-                if shop_url:
-                    domain = self._extract_domain_from_url(shop_url)
-                    if domain:  # Vérifier que le domaine n'est pas vide
-                        cpc_data = await self.extract_cpc_best_ratio(page, playwright_manager, session_manager, domain)
-                    else:
-                        logger.warning("⚠️ Cannot extract CPC: domain is empty from shop_url")
-                
+                # Extract CPC using the domain from shop_url
+                domain = self._extract_domain_from_url(shop_url)
+                cpc_data = await self.extract_cpc_best_ratio(page, playwright_manager, session_manager, domain)
                 if cpc_data and cpc_data.get('cpc'):
                     metrics.cpc = str(cpc_data['cpc'])
                     logger.info(f"✅ CPC extracted: {metrics.cpc}")

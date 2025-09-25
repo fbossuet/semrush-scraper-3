@@ -43,32 +43,34 @@
 - **Procédures**: docs/procedures/metric_addition_procedure.md
 - **Workspace**: README_WORKSPACE.md
 
-## 🔄 CHANGEMENTS RÉCENTS (2025-09-18)
-- **Chemins absolus → relatifs** : Conversion complète pour la portabilité
-- **Scraper TrendTrack** : Fonctionne avec chemins relatifs (614 boutiques)
-- **API** : Port 8001, chemins relatifs, lancement depuis /test/
-- **Bases de données** : Chemins relatifs, scraper utilise trendtrack.db
-- **Règles de sécurité** : Renforcées avec validation obligatoire
+## 🔄 CHANGEMENTS RÉCENTS (2025-09-25)
+- **Suppression des timeouts** : Enlèvement des contraintes de timeout sur les tests
+- **Tests flexibles** : Adaptation de la durée selon les besoins
+- **Correction scraper Noxtools** : Résolution des erreurs de syntaxe et amélioration de la robustesse
+- **Validation post-codage** : Nouvelle règle de validation obligatoire après écriture de code
 
 ## 🧪 RÈGLES DE TEST ET DEBUG
 - **Surveillance des logs en temps réel** : TOUJOURS lancer les scripts en arrière-plan avec redirection vers un fichier de log
-- **Arrêt automatique** : Arrêter le script après un certain nombre d'erreurs ou après un temps défini
+- **Affichage obligatoire des logs** : TOUJOURS afficher les logs avec `tail -f` après le lancement d'un script
+- **Arrêt automatique** : Arrêter le script après un certain nombre d'erreurs
 - **Analyse des logs** : Analyser les logs en temps réel pour identifier les problèmes
 - **Workflow de test** :
   1. Lancer le script : `node script.js > test-debug.log 2>&1 &`
-  2. Surveiller les logs : `tail -f test-debug.log`
+  2. **IMMÉDIATEMENT** surveiller les logs : `tail -f test-debug.log`
   3. Arrêter après erreurs : `pkill -f "node script.js"`
   4. Analyser les logs : `grep -E "(ERROR|❌|⚠️)" test-debug.log`
 - **Nettoyage des logs** : Supprimer les fichiers de log après analyse
-- **Pas de tests longs** : Éviter les tests sur 150+ boutiques, privilégier les tests courts et ciblés
+- **Tests flexibles** : Adapter la durée des tests selon les besoins
 
-## ⏰ RÈGLES DE TIMEOUT OBLIGATOIRES
-- **TIMEOUT MAXIMUM** : 60 secondes pour tout test
-- **ARRÊT AUTOMATIQUE** : Toujours utiliser `timeout 60` ou équivalent
-- **SURVEILLANCE ACTIVE** : Vérifier les logs toutes les 10 secondes
-- **ARRÊT IMMÉDIAT** : Si aucun progrès visible après 30 secondes
-- **COMMANDE SÉCURISÉE** : `timeout 60 node script.js > test.log 2>&1 || echo "TIMEOUT"`
-- **PAS D'ATTENTE INFINIE** : Jamais laisser un test sans limite de temps
+## 🔍 RÈGLES DE VALIDATION POST-CODAGE OBLIGATOIRES
+- **AVANT TOUT TEST** : Après avoir écrit du code, TOUJOURS exécuter dans l'ordre :
+  1. `/test` : Vérification des tests unitaires
+  2. `/coherence` : Vérification de la cohérence du code
+  3. `/checkdoc` : Vérification de la documentation
+- **RAPPORT OBLIGATOIRE** : Faire un rapport complet des résultats AVANT l'étape suivante
+- **ZÉRO EXCEPTION** : Aucun test, aucun lancement de script sans cette validation préalable
+- **ARRÊT IMMÉDIAT** : Si une des commandes échoue, corriger AVANT de continuer
+
 
 ## 🎯 ÉTAT ACTUEL
 - ✅ **Scraper TrendTrack** : Opérationnel (screen actif)

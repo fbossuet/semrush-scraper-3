@@ -131,12 +131,13 @@ class ServerManager:
             logger.warning(f"Erreur lors de la normalisation de l'URL {url}: {e}")
             return url
     
-    def mark_server_failed(self, reason: str = "Unknown error"):
+    def mark_server_failed(self, reason: str = "Unknown error", switch_immediately: bool = False):
         """
         Marque le serveur actuel comme ayant échoué.
         
         Args:
             reason: Raison de l'échec
+            switch_immediately: Si True, bascule immédiatement vers le serveur suivant
         """
         current_server = self.get_current_server()
         current_server.status = ServerStatus.FAILED
@@ -146,8 +147,8 @@ class ServerManager:
         logger.warning(f"❌ Serveur {current_server.name} marqué comme échoué: {reason}")
         logger.warning(f"   Échecs: {current_server.failure_count}/{self.max_failures_per_server}")
         
-        # Si on a atteint le max d'échecs, passer au serveur suivant
-        if current_server.failure_count >= self.max_failures_per_server:
+        # Basculer vers le serveur suivant si demandé ou si on a atteint le max d'échecs
+        if switch_immediately or current_server.failure_count >= self.max_failures_per_server:
             self._switch_to_next_server()
     
     def mark_server_success(self):

@@ -357,7 +357,7 @@ En tant qu'analyste de données, je veux que le système de scraping Noxtools r�
 - ✅ **Métrique calculée** : À partir des données scrapées
 
 **Inputs à Fournir :**
-- **Schéma table analytics** : Structure, contraintes, index (voir specs 001-name-trendtrack-scraper/plan/prod_schema.sql)
+- **Schéma table analytics** : Structure, contraintes, index (voir specs 001-name-trendtrack-scraper/plan/data-model.md)
 - **Validation des données** : Plages de valeurs, formats acceptés
 - **Gestion des erreurs** : Fallbacks, valeurs par défaut
 - **Métadonnées** : Timestamp, source, version du scraper
@@ -386,7 +386,7 @@ En tant qu'analyste de données, je veux que le système de scraping Noxtools r�
 - **Backoff** : 1s initial, x2 multiplicateur, max 10s
 
 ### Schéma Table Analytics (Extrait des Specs)
-**Basé sur specs/001-name-trendtrack-scraper/plan/prod_schema.sql :**
+**Basé sur specs/001-name-trendtrack-scraper/plan/data-model.md :**
 ```sql
 CREATE TABLE analytics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -3,7 +3,7 @@
 Date: 2025-09-17
 
 Fichiers générés:
-- specs/001-name-trendtrack-scraper/plan/prod_schema.sql
+- specs/001-name-trendtrack-scraper/plan/data-model.md
 - specs/001-name-trendtrack-scraper/plan/test_schema.sql
 - specs/001-name-trendtrack-scraper/plan/schema_diff.txt
 

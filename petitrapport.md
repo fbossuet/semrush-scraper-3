@@ -16,7 +16,7 @@
 ### Incohérence entre fichiers
 Après la restauration sélective, une **incohérence critique** a été détectée :
 
-- **`schema.js`** : ✅ Contient les nouveaux champs `table_scraping_status`, `details_scraping_status`
+- **`data-model.md`** : ✅ Contient les nouveaux champs `table_scraping_status`, `details_scraping_status`
 - **`shop-repository.js`** : ❌ N'a PAS ces champs (version ancienne restaurée)
 - **`trendtrack-extractor.js`** : ❌ Utilise ces champs dans le code
 
@@ -28,7 +28,7 @@ Après la restauration sélective, une **incohérence critique** a été détect
 ## 📊 ÉTAT ACTUEL DES FICHIERS
 
 ### Fichiers modifiés (gardés)
-- ✅ `schema.js` : Nouveaux champs de statut
+- ✅ `data-model.md` : Nouveaux champs de statut
 - ✅ `trendtrack-extractor.js` : Améliorations sélecteurs + DataFormatter
 - ✅ `data-formatter.js` : Module complet
 - ✅ Documentation mise à jour
@@ -41,7 +41,7 @@ Après la restauration sélective, une **incohérence critique** a été détect
 ### Option 1 : Correction manuelle (RECOMMANDÉE)
 1. **Ajouter les nouveaux champs dans `shop-repository.js`**
    - Ajouter `table_scraping_status` et `details_scraping_status` dans les méthodes
-   - Synchroniser avec `schema.js`
+   - Synchroniser avec `data-model.md`
    - Tester la cohérence
 
 ### Option 2 : Restauration complète
@@ -51,7 +51,7 @@ Après la restauration sélective, une **incohérence critique** a été détect
    - Recommencer les optimisations
 
 ### Option 3 : Restauration partielle
-1. **Restaurer aussi `schema.js`**
+1. **Restaurer aussi `data-model.md`**
    - Garder seulement les améliorations de `trendtrack-extractor.js`
    - Perdre les nouveaux champs de statut
 
@@ -117,12 +117,12 @@ const aovSelectors = [
 ### Résumé du commit
 - ✅ **Améliorations conservées** : DataFormatter.formatMonthlyVisits(), sélecteurs AOV optimisés, nouveaux champs de statut
 - 🔄 **Restauration** : shop-repository.js restauré (suppression erreurs analytics)
-- ⚠️ **Incohérence détectée** : schema.js a les nouveaux champs, shop-repository.js restauré n'a pas les nouveaux champs
+- ⚠️ **Incohérence détectée** : data-model.md a les nouveaux champs, shop-repository.js restauré n'a pas les nouveaux champs
 - 📋 **Correction manuelle nécessaire** pour résoudre l'incohérence
 
 ### Fichiers inclus dans le commit
 - `trendtrack-extractor.js` : Améliorations sélecteurs + DataFormatter
-- `schema.js` : Nouveaux champs de statut
+- `data-model.md` : Nouveaux champs de statut
 - `data-formatter.js` : Module centralisé
 - Documentation : specs/ et .specify/ mis à jour
 - `petitrapport.md` : Ce rapport de situation

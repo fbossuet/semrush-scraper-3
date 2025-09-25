@@ -168,25 +168,34 @@
 ```sql
 CREATE TABLE IF NOT EXISTS "shops" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    shop_name TEXT,
+    shop_name TEXT NOT NULL,
     shop_url TEXT UNIQUE NOT NULL,
-    total_products INTEGER,
+    creation_date TEXT,
+    category TEXT,
     monthly_visits INTEGER,
     monthly_revenue TEXT,
-    live_ads INTEGER,
-    aov NUMERIC,
+    live_ads TEXT,
+    live_ads_7d INTEGER DEFAULT 0,
+    live_ads_30d INTEGER DEFAULT 0,
     page_number TEXT,
     scraped_at TEXT,
-    project_source TEXT,
+    updated_at TEXT,
+    project_source TEXT DEFAULT 'trendtrack',
     external_id TEXT,
     metadata TEXT,
     year_founded TEXT,
-    creation_date TEXT,
+    total_products INTEGER,
+    pixel_google TEXT,
+    pixel_facebook TEXT,
+    aov NUMERIC,
+    market_us NUMERIC,
+    market_uk NUMERIC,
+    market_de NUMERIC,
+    market_ca NUMERIC,
+    market_au NUMERIC,
+    market_fr NUMERIC,
     scraping_status TEXT,
-    live_ads_7d INTEGER,
-    live_ads_30d INTEGER,
-    table_scraping_status TEXT,
-    details_scraping_status TEXT
+    scraping_last_update TEXT
 );
 ```
 
@@ -213,36 +222,26 @@ CREATE TABLE IF NOT EXISTS "analytics" (
 ```sql
 CREATE TABLE IF NOT EXISTS "scraping_sessions" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_name TEXT,
-    status TEXT,
-    target_status TEXT,
-    worker_count INTEGER,
-    websites_per_worker INTEGER,
-    total_websites INTEGER,
-    processed_websites INTEGER,
-    successful_websites INTEGER,
-    failed_websites INTEGER,
-    started_at TEXT,
-    completed_at TEXT,
-    created_at TEXT
+    started_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
+    ended_at TIMESTAMP,
+    pages_scraped INTEGER DEFAULT 0,
+    shops_found INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'running',
+    error_message TEXT,
+    project_source TEXT DEFAULT 'trendtrack'
 );
 ```
 
-### Workers Table
+### Shared Projects Table
 ```sql
-CREATE TABLE IF NOT EXISTS "workers" (
+CREATE TABLE IF NOT EXISTS "shared_projects" (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id INTEGER NOT NULL,
-    worker_id INTEGER,
-    status TEXT,
-    assigned_websites TEXT,
-    processed_websites TEXT,
-    current_website_id INTEGER,
-    started_at TEXT,
-    completed_at TEXT,
-    error_message TEXT,
-    FOREIGN KEY (session_id) REFERENCES scraping_sessions (id),
-    FOREIGN KEY (current_website_id) REFERENCES shops (id)
+    project_name TEXT UNIQUE NOT NULL,
+    project_path TEXT NOT NULL,
+    api_key TEXT UNIQUE,
+    created_at TIMESTAMP DEFAULT datetime.now(timezone.utc).isoformat(),
+    last_access TIMESTAMP,
+    is_active BOOLEAN DEFAULT 1
 );
 ```
 
@@ -250,13 +249,29 @@ CREATE TABLE IF NOT EXISTS "workers" (
 
 ### Performance Indexes
 ```sql
-CREATE INDEX idx_shops_scraping_status ON shops(scraping_status);
-CREATE INDEX idx_shops_scraping_last_update ON shops(scraping_last_update);
-CREATE INDEX idx_shops_shop_url ON shops(shop_url);
-CREATE INDEX idx_analytics_shop_id ON analytics(shop_id);
-CREATE INDEX idx_analytics_updated_at ON analytics(updated_at);
-CREATE INDEX idx_workers_session_id ON workers(session_id);
-CREATE INDEX idx_workers_status ON workers(status);
+-- Index pour améliorer les performances
+CREATE INDEX IF NOT EXISTS idx_shops_url ON shops(shop_url);
+CREATE INDEX IF NOT EXISTS idx_shops_live_ads ON shops(live_ads);
+CREATE INDEX IF NOT EXISTS idx_shops_live_ads_7d ON shops(live_ads_7d);
+CREATE INDEX IF NOT EXISTS idx_shops_live_ads_30d ON shops(live_ads_30d);
+CREATE INDEX IF NOT EXISTS idx_shops_category ON shops(category);
+CREATE INDEX IF NOT EXISTS idx_shops_scraped_at ON shops(scraped_at);
+CREATE INDEX IF NOT EXISTS idx_shops_project_source ON shops(project_source);
+CREATE INDEX IF NOT EXISTS idx_shops_external_id ON shops(external_id);
+
+-- Index composites pour optimiser les requêtes fréquentes
+CREATE INDEX IF NOT EXISTS idx_shops_live_ads_scraped_at ON shops(live_ads DESC, scraped_at DESC);
+CREATE INDEX IF NOT EXISTS idx_shops_project_live_ads ON shops(project_source, live_ads DESC);
+CREATE INDEX IF NOT EXISTS idx_shops_category_live_ads ON shops(category, live_ads DESC);
+CREATE INDEX IF NOT EXISTS idx_shops_updated_at ON shops(updated_at DESC);
+
+-- Index pour les sessions de scraping
+CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON scraping_sessions(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_project_status ON scraping_sessions(project_source, status);
+
+-- Index pour les projets partagés
+CREATE INDEX IF NOT EXISTS idx_projects_api_key ON shared_projects(api_key);
+CREATE INDEX IF NOT EXISTS idx_projects_active ON shared_projects(is_active, last_access DESC);
 ```
 
 ## Workflow des Statuts de Scraping

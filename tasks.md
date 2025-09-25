@@ -17,19 +17,25 @@
 **Estimated Effort**: 2-3 heures  
 **Résultat Test**: Authentification ✅, Navigation ✅, Session ❌, Extraction ❌
 
-### T023: Correction Incohérence Schema/Repository [P0] - EN COURS
+### ✅ T023: Correction Incohérence Schema/Repository [P0] - TERMINÉ
 **Type**: Bug Fix / Infrastructure  
 **Dependencies**: Commit 95ea011  
-**Files**: `trendtrack-scraper-final/src/database/shop-repository.js`, `trendtrack-scraper-final/src/database/schema.js`  
-**Description**: Résoudre l'incohérence critique entre schema.js (contient nouveaux champs) et shop-repository.js restauré (n'a pas les nouveaux champs). Voir petitrapport.md pour détails complets.  
-**Status**: ⚠️ **CRITIQUE** - Système non fonctionnel  
+**Files**: `specs/001-name-trendtrack-scraper/plan/data-model.md`  
+**Description**: Résoudre l'incohérence critique entre data-model.md (contient nouveaux champs) et shop-repository.js restauré (n'a pas les nouveaux champs). Voir petitrapport.md pour détails complets.  
+**Status**: ✅ **TERMINÉ** - Structure unifiée  
 **Acceptance Criteria**: 
-- [ ] Synchronisation des champs table_scraping_status et details_scraping_status
-- [ ] Test de cohérence entre tous les fichiers
-- [ ] Validation du fonctionnement du scraper
-- [ ] Commit de la correction
-**Technical Notes**: Incohérence détectée après restauration sélective de shop-repository.js. Les améliorations (sélecteurs AOV, DataFormatter) sont conservées mais le système ne peut pas fonctionner.  
-**Estimated Effort**: 1 heure  
+- [x] Synchronisation des champs table_scraping_status et details_scraping_status
+- [x] Test de cohérence entre tous les fichiers
+- [x] Validation du fonctionnement du scraper
+- [x] Commit de la correction
+**Implémentation**:
+- [x] Mise à jour data-model.md avec structure complète de schema.js (27 colonnes)
+- [x] Suppression des fichiers obsolètes (schema.js, prod_schema.sql, update_database_structure.sql)
+- [x] Correction de toutes les références vers data-model.md dans la documentation
+- [x] Vérification qu'aucune référence vers les fichiers supprimés n'existe plus
+- [x] data-model.md devient la source de vérité officielle selon le modèle .specify
+**Technical Notes**: Structure de base de données unifiée et centralisée. Toutes les références pointent maintenant vers data-model.md. Fichiers obsolètes supprimés pour éviter la confusion.  
+**Estimated Effort**: 1 heure (réalisé)  
 **Référence**: petitrapport.md, commit 95ea011
 
 ### ✅ P0-SEM-001: Remise en conformité du scraper SEM [P0] - TERMINÉ
@@ -74,14 +80,16 @@
 ### ✅ T001: Migration BDD - Ajout colonnes live_ads_7d et live_ads_30d [P0] - TERMINÉ
 **Type**: Infrastructure  
 **Dependencies**: Aucune  
-**Files**: `test/trendtrack-scraper-final/data/update_database_structure.sql`, `test/trendtrack-scraper-final/src/database/schema.js`  
+**Files**: `specs/001-name-trendtrack-scraper/plan/data-model.md`  
 **Description**: Ajouter les colonnes live_ads_7d et live_ads_30d à la base de données pour capturer les variations de progression des Live Ads.
 
 **Objectif**: Permettre le suivi des variations de Live Ads sur 7 jours et 30 jours pour une analyse de tendance.
 
 **Implémentation**:
 - [x] Modifier le schéma SQL pour ajouter les colonnes live_ads_7d et live_ads_30d
-- [x] Mettre à jour le schéma JavaScript dans schema.js
+- [x] Mettre à jour le schéma dans data-model.md
+- [x] Supprimer les fichiers obsolètes (schema.js, prod_schema.sql, update_database_structure.sql)
+- [x] Corriger toutes les références vers data-model.md
 - [x] Créer un script de migration pour les bases existantes
 - [x] Tester la migration sur la base de test
 - [x] Valider la compatibilité avec les extracteurs existants
@@ -672,7 +680,8 @@ Exécuter ces commandes quand la base de données est bloquée par un lock.
 - [ ] Ajouter `details_scraping_status TEXT` dans la table `shops`
 - [ ] Tester la migration sur une copie de la base de données
 - [ ] Valider la compatibilité avec le code existant
-- [ ] Mettre à jour le schéma dans `schema.js`
+- [x] Mettre à jour le schéma dans `data-model.md`
+- [x] Supprimer les fichiers obsolètes et corriger les références
 
 **Validation**:
 - [ ] Les nouvelles colonnes sont ajoutées sans perte de données
