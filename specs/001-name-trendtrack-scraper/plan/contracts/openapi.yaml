@@ -436,6 +436,60 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /albert:
+    get:
+      summary: Get shops with completed analytics
+      description: Get shops with analytics.scraping_status=completed (no formatting applied)
+      parameters:
+        - name: since
+          in: query
+          description: Date filter (ISO 8601 format)
+          required: false
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Shops with completed analytics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    description: Request success status
+                  environment:
+                    type: string
+                    description: Environment (PRODUCTION)
+                  database:
+                    type: string
+                    description: Database file name
+                  filter:
+                    type: string
+                    description: Applied filter (analytics.scraping_status=completed)
+                  formatting:
+                    type: string
+                    description: Formatting status (DISABLED)
+                  count:
+                    type: integer
+                    description: Number of returned shops
+                  since:
+                    type: string
+                    nullable: true
+                    description: Date filter applied
+                  data:
+                    type: array
+                    description: Array of shops with completed analytics
+                    items:
+                      $ref: '#/components/schemas/Website'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /health:
     get:
       summary: Health check

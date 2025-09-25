@@ -573,8 +573,8 @@ def transform_shop_data(shop_data):
 @app.get('/albert')
 async def get_albert_shops_with_analytics_ordered(since: Optional[str] = Query(None, description="Date de début (ISO 8601)")):
     """
-    Endpoint ALBERT - Récupère toutes les boutiques avec leurs métriques analytics depuis la base de production
-    Triées par qualité des données (completed > partial > na > failed)
+    Endpoint ALBERT - Récupère SEULEMENT les boutiques avec analytics.scraping_status=completed
+    Depuis la base de production, sans formatage des données
     
     Structure de retour :
     - id, shop_name, shop_url, category
@@ -614,44 +614,33 @@ async def get_albert_shops_with_analytics_ordered(since: Optional[str] = Query(N
                 # Si erreur de parsing de date, ignorer le filtre
                 pass
         
-        # Récupérer les analytics pour chaque boutique
+        # Récupérer les analytics pour chaque boutique et filtrer par scraping_status=completed
         shops_with_analytics = []
         for shop in shops:
             shop_with_analytics = shop.copy()
             analytics = test_api.get_shop_analytics(shop.get('id'))
-            if analytics:
-                shop_with_analytics.update(analytics)
             
-            # Appliquer les transformations de données
-            shop_with_analytics = transform_shop_data(shop_with_analytics)
-            shops_with_analytics.append(shop_with_analytics)
+            # NOUVELLE RÈGLE : Seules les boutiques avec analytics.scraping_status=completed
+            if analytics and analytics.get('scraping_status') == 'completed':
+                shop_with_analytics.update(analytics)
+                # FORMATAGE DÉSACTIVÉ : Pas de transformation des données
+                # shop_with_analytics = transform_shop_data(shop_with_analytics)
+                shops_with_analytics.append(shop_with_analytics)
         
-        # Trier par qualité des données (completed > partial > na > failed)
-        def sort_key(shop):
-            status = shop.get('scraping_status', '')
-            if status == 'completed':
-                return 0
-            elif status == 'partial':
-                return 1
-            elif status == 'na':
-                return 2
-            elif status == 'failed':
-                return 3
-            else:
-                return 4
-        
-        shops_with_analytics.sort(key=sort_key)
+        # Plus de tri par statut car on ne garde que les 'completed'
         
         return {
             'success': True,
             'environment': 'PRODUCTION',
             'database': 'trendtrack.db',
+            'filter': 'analytics.scraping_status=completed',
+            'formatting': 'DISABLED',
             'count': len(shops_with_analytics),
             'since': since,
             'data': shops_with_analytics
         }
     except Exception as e:
-        logger.error(f"❌ Erreur endpoint test: {e}")
+        logger.error(f"❌ Erreur endpoint albert: {e}")
         return {'success': False, 'error': str(e), 'environment': 'PRODUCTION'}
 
 @app.get("/export/csv")
