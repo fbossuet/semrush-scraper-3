@@ -135,7 +135,7 @@ class MetricsExtractor:
         return f"{base_url}?{query_string}"
         
     async def extract_metrics(self, page: Page, playwright_manager: PlaywrightManager, 
-                            session_manager: SessionManager) -> ExtractedMetrics:
+                            session_manager: SessionManager, shop_url: str = None) -> ExtractedMetrics:
         """Extract metrics from the Noxtools analytics page.
         
         Args:
@@ -840,10 +840,10 @@ class MetricsExtractor:
 
 # Convenience function for metrics extraction
 async def extract_noxtools_metrics(page: Page, playwright_manager: PlaywrightManager,
-                                 session_manager: SessionManager,
+                                 session_manager: SessionManager, shop_url: str = None,
                                  config: Optional[MetricsConfig] = None) -> ExtractedMetrics:
     """Quick metrics extraction function."""
     extractor = MetricsExtractor(config)
-    return await extractor.extract_metrics(page, playwright_manager, session_manager)
+    return await extractor.extract_metrics(page, playwright_manager, session_manager, shop_url)
 
 

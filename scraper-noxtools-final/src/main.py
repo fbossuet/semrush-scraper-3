@@ -158,7 +158,8 @@ class NoxtoolsScraper:
             metrics = await self.metrics_extractor.extract_metrics(
                 self.current_page,
                 self.playwright_manager,
-                self.session_manager
+                self.session_manager,
+                domain  # Passer le domaine comme shop_url
             )
             
             if metrics and metrics.success:
