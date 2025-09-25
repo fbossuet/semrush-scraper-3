@@ -15,6 +15,7 @@
 
 ## 🚨 RÈGLE CRITIQUE ABSOLUE - NON NÉGOCIABLE
 - **VALIDATION UTILISATEUR OBLIGATOIRE** : Ne JAMAIS toucher au code sans validation explicite de l'utilisateur
+- **DEMANDE DE VALIDATION OBLIGATOIRE** : TOUJOURS demander la validation de l'utilisateur AVANT de modifier le code
 - **ARRÊT IMMÉDIAT** : Si erreur détectée après modification, STOPPER et demander validation
 - **PAS DE BYPASS** : Même après un test réussi, demander validation avant toute action
 - **ZÉRO EXCEPTION** : Cette règle s'applique à TOUT : modifications, corrections, tests, commits
