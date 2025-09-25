@@ -2,6 +2,21 @@
 
 ## Tâches Actives
 
+### T023: Correction Incohérence Schema/Repository [P0] - EN COURS
+**Type**: Bug Fix / Infrastructure  
+**Dependencies**: Commit 95ea011  
+**Files**: `trendtrack-scraper-final/src/database/shop-repository.js`, `trendtrack-scraper-final/src/database/schema.js`  
+**Description**: Résoudre l'incohérence critique entre schema.js (contient nouveaux champs) et shop-repository.js restauré (n'a pas les nouveaux champs). Voir petitrapport.md pour détails complets.  
+**Status**: ⚠️ **CRITIQUE** - Système non fonctionnel  
+**Acceptance Criteria**: 
+- [ ] Synchronisation des champs table_scraping_status et details_scraping_status
+- [ ] Test de cohérence entre tous les fichiers
+- [ ] Validation du fonctionnement du scraper
+- [ ] Commit de la correction
+**Technical Notes**: Incohérence détectée après restauration sélective de shop-repository.js. Les améliorations (sélecteurs AOV, DataFormatter) sont conservées mais le système ne peut pas fonctionner.  
+**Estimated Effort**: 1 heure  
+**Référence**: petitrapport.md, commit 95ea011
+
 ### ✅ P0-SEM-001: Remise en conformité du scraper SEM [P0] - TERMINÉ
 **Type**: Bug Fix / Compliance  
 **Dependencies**: .cursorrules, /specify, /specs  

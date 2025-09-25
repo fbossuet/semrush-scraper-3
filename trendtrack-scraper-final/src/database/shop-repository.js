@@ -252,7 +252,7 @@ export class ShopRepository {
       const stmt = db.prepare(`
         INSERT INTO shops (
           shop_name, shop_url, category, monthly_visits, monthly_revenue,
-          total_products, live_ads_7d, live_ads_30d, scraping_status, last_updated
+          total_products, live_ads_7d, live_ads_30d, table_scraping_status, last_updated
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
@@ -296,7 +296,7 @@ export class ShopRepository {
         UPDATE shops SET
           shop_name = ?, shop_url = ?, category = ?, monthly_visits = ?,
           monthly_revenue = ?, total_products = ?, live_ads_7d = ?, live_ads_30d = ?,
-          scraping_status = ?, last_updated = ?
+          table_scraping_status = ?, last_updated = ?
         WHERE id = ?
       `);
       
@@ -370,7 +370,7 @@ export class ShopRepository {
         detailData.avg_visit_duration || null,
         detailData.branded_traffic || null,
         detailData.conversion_rate || null,
-        detailData.scraping_status || 'details_extracted',
+        detailData.details_scraping_status || 'details_extracted',
         new Date().toISOString(),
         detailData.visits || null,
         detailData.traffic || null,
@@ -404,7 +404,7 @@ export class ShopRepository {
         detailData.aov || null,
         detailData.live_ads_7d || 0,
         detailData.live_ads_30d || 0,
-        detailData.scraping_status || 'details_extracted',
+        detailData.details_scraping_status || 'details_extracted',
         new Date().toISOString(),
         id
       ];

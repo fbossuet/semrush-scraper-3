@@ -1,5 +1,8 @@
 ## V2 Scraper TrendTrack MVP — Spécification (modèle .specify)
 
+**⚠️ ATTENTION** : Cette documentation concerne UNIQUEMENT le scraper MVP (TKMVP).
+Pour le scraper classique (TKOLD), voir `.specify/doc-tkold.md`
+
 ### 1) Contexte et Objectif
 - Problème originel: Taux d'échec élevé en Phase 3 (contextes Playwright fermés, sessions expirées), métriques manquantes/partielles.
 - MVP V1: Architecture et classes présentes mais intégration incomplète; traitement par lots limité; AOV non extrait; 6/30 détails (≈20%).

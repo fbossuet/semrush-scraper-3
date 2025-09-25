@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 
 export class DatabaseManager {
-  constructor(dbPath = './trendtrack-scraper-final/data/trendtrack.db') {
+  constructor(dbPath = './data/trendtrack.db') {
     this.dbPath = dbPath;
     this.db = null;
     this.cache = new Map();

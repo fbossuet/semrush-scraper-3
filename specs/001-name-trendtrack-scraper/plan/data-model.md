@@ -261,7 +261,10 @@ CREATE INDEX idx_workers_status ON workers(status);
 
 ## Workflow des Statuts de Scraping
 
-### Règle Fondamentale
+**⚠️ ATTENTION** : Cette section concerne UNIQUEMENT le scraper MVP (TKMVP).
+Pour le scraper classique (TKOLD), voir `.specify/doc-tkold.md`
+
+### Règle Fondamentale TKMVP
 **Le scraper MVP TrendTrack ne met JAMAIS à jour la table `analytics`**
 
 ### Workflow des Statuts dans la Table `shops`

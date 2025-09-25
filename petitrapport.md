@@ -108,3 +108,21 @@ const aovSelectors = [
 3. **Test de cohérence** : Vérifier que tous les fichiers sont synchronisés
 4. **Test de fonctionnement** : Lancer le scraper pour validation
 5. **Commit final** : Sauvegarder l'état stable
+
+## 💾 COMMIT RÉALISÉ
+
+**Commit Hash** : `95ea011`  
+**Message** : `feat: Optimisation sélecteurs AOV + DataFormatter + nouveau workflow statuts`
+
+### Résumé du commit
+- ✅ **Améliorations conservées** : DataFormatter.formatMonthlyVisits(), sélecteurs AOV optimisés, nouveaux champs de statut
+- 🔄 **Restauration** : shop-repository.js restauré (suppression erreurs analytics)
+- ⚠️ **Incohérence détectée** : schema.js a les nouveaux champs, shop-repository.js restauré n'a pas les nouveaux champs
+- 📋 **Correction manuelle nécessaire** pour résoudre l'incohérence
+
+### Fichiers inclus dans le commit
+- `trendtrack-extractor.js` : Améliorations sélecteurs + DataFormatter
+- `schema.js` : Nouveaux champs de statut
+- `data-formatter.js` : Module centralisé
+- Documentation : specs/ et .specify/ mis à jour
+- `petitrapport.md` : Ce rapport de situation

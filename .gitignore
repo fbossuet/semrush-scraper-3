@@ -35,7 +35,100 @@ test-stealth-profile/
 # Autres temporaires
 *.py~  # Fichiers temporaires éditeurs
 
+# Documentation - Fichiers .md
+*.md
+
+# Fichiers de configuration sensibles
+.env
+*.env*
+config.env
+*.config
+*.conf
+*.key
+*.pem
+*.p12
+*.p8
+*.pfx
+*.secret
+*.crt
+*.csr
+
+# Dossiers de dépendances
+node_modules/
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+env/
+.venv/
+.env/
+
+# Fichiers de données volumineux
+*.json
+*.csv
+*.xlsx
+*.xls
+*.sqlite
+*.db
+*.sqlite3
+
+# Archives et compressions
+*.zip
+*.tar.gz
+*.rar
+*.7z
+*.gz
+*.bz2
+
+# Fichiers de logs et temporaires
+logs/
+*.log
+*.tmp
+*.temp
+*.pid
+*.lock
+*.swp
+*.swo
+*.sock
+*~
+
+# Dossiers de backup
+*_backup_*
+*backup*
+backup_*
+
+# Fichiers de session et profils
+session-profile-shared/
+profile-*
+session-*
+
+# Fichiers de test et debug
+test-*
+debug-*
+*test*
+*debug*
+
+# Fichiers spécifiques au projet
 sem-scraper-final/identify_looping_scripts.py
 sem-scraper-final/improved_year_founded_selectors.py
 trendtrack-scraper-final/extract-ids-only.js
 trendtrack-scraper-final/extract-shop-ids.js
+
+# Fichiers de scraping et données
+scraper-*/data/
+scraper-*/logs/
+scraper-*/screenshots/
+scraper-*/profiles/
+scraper-*/sessions/
+
+# Fichiers de rapport et analyse
+rapport_*.txt
+analyse_*.txt
+statistics_*.txt
+metrics_*.txt
+
+# Fichiers de migration et SQL
+migration_*.sql
+update_*.sql
+schema_*.sql
