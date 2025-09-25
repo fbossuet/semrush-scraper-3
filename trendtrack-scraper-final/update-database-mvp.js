@@ -84,8 +84,17 @@ async function main() {
     logProgress(`🔍 Trouvé ${existingShops.length} boutiques avec statut table_scraping_status: table_extracted`);
     
     if (existingShops.length === 0) {
-      logProgress('🆕 Nouveau scraping MVP - Phase 1: Extraction du tableau');
-      await executePhase1MVP(mvpScraper, shopRepo);
+      // Vérifier s'il y a des boutiques avec statut pending (Phase 3 directe)
+      const pendingShops = await shopRepo.findByTableScrapingStatus('pending');
+      logProgress(`🔍 Trouvé ${pendingShops.length} boutiques avec statut pending`);
+      
+      if (pendingShops.length > 0) {
+        logProgress('🔄 Scraping MVP - Phase 3: Extraction des détails (boutiques pending)');
+        await executePhase3MVP(mvpScraper, shopRepo, pendingShops);
+      } else {
+        logProgress('🆕 Nouveau scraping MVP - Phase 1: Extraction du tableau');
+        await executePhase1MVP(mvpScraper, shopRepo);
+      }
     } else {
       logProgress('🔄 Scraping MVP - Phase 3: Extraction des détails');
       await executePhase3MVP(mvpScraper, shopRepo, existingShops);

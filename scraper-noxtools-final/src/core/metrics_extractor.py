@@ -158,30 +158,68 @@ class MetricsExtractor:
             logger.info(f"📍 Base metrics URL: {self.config.base_metrics_url}")
             
             # Extract domain from shop_url for navigation
-            domain = self._extract_domain_from_shop_url(shop_url) if shop_url else "example.com"
+            domain = self._extract_domain_from_shop_url(shop_url) if shop_url else "cakesbody.com"
             logger.info(f"🌐 Using domain for navigation: {domain}")
             
-            # Navigate to overview page with correct URL (q=domain, date=calculated)
-            overview_url = self._build_overview_url(domain)
-            logger.info(f"🔗 Navigating to overview URL: {overview_url}")
+            # WORKFLOW RESTAURÉ: Accès direct d'abord, bridge en fallback
+            logger.info("🔄 Restoring working workflow: Direct access first, bridge as fallback")
             
-            # Use session manager for cross-domain navigation
-            navigation_success = False
+            # Step 1: Navigate to Dashboard (https://noxtools.com/secure/member)
+            logger.info("📊 Step 1: Navigating to Dashboard...")
             try:
-                navigation_success = await session_manager.navigate_cross_domain(
-                    page, playwright_manager, overview_url
-                )
+                await playwright_manager.navigate_with_retry(page, self.config.dashboard_url)
+                await asyncio.sleep(1.0)
+                logger.info("✅ Dashboard navigation successful")
             except Exception as e:
-                logger.warning(f"⚠️ Cross-domain navigation error: {e}")
+                logger.warning(f"⚠️ Dashboard navigation failed: {e}")
             
-            # If session manager failed, try direct navigation with referer
-            if not navigation_success:
+            # Step 2: Test direct access to Semrush (comme dans l'ancien code qui marchait)
+            logger.info("🧪 Step 2: Testing direct access to Semrush...")
+            direct_access_success = False
+            try:
+                # Test direct access to market overview
+                direct_url = f"https://semrush1.semrush.pw/analytics/traffic/market-overview"
+                await page.goto(direct_url, referer=self.config.dashboard_url, timeout=5000)
+                await page.wait_for_load_state('domcontentloaded', timeout=5000)
+                
+                # Check if direct access worked
+                current_url = page.url
+                page_title = await page.evaluate('document.title')
+                
+                if "403" not in page_title and "forbidden" not in page_title.lower():
+                    logger.info("✅ Direct server access successful, no bridge needed")
+                    direct_access_success = True
+                else:
+                    logger.info("⚠️ Direct access failed, will use bridge")
+                    
+            except Exception as e:
+                logger.info(f"⚠️ Direct access failed: {e}, will use bridge")
+            
+            # Step 3: Use bridge only if direct access failed
+            if not direct_access_success:
+                logger.info("🌉 Step 3: Using bridge as fallback...")
+                bridge_url = self.server_manager.get_current_bridge_url()
+                logger.info(f"🌉 Using bridge URL: {bridge_url}")
                 try:
-                    await page.goto(overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
-                    navigation_success = True
-                    logger.info("✅ Direct navigation to overview page with referer succeeded")
+                    await page.goto(bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                    await page.wait_for_load_state('domcontentloaded', timeout=10000)
+                    await asyncio.sleep(1.0)
+                    logger.info("✅ Bridge URL visited successfully")
                 except Exception as e:
-                    logger.warning(f"⚠️ Direct navigation with referer failed: {e}")
+                    logger.warning(f"⚠️ Bridge URL visit failed: {e}")
+            
+            # Step 4: Navigate to Overview (https://semrush1.semrush.pw/analytics/overview/...)
+            overview_url = self._build_overview_url(domain)
+            logger.info(f"🔗 Step 4: Navigating to Overview: {overview_url}")
+            try:
+                await page.goto(overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                await page.wait_for_load_state('networkidle', timeout=10000)
+                await asyncio.sleep(2.0)  # Extra time for SAP React
+                logger.info("✅ Overview navigation successful")
+                navigation_success = True
+            except Exception as e:
+                logger.warning(f"⚠️ Overview navigation failed: {e}")
+                navigation_success = False
             
             if not navigation_success:
                 metrics.error_message = "Failed to navigate to overview page"
