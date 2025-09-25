@@ -429,6 +429,10 @@ export class MVPScraper {
     console.log(`📊 Détails à sauvegarder:`, details);
     
     try {
+      console.log(`🔍 DEBUG MVP-SCRAPER - Données reçues dans saveShopDetails:`, details);
+      console.log(`🔍 DEBUG MVP-SCRAPER - liveAds7d:`, details.liveAds7d);
+      console.log(`🔍 DEBUG MVP-SCRAPER - liveAds30d:`, details.liveAds30d);
+      
       // Préparer les données pour la sauvegarde
       const detailData = {
         // Métriques de marché
@@ -444,8 +448,14 @@ export class MVPScraper {
         pixel_facebook: details.pixelFacebook || "non",
         
         // Métriques live ads
-        live_ads_7d: details.liveAds7d || 0,
-        live_ads_30d: details.liveAds30d || 0,
+        live_ads_7d: (() => {
+          console.log(`🔍 DEBUG MAPPING - details.liveAds7d:`, details.liveAds7d);
+          return details.liveAds7d || 0;
+        })(),
+        live_ads_30d: (() => {
+          console.log(`🔍 DEBUG MAPPING - details.liveAds30d:`, details.liveAds30d);
+          return details.liveAds30d || 0;
+        })(),
         
         // AOV
         aov: details.aov || null,
@@ -455,15 +465,18 @@ export class MVPScraper {
         updated_at: new Date().toISOString()
       };
       
-      // Utiliser ShopRepository pour sauvegarder
+      // Utiliser ShopRepository pour sauvegarder (VERSION MVP - sans analytics)
       if (this.shopRepository) {
-        const success = await this.shopRepository.updateDetailMetrics(shopId, detailData);
+        console.log(`🔍 DEBUG APPEL - detailData avant appel:`, detailData);
+        console.log(`🔍 DEBUG APPEL - detailData.live_ads_7d:`, detailData.live_ads_7d);
+        console.log(`🔍 DEBUG APPEL - detailData.live_ads_30d:`, detailData.live_ads_30d);
+        const success = await this.shopRepository.updateShopDetailsMVP(shopId, detailData);
         
         if (success) {
-          console.log(`✅ Détails sauvegardés pour la boutique ${shopId}`);
+          console.log(`✅ Détails MVP sauvegardés pour la boutique ${shopId}`);
           return true;
         } else {
-          console.log(`❌ Échec sauvegarde pour la boutique ${shopId}`);
+          console.log(`❌ Échec sauvegarde MVP pour la boutique ${shopId}`);
           return false;
         }
       } else {

@@ -494,6 +494,39 @@ export class ShopRepository {
         totalProducts: shop.total_products,
         liveAds: shop.live_ads,
         creationDate: shop.creation_date,
+        external_id: shop.external_id,
+        scraping_status: shop.scraping_status,
+        last_updated: shop.last_updated
+      }));
+
+      console.log(`✅ Trouvé ${mappedShops.length} boutiques avec le statut: ${status}`);
+      return mappedShops;
+    } catch (error) {
+      console.error(`❌ Erreur recherche par statut ${status}:`, error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Trouve les boutiques par statut de scraping de table (MVP)
+   */
+  async findByTableScrapingStatus(status) {
+    try {
+      const db = this._getConnection();
+      const stmt = db.prepare('SELECT * FROM shops WHERE table_scraping_status = ?');
+      const shops = stmt.all(status);
+      
+      // Mapper les noms de colonnes de la base vers les noms attendus par le code
+      const mappedShops = shops.map(shop => ({
+        id: shop.id,
+        shopName: shop.shop_name,
+        shopUrl: shop.shop_url,
+        category: shop.category,
+        monthlyVisits: shop.monthly_visits,
+        monthlyRevenue: shop.monthly_revenue,
+        totalProducts: shop.total_products,
+        liveAds: shop.live_ads,
+        creationDate: shop.creation_date,
         external_id: shop.external_id, // Ajout du mapping external_id
         scraping_status: shop.scraping_status,
         last_updated: shop.last_updated
@@ -504,6 +537,51 @@ export class ShopRepository {
     } catch (error) {
       console.error('❌ Erreur recherche par statut:', error.message);
       return [];
+    }
+  }
+
+  /**
+   * Met à jour les détails d'une boutique (VERSION MVP - sans analytics)
+   * Règle MVP: Ne JAMAIS toucher à la table analytics
+   */
+  async updateShopDetailsMVP(shopId, detailData) {
+    try {
+      console.log(`🔍 DEBUG MVP - shopId:`, shopId);
+      console.log(`🔍 DEBUG MVP - detailData type:`, typeof detailData);
+      console.log(`🔍 DEBUG MVP - detailData:`, detailData);
+      console.log(`🔍 DEBUG MVP - detailData keys:`, Object.keys(detailData || {}));
+      console.log(`🔍 DEBUG MVP - AOV:`, detailData?.aov);
+      console.log(`🔍 DEBUG MVP - live_ads_7d:`, detailData?.live_ads_7d);
+      console.log(`🔍 DEBUG MVP - live_ads_30d:`, detailData?.live_ads_30d);
+      
+      const db = this._getConnection();
+      
+      // MVP: Seulement mettre à jour la table shops avec les champs de base
+      const shopsStmt = db.prepare(`
+        UPDATE shops SET
+          aov = ?, live_ads_7d = ?, live_ads_30d = ?,
+          details_scraping_status = ?
+        WHERE id = ?
+      `);
+      
+      const shopsParams = [
+        detailData.aov || null,
+        detailData.live_ads_7d || null,
+        detailData.live_ads_30d || null,
+        detailData.details_scraping_status || 'details_extracted',
+        shopId
+      ];
+      
+      console.log(`🔍 DEBUG MVP - Paramètres SQL:`, shopsParams);
+      
+      shopsStmt.run(shopsParams);
+      this._clearCache();
+      
+      console.log(`✅ Détails MVP mis à jour pour boutique ID: ${shopId}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Erreur mise à jour détails MVP:', error.message);
+      return false;
     }
   }
 

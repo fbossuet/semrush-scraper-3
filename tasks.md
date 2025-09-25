@@ -2,6 +2,21 @@
 
 ## Tâches Actives
 
+### T024: Résolution Session Expirée Scraper Noxtools Alpha [P0] - EN COURS
+**Type**: Bug Fix / Infrastructure  
+**Dependencies**: Aucune  
+**Files**: `scraper-noxtools-final/src/core/session_manager.py`, `scraper-noxtools-final/src/core/metrics_extractor.py`  
+**Description**: Résoudre le problème critique de session expirée sur les pages Semrush lors de la navigation cross-domain. Les sessions expirent trop rapidement (5-10 secondes) empêchant l'extraction des métriques.  
+**Status**: ⚠️ **CRITIQUE** - Extraction impossible  
+**Acceptance Criteria**: 
+- [ ] Session maintenue pendant au moins 30 secondes sur les pages Semrush
+- [ ] Extraction de métriques fonctionnelle avec domaines réels
+- [ ] Test de production réussi avec enregistrement BDD
+- [ ] Validation du workflow complet
+**Technical Notes**: Problème identifié lors du test de production. L'authentification Noxtools fonctionne mais la session expire lors de la navigation vers semrush1.semrush.pw. Nécessite amélioration du SessionManager et gestion des cookies cross-domain.  
+**Estimated Effort**: 2-3 heures  
+**Résultat Test**: Authentification ✅, Navigation ✅, Session ❌, Extraction ❌
+
 ### T023: Correction Incohérence Schema/Repository [P0] - EN COURS
 **Type**: Bug Fix / Infrastructure  
 **Dependencies**: Commit 95ea011  

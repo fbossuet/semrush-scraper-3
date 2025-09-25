@@ -61,6 +61,14 @@
 - **Nettoyage des logs** : Supprimer les fichiers de log après analyse
 - **Pas de tests longs** : Éviter les tests sur 150+ boutiques, privilégier les tests courts et ciblés
 
+## ⏰ RÈGLES DE TIMEOUT OBLIGATOIRES
+- **TIMEOUT MAXIMUM** : 60 secondes pour tout test
+- **ARRÊT AUTOMATIQUE** : Toujours utiliser `timeout 60` ou équivalent
+- **SURVEILLANCE ACTIVE** : Vérifier les logs toutes les 10 secondes
+- **ARRÊT IMMÉDIAT** : Si aucun progrès visible après 30 secondes
+- **COMMANDE SÉCURISÉE** : `timeout 60 node script.js > test.log 2>&1 || echo "TIMEOUT"`
+- **PAS D'ATTENTE INFINIE** : Jamais laisser un test sans limite de temps
+
 ## 🎯 ÉTAT ACTUEL
 - ✅ **Scraper TrendTrack** : Opérationnel (screen actif)
 - ✅ **Chemins relatifs** : Implémentés dans tous les fichiers
