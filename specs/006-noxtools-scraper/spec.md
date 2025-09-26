@@ -81,9 +81,15 @@ Le script `main.py` doit être le reflet du test temporaire le plus abouti et in
 1. **Initialisation** : Créer et configurer tous les modules
 2. **Authentification** : S'authentifier sur Noxtools
 3. **Récupération** : Récupérer les boutiques éligibles depuis la base de données
-4. **Scraping** : Pour chaque boutique (navigation → extraction → formatage)
+4. **Scraping** : Pour chaque boutique (navigation → extraction unifiée → formatage)
 5. **Gestion d'erreurs** : Gérer les erreurs et le fallback automatique
 6. **Nettoyage** : Nettoyer les ressources et fermer les connexions
+
+#### Workflow de Scraping Unifié (Refactoring 2025-01-18)
+1. **Navigation** : Dashboard → Test Market-Overview → Bridge (si échec) → Overview
+2. **Extraction Unifiée** : Métriques + CPC en une seule opération sur Overview
+3. **Fonctionnalités Avancées** : Scroll pour virtualisation, retry avec scroll, parsing numérique avancé
+4. **Optimisation** : Une seule navigation, pas de duplication du workflow
 
 ### Exigences de Sécurité et Validation
 - **Backup obligatoire** : Avant toute modification
@@ -151,6 +157,8 @@ Le script `main.py` doit être le reflet du test temporaire le plus abouti et in
 - ✅ **Modules** : Tous les modules créés et intégrés
 - ✅ **Tests** : Tests complets du ServerManager passent
 - ✅ **Documentation** : Mise à jour et cohérente
+- ⚠️ **Refactoring Requis** : Duplication entre `extract_metrics()` et `extract_cpc_best_ratio()`
+- 📋 **Plan de Refactoring** : Spécification technique créée (plan/refactoring_spec.md)
 - 🔄 **Script final** : En cours de création (main.py)
 - ⚠️ **Base de données** : Chemin à corriger pour l'accès
 - 📋 **Prochaines étapes** : Créer le script final et tester en production
@@ -170,6 +178,7 @@ Le script `main.py` doit être le reflet du test temporaire le plus abouti et in
 4. ✅ **Mettre à jour documentation** : Spec, plan, tasks avec ServerManager
 5. 🔄 **Créer script final** : main.py propre et fonctionnel
 6. 📋 **Tester en production** : Validation complète du scraper
+7. 📋 **P1 - Validation format visits** : Implémenter la validation du format K/M pour visits et marquer en "failed" si invalide
 
 ### Résumé de l'Intégration
 **Le contenu du `.cursorrules` a été intégré dans la spécification avec les sections suivantes :**
@@ -243,13 +252,14 @@ En tant qu'analyste de données, je veux que le système de scraping Noxtools r�
 - **NOX-019** : Le système DOIT respecter la correspondance avec la table shops via les clés étrangères
 - **NOX-020** : Le système DOIT gérer les métriques spécifiques à Noxtools
 - **NOX-021** : Le système DOIT valider l'intégrité des données avant sauvegarde
+- **NOX-022** : Le système DOIT valider le format des métriques visits (doit contenir K ou M) et marquer la boutique en statut "failed" si le format est invalide
 
 #### Robustesse et Performance
-- **NOX-022** : Le système DOIT implémenter une logique de retry adaptative
-- **NOX-023** : Le système DOIT gérer les timeouts adaptatifs selon le type d'opération
-- **NOX-024** : Le système DOIT gérer les erreurs gracieusement sans arrêter le processus global
-- **NOX-025** : Le système DOIT fournir des logs détaillés pour le debugging
-- **NOX-026** : Le système DOIT optimiser les performances pour le scraping en parallèle
+- **NOX-023** : Le système DOIT implémenter une logique de retry adaptative
+- **NOX-024** : Le système DOIT gérer les timeouts adaptatifs selon le type d'opération
+- **NOX-025** : Le système DOIT gérer les erreurs gracieusement sans arrêter le processus global
+- **NOX-026** : Le système DOIT fournir des logs détaillés pour le debugging
+- **NOX-027** : Le système DOIT optimiser les performances pour le scraping en parallèle
 
 ### Exigences par Version
 
@@ -264,6 +274,7 @@ En tant qu'analyste de données, je veux que le système de scraping Noxtools r�
 - **NOX-ALPHA-008** : Le système DOIT gérer le fallback entre serveurs Semrush (NOX-011)
 - **NOX-ALPHA-009** : Le système DOIT maintenir la cohérence des URLs lors du fallback (NOX-017)
 - **NOX-ALPHA-010** : Le système DOIT appliquer les critères d'éligibilité des shops (NOX-014)
+- **NOX-ALPHA-011** : Le système DOIT valider le format des métriques visits (NOX-022)
 
 #### Version Beta - Formatage et Enregistrement
 - **NOX-BETA-001** : Le système DOIT implémenter toutes les fonctionnalités de la version Alpha
@@ -318,30 +329,123 @@ En tant qu'analyste de données, je veux que le système de scraping Noxtools r�
   - Mot de passe : `id="amember-pass"`
   - Bouton validation : `type="submit"`
 - ✅ **Redirection après login** : https://noxtools.com/secure/member
-- ✅ **URL finale avec paramètres** : https://semrush1.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507
-- ✅ **URL des métriques** : https://semrush1.semrush.pw/analytics/traffic/market-overview?searchType=domain&fid=1355702&dateRange=2025-07-01&country=us
-- ✅ **URL overview (CPC)** : https://semrush1.semrush.pw/analytics/overview/?fid=1355922&searchType=domain&db=us&q=worldwildlife.org
+- ✅ **ÉTAPE 1 - Overview (CPC)** : https://semrush1.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507
+- ✅ **ÉTAPE 2 - Market-Overview (Autres métriques)** : https://semrush1.semrush.pw/analytics/traffic/market-overview/?date=202507&q=cakesbody.com&searchType=domain&fid=1361959
 - ✅ **Gestion session/cookies** : Maintenir entre domaines (noxtools.com → semrush1.semrush.pw)
-- ✅ **Sélecteurs des métriques** : 
+- ✅ **Sélecteurs Overview (CPC)** :
+  - Lignes: `div[data-ui-name="Body.Row"]`
+  - Keywords: `div[name="phrase"] a`
+  - Volume: `div[name="volume"][role="gridcell"] [data-at="value-volume"]`
+  - Traffic: `div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]`
+  - CPC: `div[name="cpc"][role="gridcell"] [data-at="value-cpc"]`
+  - **Logique CPC** : ratio = volume / trafficPercent → sélection max(ratio)
+
+### Spécification Technique - Extraction CPC sur Overview
+
+## 🔧 **Méthodes de Récupération CPC**
+
+### 1. Scroll pour Virtualisation
+```javascript
+// Méthode 1 : Scroll du conteneur SAP React
+const cont = document.querySelector('[data-ui-name="Body"]') || document.scrollingElement || document.body;
+let y = 0; let steps = 0;
+const max = (cont.scrollHeight || 0) - (cont.clientHeight || 0);
+while (y < max && steps < 8) { 
+    y += Math.max(200, (cont.clientHeight||0)/2); 
+    cont.scrollTo(0, y); 
+    steps++; 
+}
+
+// Méthode 2 : Scroll de la fenêtre (fallback)
+for _ in range(6):
+    await page.evaluate('window.scrollBy(0, Math.max(300, window.innerHeight/2))')
+    await asyncio.sleep(0.25)
+```
+
+### 2. Sélecteurs CPC Spécifiques
+```javascript
+const rows = document.querySelectorAll('div[data-ui-name="Body.Row"]');
+const kw   = q('div[name="phrase"] a');
+const vol  = parseNum(q('div[name="volume"][role="gridcell"] [data-at="value-volume"]'));
+const traf = parseNum(q('div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]'));
+const cpcT = q('div[name="cpc"][role="gridcell"] [data-at="value-cpc"]');
+```
+
+### 3. Parsing Numérique Avancé
+```javascript
+const parseNum = (s) => {
+    if (!s) return NaN;
+    const t = s.trim().replace(/[,%]/g,'').replace(/[, ]/g,'');
+    const m = t.match(/^([\d.]+)([KkMm])?$/);
+    if (!m) {
+        const v = parseFloat(t);
+        return isFinite(v) ? v : NaN;
+    }
+    const n = parseFloat(m[1]);
+    const mul = m[2] ? (m[2].toLowerCase()==='k' ? 1e3 : 1e6) : 1;
+    return n * mul;
+};
+```
+
+### 4. Retry avec Scroll
+```python
+for attempt in range(3):
+    best = await page.evaluate(eval_script)
+    if best and best.get('cpc') is not None:
+        break
+    if attempt < 2:  # Don't scroll on last attempt
+        await _scroll_grid()
+        await asyncio.sleep(0.5)
+```
+
+## 🧮 **Calcul CPC**
+
+### Logique de Calcul
+```javascript
+const ratio = vol / traf;
+if (!best || ratio > best.ratio) best = { keyword: kw, ratio, cpc, cpcRaw: cpcT };
+```
+
+### Algorithme :
+1. **Parcourir** toutes les lignes `div[data-ui-name="Body.Row"]`
+2. **Extraire** : keyword, volume, trafficPercent, cpc
+3. **Calculer** : ratio = volume / trafficPercent
+4. **Sélectionner** : ligne avec le ratio maximum
+5. **Retourner** : CPC de la ligne sélectionnée
+
+## 🔄 **Workflow CPC**
+
+### Workflow Simplifié
+```
+extract_metrics():
+Dashboard → Test Market-Overview → Bridge (si échec) → Overview → 
+Extraction métriques + CPC (en une seule fois)
+```
+
+### Fonctionnalités à Intégrer
+1. **Scroll pour virtualisation** : Fonction `_scroll_grid()`
+2. **Parsing numérique avancé** : Fonction `_parse_numeric()`
+3. **Extraction CPC avec retry** : Logique intégrée dans la méthode
+
+- ✅ **Sélecteurs Market-Overview (Autres métriques)** :
   - visits : `[data-ui-name="Flex"][role="gridcell"][name="entrances"][tabindex="-1"][aria-colindex="3"]`
   - organic search traffic : `[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchOrganic"][tabindex="-1"][aria-colindex="9"]`
   - paid search traffic : `[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchPaid"][tabindex="-1"][aria-colindex="11"]`
   - purchase conversion : `[data-ui-name="Flex"][role="gridcell"][name="purchasesPerVisit"][tabindex="-1"][aria-colindex="21"]`
   - avg visit duration : `[data-ui-name="Flex"][role="gridcell"][name="avgVisitDuration"][tabindex="-1"][aria-colindex="27"]`
   - bounce rate : `[data-ui-name="Flex"][role="gridcell"][name="bouncesPerVisit"][tabindex="-1"][aria-colindex="29"]`
-  - cpc (à confirmer) : `name="cpc"` (sélecteur à valider; Alpha: affichage log uniquement)
 - ✅ **Technologie** : Page chargée en SAP React (à prendre en compte pour l'extraction)
 
-**Extraction CPC (Alpha)**
-- Naviguer vers l’overview (cf. URL overview) après passage par `https://semrush.noxtools.com/server3.php`
-  - Note: pour la version Finale, prévoir un mécanisme de fallback automatique sur d’autres passerelles/domains en cas d’erreur (ex: indisponibilité/404), conformément à `NOX-FINAL-005`.
-- Attendre le chargement SAP React (networkidle + délais de stabilisation)
-- Parcourir les lignes `div[data-ui-name="Body.Row"]`
-- Sélecteurs:
-  - Volume: `div[name="volume"][role="gridcell"] [data-at="value-volume"]`
-  - Traffic %: `div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]`
-  - CPC: `div[name="cpc"][role="gridcell"] [data-at="value-cpc"]`
-- Calcul: ratio = volume / trafficPercent; conserver la ligne au ratio maximal et retourner le CPC associé
+**Extraction Unifiée (Refactoring 2025-01-18)**
+- **Navigation unique** : Dashboard → Test Market-Overview → Bridge (si échec) → Overview
+- **Extraction unifiée** : Métriques + CPC en une seule opération sur Overview
+- **Fonctionnalités avancées** :
+  - Scroll pour virtualisation SAP React
+  - Retry avec scroll progressif
+  - Parsing numérique avancé (K/M support)
+  - Sélecteurs CPC spécifiques et précis
+- **Optimisation** : Une seule navigation, pas de duplication du workflow
+- **Rate limiting** : Limites/minute et burst maintenues
 
 **Inputs à Fournir :**
 - **Rate limiting** : Limites de requêtes par minute/heure
@@ -405,6 +509,26 @@ CREATE TABLE analytics (
     updated_at DATE,
     FOREIGN KEY (shop_id) REFERENCES shops (id)
 );
+```
+
+### Validation du Format des Métriques (Nouvelle Règle P1)
+**Validation obligatoire du format des métriques visits** :
+
+#### Règle de Validation Visits
+- **Condition** : Si la métrique `visits` ne contient pas de suffixe K ou M
+- **Action** : Marquer la boutique en statut "failed"
+- **Exemples valides** : "1.5M", "33K", "150K", "2.1M"
+- **Exemples invalides** : "1500000", "33000", "1500", "2100000"
+- **Implémentation** : Validation dans le StatusManager avant classification du statut
+
+#### Logique de Validation
+```python
+def validate_visits_format(visits_value: str) -> bool:
+    """Valide que visits contient K ou M suffixe."""
+    if not visits_value:
+        return False
+    cleaned = visits_value.strip().upper()
+    return cleaned.endswith('K') or cleaned.endswith('M')
 ```
 
 ### Formatage des Données (Version Beta)

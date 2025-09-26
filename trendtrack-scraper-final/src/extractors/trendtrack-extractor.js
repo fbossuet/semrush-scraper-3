@@ -188,7 +188,7 @@ export class TrendTrackExtractor extends BaseExtractor {
       }
       
       // URL complète avec tous les paramètres
-      let url = 'https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops?include=true&tab=websites&minTraffic=500000&languages=en&currencies=USD&creationCountry=US&orderBy=liveAds';
+      let url = 'https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops?include=true&tab=websites&minTraffic=1000&languages=en&currencies=USD&creationCountry=US&orderBy=liveAds';
       
       // Ajouter le paramètre de page si nécessaire
       if (page > 1) {

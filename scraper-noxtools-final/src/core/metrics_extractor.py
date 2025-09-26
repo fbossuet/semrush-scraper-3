@@ -185,12 +185,13 @@ class MetricsExtractor:
                 # Check if direct access worked
                 current_url = page.url
                 page_title = await page.evaluate('document.title')
+                page_content = await page.content()
                 
-                if "403" not in page_title and "forbidden" not in page_title.lower():
+                if "403" not in page_title and "forbidden" not in page_title.lower() and "Session expired" not in page_content:
                     logger.info("✅ Direct server access successful, no bridge needed")
                     direct_access_success = True
                 else:
-                    logger.info("⚠️ Direct access failed, will use bridge")
+                    logger.info("⚠️ Direct access failed (session expired or forbidden), will use bridge")
                     
             except Exception as e:
                 logger.info(f"⚠️ Direct access failed: {e}, will use bridge")
@@ -482,9 +483,9 @@ class MetricsExtractor:
             except Exception as e:
                 logger.warning(f"🔍 DEBUG - Error in page analysis: {e}")
             
-            # Check if we're on the right page
-            if 'analytics/traffic/market-overview' not in current_url:
-                logger.warning(f"⚠️ Not on metrics page: {current_url}")
+            # Check if we're on the right page (Overview page for metrics extraction)
+            if 'analytics/overview' not in current_url:
+                logger.warning(f"⚠️ Not on overview page: {current_url}")
                 return False
                 
             # Check for session expired message

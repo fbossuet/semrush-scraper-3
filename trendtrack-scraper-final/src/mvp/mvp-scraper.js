@@ -111,7 +111,7 @@ export class MVPScraper {
     const extractOperation = async () => {
       // 1. D'abord naviguer vers la page des boutiques
       console.log('🌐 Navigation vers la page des boutiques...');
-      await this.contextManager.page.goto('https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops?include=true&tab=websites&minTraffic=500000&languages=en&currencies=USD&creationCountry=US&orderBy=liveAds', {
+      await this.contextManager.page.goto('https://app.trendtrack.io/en/workspace/w-al-yakoobs-workspace-x0Qg9st/trending-shops?include=true&tab=websites&minTraffic=1000&languages=en&currencies=USD&creationCountry=US&orderBy=liveAds', {
         waitUntil: 'domcontentloaded',
         timeout: this.config.navigationTimeout
       });

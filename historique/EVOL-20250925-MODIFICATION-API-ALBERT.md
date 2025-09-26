@@ -153,3 +153,4 @@ curl "http://37.59.102.7:8001/albert"
 Les modifications apportées à l'API Albert sont des **évolutions fonctionnelles** qui améliorent la précision des données retournées. Le code est opérationnel et testé. La documentation OpenAPI doit être mise à jour pour inclure le nouvel endpoint `/albert` avec ses spécificités de filtrage et de formatage.
 
 **Statut** : ✅ Évolution complétée et validée
+

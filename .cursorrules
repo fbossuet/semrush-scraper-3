@@ -8,11 +8,10 @@
 - Utiliser: python3 workspace_config.py pour configuration centralisée
 
 ## 📋 SYSTÈME DE TÂCHES
-- **Fichier de suivi**: tasks.md dans le dossier spec correspondant au projet (ex: specs/006-noxtools-scraper/tasks.md)
+- **Fichier de suivi**: tasks.md (système interne inspiré de git spec check)
 - **Priorités**: P0 (critique), P1 (important), P2 (normal), P3 (faible)
 - **Types**: Bug Fix, Feature, Infrastructure, Documentation, Refactoring
 - **Statuts**: En cours, En attente, Terminée, Annulée
-- **Règle obligatoire**: TOUJOURS créer/sauvegarder les tâches dans le fichier tasks.md du dossier spec du projet en cours
 
 ## 🚨 RÈGLE CRITIQUE ABSOLUE - NON NÉGOCIABLE
 - **VALIDATION UTILISATEUR OBLIGATOIRE** : Ne JAMAIS toucher au code sans validation explicite de l'utilisateur

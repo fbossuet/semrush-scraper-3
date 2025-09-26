@@ -6,16 +6,20 @@
 **Type**: Bug Fix / Infrastructure  
 **Dependencies**: Aucune  
 **Files**: `scraper-noxtools-final/src/core/session_manager.py`, `scraper-noxtools-final/src/core/metrics_extractor.py`  
-**Description**: Résoudre le problème critique de session expirée sur les pages Semrush lors de la navigation cross-domain. Les sessions expirent trop rapidement (5-10 secondes) empêchant l'extraction des métriques.  
+**Description**: Résoudre le problème critique de session expirée sur les pages Semrush lors de la navigation cross-domain. Les sessions expirent trop rapidement (5-10 secondes) empêchant l'extraction des métriques. **PROBLÈME IDENTIFIÉ** : Duplication entre `extract_metrics()` et `extract_cpc_best_ratio()` causant une double navigation et des problèmes de session.  
 **Status**: ⚠️ **CRITIQUE** - Extraction impossible  
 **Acceptance Criteria**: 
 - [ ] Session maintenue pendant au moins 30 secondes sur les pages Semrush
 - [ ] Extraction de métriques fonctionnelle avec domaines réels
 - [ ] Test de production réussi avec enregistrement BDD
 - [ ] Validation du workflow complet
-**Technical Notes**: Problème identifié lors du test de production. L'authentification Noxtools fonctionne mais la session expire lors de la navigation vers semrush1.semrush.pw. Nécessite amélioration du SessionManager et gestion des cookies cross-domain.  
+- [ ] **NOUVEAU** : Élimination de la duplication entre `extract_metrics()` et `extract_cpc_best_ratio()`
+- [ ] **NOUVEAU** : Intégration des fonctionnalités avancées CPC dans `_extract_metrics_from_page()`
+- [ ] **NOUVEAU** : Workflow unifié avec une seule navigation vers Overview
+**Technical Notes**: Problème identifié lors du test de production. L'authentification Noxtools fonctionne mais la session expire lors de la navigation vers semrush1.semrush.pw. **ANALYSE RÉCENTE** : Duplication majeure détectée entre les deux méthodes d'extraction causant une double navigation et des problèmes de session. **SOLUTION** : Suivre la spécification technique `specs/006-noxtools-scraper/plan/refactoring_spec.md` pour éliminer la duplication et unifier le workflow.  
 **Estimated Effort**: 2-3 heures  
-**Résultat Test**: Authentification ✅, Navigation ✅, Session ❌, Extraction ❌
+**Résultat Test**: Authentification ✅, Navigation ✅, Session ❌, Extraction ❌  
+**Spécification Technique**: Voir `specs/006-noxtools-scraper/plan/refactoring_spec.md` pour les détails complets du refactoring
 
 ### ✅ T023: Correction Incohérence Schema/Repository [P0] - TERMINÉ
 **Type**: Bug Fix / Infrastructure  

@@ -53,28 +53,44 @@ Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui 
   - Page login: https://noxtools.com/secure/login
   - Sélecteurs: `#amember-login`, `#amember-pass`, `[type="submit"]`
   - Redirection: https://noxtools.com/secure/member
-  - URL finale: https://semrush1.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507
-  - URL métriques: https://semrush1.semrush.pw/analytics/traffic/market-overview?searchType=domain&fid=1355702&dateRange=2025-07-01&country=us
-  - Sélecteurs métriques (SAP React gridcell):
-    - visits: `[data-ui-name="Flex"][role="gridcell"][name="entrances"][tabindex="-1"][aria-colindex="3"]`
-    - organic: `[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchOrganic"][tabindex="-1"][aria-colindex="9"]`
-    - paid: `[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchPaid"][tabindex="-1"][aria-colindex="11"]`
-    - purchase conversion: `[data-ui-name="Flex"][role="gridcell"][name="purchasesPerVisit"][tabindex="-1"][aria-colindex="21"]`
-    - avg visit duration: `[data-ui-name="Flex"][role="gridcell"][name="avgVisitDuration"][tabindex="-1"][aria-colindex="27"]`
-    - bounce rate: `[data-ui-name="Flex"][role="gridcell"][name="bouncesPerVisit"][tabindex="-1"][aria-colindex="29"]`
-  - Métrique supplémentaire Alpha: CPC (sélecteur à confirmer, affichage log uniquement)
+  - **ÉTAPE 1 - Overview (CPC)** : https://semrush1.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507
+    - Sélecteurs Overview (SAP React grid) :
+      - Lignes: `div[data-ui-name="Body.Row"]`
+      - Keywords: `div[name="phrase"] a`
+      - Volume: `div[name="volume"][role="gridcell"] [data-at="value-volume"]`
+      - Traffic: `div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]`
+      - CPC: `div[name="cpc"][role="gridcell"] [data-at="value-cpc"]`
+    - Logique CPC : ratio = volume / trafficPercent → sélection max(ratio)
+  - **ÉTAPE 2 - Market-Overview (Autres métriques)** : https://semrush1.semrush.pw/analytics/traffic/market-overview/?date=202507&q=cakesbody.com&searchType=domain&fid=1361959
+    - Sélecteurs métriques (SAP React gridcell):
+      - visits: `[data-ui-name="Flex"][role="gridcell"][name="entrances"][tabindex="-1"][aria-colindex="3"]`
+      - organic: `[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchOrganic"][tabindex="-1"][aria-colindex="9"]`
+      - paid: `[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchPaid"][tabindex="-1"][aria-colindex="11"]`
+      - purchase conversion: `[data-ui-name="Flex"][role="gridcell"][name="purchasesPerVisit"][tabindex="-1"][aria-colindex="21"]`
+      - avg visit duration: `[data-ui-name="Flex"][role="gridcell"][name="avgVisitDuration"][tabindex="-1"][aria-colindex="27"]`
+      - bounce rate: `[data-ui-name="Flex"][role="gridcell"][name="bouncesPerVisit"][tabindex="-1"][aria-colindex="29"]`
   - Technologie: SAP React (extraction adaptée)
 
-### CPC (Alpha)
-- Navigation: Dashboard → Bridge `https://semrush.noxtools.com/server3.php` → Overview
-  - Remarque: en Version Finale, ajouter un fallback automatique (domaines/passerelles alternatifs) si indisponible (cf. `NOX-FINAL-005`).
-- URL Overview (alpha, hardcodée): `https://semrush1.semrush.pw/analytics/overview/?fid=1355922&searchType=domain&db=us&q=worldwildlife.org`
-- Attentes: `networkidle` + délai 2s
-- Extraction par évaluation:
+### Workflow en 2 Étapes Distinctes (Alpha)
+
+#### **ÉTAPE 1 - Overview (CPC Extraction)**
+- **Navigation** : Dashboard → Bridge `https://semrush.noxtools.com/server3.php` → Overview
+- **URL** : `https://semrush1.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507`
+- **Attentes** : `networkidle` + délai 2s
+- **Extraction CPC** :
   - Lignes: `div[data-ui-name="Body.Row"]`
-  - `volume`, `trafficPercent`, `cpc` via sélecteurs fournis
-  - Calcul ratio volume/traffic et sélection du CPC max-ratio
-- Rate limiting: limites/minute et burst
+  - Keywords: `div[name="phrase"] a`
+  - Volume: `div[name="volume"][role="gridcell"] [data-at="value-volume"]`
+  - Traffic: `div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]`
+  - CPC: `div[name="cpc"][role="gridcell"] [data-at="value-cpc"]`
+  - **Logique** : ratio = volume / trafficPercent → sélection max(ratio)
+- **Rate limiting** : limites/minute et burst
+
+#### **ÉTAPE 2 - Market-Overview (Autres Métriques)**
+- **Navigation** : Depuis Overview → Market-Overview avec FID
+- **URL** : `https://semrush1.semrush.pw/analytics/traffic/market-overview/?date=202507&q=cakesbody.com&searchType=domain&fid=1361959`
+- **Extraction** : Toutes les autres métriques (visits, organic, paid, etc.)
+- **Remarque** : en Version Finale, ajouter un fallback automatique (domaines/passerelles alternatifs) si indisponible (cf. `NOX-FINAL-005`).
 
 ### Beta (à fournir/valider)
 - Chemin de la BDD
