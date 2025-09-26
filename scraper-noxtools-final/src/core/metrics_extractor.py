@@ -448,6 +448,57 @@ class MetricsExtractor:
             logger.error(f"❌ CPC navigation error: {e}")
             return False
 
+    async def _extract_cpc_advanced(self, page: Page) -> Optional[Dict[str, Any]]:
+        """Extract CPC with all advanced features preserved from extract_cpc_best_ratio.
+        
+        This method preserves all the advanced functionality from extract_cpc_best_ratio():
+        - Session validation on CPC page
+        - Network settling with SAP React support
+        - Grid detection with fallbacks
+        - Scroll virtualization for rendering
+        - Advanced number parsing (K/M support)
+        - Best ratio logic (volume/trafficPercent)
+        - Retry logic with multiple attempts
+        - Comprehensive error handling
+        
+        Args:
+            page: Playwright page instance (already on CPC overview page)
+            
+        Returns:
+            Optional[Dict[str, Any]]: CPC data with { keyword, ratio, cpc, cpcRaw }
+        """
+        try:
+            logger.info("💰 Starting advanced CPC extraction...")
+            
+            # Step 1: Session validation (from extract_cpc_best_ratio)
+            await self._validate_session_on_cpc_page(page)
+            
+            # Step 2: Network settling + extra RAFs for SAP React (from extract_cpc_best_ratio)
+            try:
+                await page.wait_for_load_state('networkidle', timeout=10000)
+                logger.info("✅ Network idle state reached for CPC page")
+            except Exception as e:
+                logger.warning(f"⚠️ Network idle wait failed for CPC page: {e}")
+            await asyncio.sleep(2.0)
+            logger.info("✅ SAP React stabilization delay completed")
+            
+            # Step 3: Grid detection with fallbacks (from extract_cpc_best_ratio)
+            await self._wait_for_cpc_grid(page)
+            
+            # Step 4: Extract CPC with retry logic and scroll virtualization
+            cpc_data = await self._extract_cpc_with_retry(page)
+            
+            if cpc_data and cpc_data.get('cpc') is not None:
+                logger.info(f"✅ CPC extraction successful: {cpc_data}")
+                return cpc_data
+            else:
+                logger.warning("⚠️ No CPC data found after all attempts")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Advanced CPC extraction error: {e}")
+            return None
+
     async def extract_cpc_best_ratio(self, page: Page, playwright_manager: PlaywrightManager,
                                      session_manager: SessionManager, domain: str) -> Optional[Dict[str, Any]]:
         """Extract CPC based on max(volume/traffic) from overview grid.
@@ -1063,6 +1114,137 @@ class MetricsExtractor:
         """Get the metrics URL that will be navigated to."""
         return self.config.base_metrics_url
 
+    # ========================================================================
+    # UTILITY FUNCTIONS FOR UNIFIED CPC EXTRACTION
+    # ========================================================================
+    
+    async def _validate_session_on_cpc_page(self, page: Page) -> None:
+        """Validate session on CPC page (from extract_cpc_best_ratio).
+        
+        Args:
+            page: Playwright page instance
+            
+        Raises:
+            Exception: If session expired detected
+        """
+        try:
+            page_content = await page.content()
+            if "Session expired" in page_content or "access again from Dashboard" in page_content:
+                logger.error("❌ Session expired on CPC page - need to refresh session")
+                raise Exception("Session expired on CPC page")
+            logger.info("✅ Session validation passed on CPC page")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not check page content: {e}")
+
+    async def _wait_for_cpc_grid(self, page: Page) -> None:
+        """Wait for CPC grid elements (from extract_cpc_best_ratio).
+        
+        Args:
+            page: Playwright page instance
+        """
+        try:
+            await page.wait_for_selector('div[data-ui-name="Body.Row"]', timeout=10000)
+            logger.info("✅ Found Body.Row elements for CPC extraction")
+        except Exception as e:
+            logger.warning(f"⚠️ Body.Row not found, trying volume cells: {e}")
+            try:
+                await page.wait_for_selector('div[name="volume"][role="gridcell"] [data-at="value-volume"]', timeout=8000)
+                logger.info("✅ Found volume cells for CPC extraction")
+            except Exception as e2:
+                logger.warning(f"⚠️ Volume cells not found either: {e2}")
+
+    async def _extract_cpc_with_retry(self, page: Page) -> Optional[Dict[str, Any]]:
+        """Extract CPC with retry logic and scroll virtualization (from extract_cpc_best_ratio).
+        
+        Args:
+            page: Playwright page instance
+            
+        Returns:
+            Optional[Dict[str, Any]]: CPC data with { keyword, ratio, cpc, cpcRaw }
+        """
+        # Get CPC extraction script (identical to extract_cpc_best_ratio)
+        eval_script = self._get_cpc_extraction_script()
+        
+        best = None
+        for attempt in range(3):
+            try:
+                best = await page.evaluate(eval_script)
+                logger.info(f"CPC evaluation attempt {attempt + 1}: {best}")
+            except Exception as e:
+                logger.warning(f"⚠️ CPC evaluation attempt {attempt + 1} failed: {e}")
+                best = None
+                
+            if best and best.get('cpc') is not None:
+                logger.info(f"✅ CPC found on attempt {attempt + 1}: {best}")
+                break
+                
+            if attempt < 2:  # Don't scroll on last attempt
+                await self._scroll_cpc_grid(page)
+                await asyncio.sleep(0.5)
+        
+        return best
+
+    def _get_cpc_extraction_script(self) -> str:
+        """Get CPC extraction script (identical to extract_cpc_best_ratio).
+        
+        Returns:
+            str: JavaScript evaluation script for CPC extraction
+        """
+        return r"""
+        () => {
+          const parseNum = (s) => {
+            if (!s) return NaN;
+            const t = s.trim().replace(/[,%]/g,'').replace(/[, ]/g,'');
+            const m = t.match(/^([\d.]+)([KkMm])?$/);
+            if (!m) {
+              const v = parseFloat(t);
+              return isFinite(v) ? v : NaN;
+            }
+            const n = parseFloat(m[1]);
+            const mul = m[2] ? (m[2].toLowerCase()==='k' ? 1e3 : 1e6) : 1;
+            return n * mul;
+          };
+          let best = null;
+          const rows = document.querySelectorAll('div[data-ui-name="Body.Row"]');
+          rows.forEach(row => {
+            const q = (sel) => row.querySelector(sel)?.textContent?.trim() ?? '';
+            const kw   = q('div[name="phrase"] a');
+            const vol  = parseNum(q('div[name="volume"][role="gridcell"] [data-at="value-volume"]'));
+            const traf = parseNum(q('div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]'));
+            const cpcT = q('div[name="cpc"][role="gridcell"] [data-at="value-cpc"]');
+            const cpc  = parseNum(cpcT);
+            if (!isFinite(vol) || !isFinite(traf) || traf <= 0) return;
+            const ratio = vol / traf;
+            if (!best || ratio > best.ratio) best = { keyword: kw, ratio, cpc, cpcRaw: cpcT };
+          });
+          return best;
+        }
+        """
+
+    async def _scroll_cpc_grid(self, page: Page) -> None:
+        """Scroll CPC grid to force virtualization rendering (from extract_cpc_best_ratio).
+        
+        Args:
+            page: Playwright page instance
+        """
+        try:
+            await page.evaluate("""
+                () => {
+                  const cont = document.querySelector('[data-ui-name="Body"]') || document.scrollingElement || document.body;
+                  let y = 0; let steps = 0;
+                  const max = (cont.scrollHeight || 0) - (cont.clientHeight || 0);
+                  while (y < max && steps < 8) { y += Math.max(200, (cont.clientHeight||0)/2); cont.scrollTo(0, y); steps++; }
+                  return true;
+                }
+            """)
+            logger.info("✅ Grid scrolled using container method")
+        except Exception as e:
+            logger.warning(f"⚠️ Container scroll failed, using window scroll: {e}")
+            for _ in range(6):
+                await page.evaluate('window.scrollBy(0, Math.max(300, window.innerHeight/2))')
+                await asyncio.sleep(0.25)
+            logger.info("✅ Grid scrolled using window method")
+
 # Convenience function for metrics extraction
 async def extract_noxtools_metrics(page: Page, playwright_manager: PlaywrightManager,
                                  session_manager: SessionManager,
@@ -1070,5 +1252,4 @@ async def extract_noxtools_metrics(page: Page, playwright_manager: PlaywrightMan
     """Quick metrics extraction function."""
     extractor = MetricsExtractor(config)
     return await extractor.extract_metrics(page, playwright_manager, session_manager)
-
 
