@@ -145,56 +145,81 @@ class NoxtoolsScraper:
     async def scrape_shop_metrics(self, domain: str) -> Optional[Dict[str, Any]]:
         """Scrape les métriques pour un domaine spécifique."""
         try:
+            logger.info(f"📊 [DEBUG] Starting shop metrics scraping for: {domain}")
+            logger.info(f"📊 [DEBUG] Authentication status: {self.is_authenticated}")
+            logger.info(f"📊 [DEBUG] Current page URL: {self.current_page.url}")
+            logger.info(f"📊 [DEBUG] Current page title: {await self.current_page.title()}")
+            
             if not self.is_authenticated:
-                logger.error("❌ Non authentifié")
+                logger.error("❌ [DEBUG] Not authenticated")
                 return None
             
-            logger.info(f"📊 Scraping des métriques pour: {domain}")
+            logger.info(f"📊 [DEBUG] Scraping des métriques pour: {domain}")
             
             # Le MetricsExtractor gère maintenant la navigation avec FID dynamique
-            logger.info(f"🌐 Navigation vers métriques avec FID dynamique...")
+            logger.info(f"🌐 [DEBUG] Navigation vers métriques avec FID dynamique...")
             
             # Extraire les métriques
+            logger.info(f"🔍 [DEBUG] Starting metrics extraction...")
             metrics = await self.metrics_extractor.extract_metrics(
                 self.current_page,
                 self.playwright_manager,
-                self.session_manager
+                self.session_manager,
+                shop_url=domain
             )
+            logger.info(f"🔍 [DEBUG] Metrics extraction result: {metrics}")
             
             if metrics and metrics.success:
-                logger.info(f"✅ Métriques extraites pour {domain}")
+                logger.info(f"✅ [DEBUG] Metrics extracted successfully for {domain}")
+                logger.info(f"✅ [DEBUG] Metrics data: {metrics.to_dict()}")
                 
                 # Formater les métriques
+                logger.info(f"📝 [DEBUG] Formatting metrics...")
                 formatted_metrics = format_metrics(metrics.to_dict())
                 formatted_metrics['domain'] = domain
+                logger.info(f"📝 [DEBUG] Formatted metrics: {formatted_metrics}")
                 
                 return formatted_metrics
             else:
-                logger.warning(f"⚠️ Aucune métrique extraite pour {domain}")
+                logger.warning(f"⚠️ [DEBUG] No metrics extracted for {domain}")
+                logger.warning(f"⚠️ [DEBUG] Metrics success: {metrics.success if metrics else 'None'}")
+                logger.warning(f"⚠️ [DEBUG] Metrics error: {metrics.error_message if metrics else 'None'}")
                 return None
                 
         except Exception as e:
-            logger.error(f"❌ Erreur lors du scraping de {domain}: {e}")
+            logger.error(f"❌ [DEBUG] Error during scraping of {domain}: {e}")
+            logger.error(f"❌ [DEBUG] Exception type: {type(e).__name__}")
+            logger.error(f"❌ [DEBUG] Exception args: {e.args}")
             return None
     
     async def scrape_multiple_shops(self, domains: List[str]) -> List[Dict[str, Any]]:
         """Scrape les métriques pour plusieurs domaines."""
         results = []
         
-        logger.info(f"🚀 Début du scraping de {len(domains)} domaines")
+        logger.info(f"🚀 [DEBUG] Starting scraping of {len(domains)} domains")
+        logger.info(f"🚀 [DEBUG] Domains list: {domains}")
         
         for i, domain in enumerate(domains, 1):
-            logger.info(f"📊 [{i}/{len(domains)}] Scraping: {domain}")
+            logger.info(f"📊 [DEBUG] [{i}/{len(domains)}] Scraping: {domain}")
+            logger.info(f"📊 [DEBUG] Progress: {i}/{len(domains)} ({i/len(domains)*100:.1f}%)")
             
             metrics = await self.scrape_shop_metrics(domain)
+            logger.info(f"📊 [DEBUG] Metrics result for {domain}: {metrics is not None}")
+            
             if metrics:
                 results.append(metrics)
+                logger.info(f"✅ [DEBUG] Added metrics for {domain} to results")
+            else:
+                logger.warning(f"⚠️ [DEBUG] No metrics for {domain}")
             
             # Délai entre les requêtes
             if i < len(domains):
+                logger.info(f"⏳ [DEBUG] Waiting 2 seconds before next domain...")
                 await asyncio.sleep(2)
+                logger.info(f"⏳ [DEBUG] Wait completed, continuing...")
         
-        logger.info(f"✅ Scraping terminé: {len(results)}/{len(domains)} domaines traités")
+        logger.info(f"✅ [DEBUG] Scraping completed: {len(results)}/{len(domains)} domains processed")
+        logger.info(f"✅ [DEBUG] Results summary: {[r.get('domain', 'Unknown') for r in results]}")
         return results
     
     async def get_server_status(self) -> Dict[str, Any]:
@@ -239,11 +264,39 @@ async def main():
             logger.error("❌ Échec de l'authentification")
             return
         
-        # 3. Test avec un domaine
-        test_domains = ["cakesbody.com"]
-        logger.info(f"🧪 Test avec {len(test_domains)} domaines")
+        # 3. Récupérer les boutiques éligibles depuis la BDD
+        from services.shop_repository import ShopRepository
         
-        results = await scraper.scrape_multiple_shops(test_domains)
+        shop_repo = ShopRepository()
+        eligible_shops = shop_repo.get_shops_to_scrape(limit=10)
+        
+        if not eligible_shops:
+            logger.info("📊 Zéro boutiques éligibles pour le scraping Noxtools")
+            print("📊 Zéro boutiques éligibles pour le scraping Noxtools")
+            return
+        
+        logger.info(f"🧪 {len(eligible_shops)} boutiques éligibles trouvées")
+        print(f"🧪 {len(eligible_shops)} boutiques éligibles trouvées")
+        
+        # Extraire les domaines des boutiques éligibles
+        domains = []
+        for shop in eligible_shops:
+            if shop.shop_url:
+                from urllib.parse import urlparse
+                parsed_url = urlparse(shop.shop_url)
+                domain = parsed_url.netloc
+                if domain:
+                    domains.append(domain)
+        
+        if not domains:
+            logger.info("📊 Aucun domaine valide trouvé dans les boutiques éligibles")
+            print("📊 Aucun domaine valide trouvé dans les boutiques éligibles")
+            return
+        
+        logger.info(f"🧪 Test avec {len(domains)} domaines éligibles")
+        print(f"🧪 Test avec {len(domains)} domaines éligibles")
+        
+        results = await scraper.scrape_multiple_shops(domains)
         
         # 4. Affichage des résultats
         print(f"\n📊 RÉSULTATS DU SCRAPING")

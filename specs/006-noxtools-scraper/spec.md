@@ -2,7 +2,7 @@
 
 **Branche de Fonctionnalité** : `006-noxtools-scraper`  
 **Créé** : 2025-01-18  
-**Statut** : Brouillon  
+**Statut** : Version Alpha en cours  
 **Entrée** : Description utilisateur : "Créer un nouveau scraper dans un dossier scraper-noxtools-final qui reproduit les fonctionnalités du scraper SEM existant mais adapté pour Noxtools avec de nouveaux sélecteurs et une navigation vers un autre domaine."
 
 ## Versions de Développement
@@ -74,6 +74,7 @@ Le script `main.py` doit être le reflet du test temporaire le plus abouti et in
 - `core/metrics_extractor.py` - Extraction des métriques
 - `core/market_overview_navigator.py` - Navigation Market Overview
 - `services/shop_repository.py` - Récupération des boutiques
+- `services/database_saver.py` - Sauvegarde des métriques en BDD
 - `services/formatter.py` - Formatage des données
 - `services/status_manager.py` - Gestion des statuts
 
@@ -82,8 +83,9 @@ Le script `main.py` doit être le reflet du test temporaire le plus abouti et in
 2. **Authentification** : S'authentifier sur Noxtools
 3. **Récupération** : Récupérer les boutiques éligibles depuis la base de données
 4. **Scraping** : Pour chaque boutique (navigation → extraction unifiée → formatage)
-5. **Gestion d'erreurs** : Gérer les erreurs et le fallback automatique
-6. **Nettoyage** : Nettoyer les ressources et fermer les connexions
+5. **Sauvegarde** : Enregistrer les métriques en base de données
+6. **Gestion d'erreurs** : Gérer les erreurs et le fallback automatique
+7. **Nettoyage** : Nettoyer les ressources et fermer les connexions
 
 #### Workflow de Scraping Détaillé
 
@@ -536,14 +538,57 @@ Dashboard → Test Market-Overview → Bridge (si échec)
 Extraction métriques 
 ```
 
-- ✅ **Sélecteurs Market-Overview (Autres métriques)** :
-  - visits : `[data-ui-name="Flex"][role="gridcell"][name="entrances"][tabindex="-1"][aria-colindex="3"]`
-  - organic search traffic : `[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchOrganic"][tabindex="-1"][aria-colindex="9"]`
-  - paid search traffic : `[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchPaid"][tabindex="-1"][aria-colindex="11"]`
-  - purchase conversion : `[data-ui-name="Flex"][role="gridcell"][name="purchasesPerVisit"][tabindex="-1"][aria-colindex="21"]`
-  - avg visit duration : `[data-ui-name="Flex"][role="gridcell"][name="avgVisitDuration"][tabindex="-1"][aria-colindex="27"]`
-  - bounce rate : `[data-ui-name="Flex"][role="gridcell"][name="bouncesPerVisit"][tabindex="-1"][aria-colindex="29"]`
+- ✅ **Sélecteurs Market-Overview (Autres métriques) - Version 2025-01-25** :
+  - visits : `[name="entrances"]` (sélection du 2ème élément pour la valeur)
+  - organic search traffic : `[name="entrancesSearchOrganic"]` (sélection du 2ème élément pour la valeur)
+  - paid search traffic : `[name="entrancesSearchPaid"]` (sélection du 2ème élément pour la valeur)
+  - purchase conversion : `[name="purchasesPerVisit"]` (sélection du 2ème élément pour la valeur)
+  - avg visit duration : `[name="avgVisitDuration"]` (sélection du 2ème élément pour la valeur)
+  - bounce rate : `[name="bouncesPerVisit"]` (sélection du 2ème élément pour la valeur)
 - ✅ **Technologie** : Page chargée en SAP React (à prendre en compte pour l'extraction)
+
+## 🏪 **Critères d'Éligibilité des Boutiques**
+
+### Logique de Sélection
+Le scraper Noxtools récupère automatiquement les boutiques éligibles depuis la base de données selon les critères suivants :
+
+#### Critères d'Éligibilité
+```sql
+SELECT s.id, s.shop_url, s.shop_name, a.scraping_status
+FROM shops s
+JOIN analytics a ON s.id = a.shop_id
+WHERE s.scraping_status != 'failed'
+AND s.details_scraping_status = 'details_extracted'
+AND a.scraping_status IS NULL
+ORDER BY s.id
+LIMIT ? OFFSET ?
+```
+
+#### Explication des Critères
+- **`s.scraping_status != 'failed'`** : Exclut les boutiques en échec de scraping
+- **`s.details_scraping_status = 'details_extracted'`** : Seules les boutiques avec détails extraits
+- **`a.scraping_status IS NULL`** : Boutiques sans analytics Noxtools (pas encore scrapées)
+- **`ORDER BY s.id`** : Traitement par ordre d'ID pour cohérence
+- **`LIMIT ? OFFSET ?`** : Traitement par lots pour performance
+
+#### Gestion des Cas Limites
+- **Zéro boutiques éligibles** : Log "📊 Zéro boutiques éligibles pour le scraping Noxtools"
+- **Aucun domaine valide** : Log "📊 Aucun domaine valide trouvé dans les boutiques éligibles"
+- **Extraction des domaines** : Parsing des URLs pour récupérer les domaines nets
+
+### Services de Gestion des Boutiques
+
+#### ShopRepository
+- **Récupération** : `get_shops_to_scrape(limit, offset)`
+- **Rate limiting** : Intégration avec `TokenBucket`
+- **Batch processing** : Traitement par lots configurable
+- **Anti-détection** : Délais adaptatifs entre requêtes
+
+#### DatabaseSaver
+- **Sauvegarde** : `save_metrics(shop_id, metrics)`
+- **Conversion des types** : int/float pour BDD
+- **Gestion des erreurs** : Logs détaillés et rollback
+- **Validation** : Intégrité des données avant sauvegarde
 
 **Extraction Unifiée (Refactoring 2025-01-18)**
 - **Navigation unique** : Dashboard → Test Market-Overview → Bridge (si échec)

@@ -19,6 +19,8 @@ from playwright.async_api import Page
 from .anti_detection import get_default_stealth_config, StealthConfig
 from .playwright_manager import PlaywrightManager
 from .session_manager import SessionManager
+from .server_manager import get_server_manager
+from utils.url_params import build_overview_url, build_date_range
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +28,12 @@ logger = logging.getLogger(__name__)
 class MetricsConfig:
     """Configuration for metrics extraction from Noxtools."""
     # URL des métriques (hardcodée pour Alpha)
-    metrics_url: str = "https://semrush1.semrush.pw/analytics/traffic/market-overview?searchType=domain&fid=1355702&dateRange=2025-07-01&country=us"
+    metrics_url: str = "https://semrush1.semrush.pw/analytics/traffic/market-overview?searchType=domain&fid=1355702&date=202507&country=us"
     # URL dashboard (utilisée comme Referer pour réactiver la session)
     dashboard_url: str = "https://noxtools.com/secure/member"
     # URL passerelle Noxtools → Semrush (réactive la session côté Semrush)
-    bridge_url: str = "https://semrush.noxtools.com/server3.php"
+    # Note: Cette URL sera remplacée par ServerManager.get_current_bridge_url()
+    bridge_url: str = "https://semrush.noxtools.com/server1.php"
     # URL overview pour CPC (Alpha hardcodée)
     overview_url: str = "https://semrush3.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507"
     
@@ -46,13 +49,14 @@ class MetricsConfig:
     def __post_init__(self):
         if self.selectors is None:
             self.selectors = {
-                # Nouveau sélecteur VISITS fourni (SAP React gridcell)
-                'visits': '[data-ui-name="Flex"][role="gridcell"][name="entrances"][tabindex="-1"][aria-colindex="3"]',
-                'organic_search_traffic': '[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchOrganic"][tabindex="-1"][aria-colindex="9"]',
-                'paid_search_traffic': '[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchPaid"][tabindex="-1"][aria-colindex="11"]',
-                'purchase_conversion': '[data-ui-name="Flex"][role="gridcell"][name="purchasesPerVisit"][tabindex="-1"][aria-colindex="21"]',
-                'avg_visit_duration': '[data-ui-name="Flex"][role="gridcell"][name="avgVisitDuration"][tabindex="-1"][aria-colindex="27"]',
-                'bounce_rate': '[data-ui-name="Flex"][role="gridcell"][name="bouncesPerVisit"][tabindex="-1"][aria-colindex="29"]'
+                # Sélecteurs pour extraire les VALEURS (pas les labels)
+                # On prend la 2ème occurrence de chaque sélecteur (valeurs au lieu des labels)
+                'visits': '[name="entrances"]:nth-of-type(2)',
+                'organic_search_traffic': '[name="entrancesSearchOrganic"]:nth-of-type(2)',
+                'paid_search_traffic': '[name="entrancesSearchPaid"]:nth-of-type(2)',
+                'purchase_conversion': '[name="purchasesPerVisit"]:nth-of-type(2)',
+                'avg_visit_duration': '[name="avgVisitDuration"]:nth-of-type(2)',
+                'bounce_rate': '[name="bouncesPerVisit"]:nth-of-type(2)'
             }
 
 @dataclass
@@ -64,6 +68,7 @@ class ExtractedMetrics:
     purchase_conversion: Optional[str] = None
     avg_visit_duration: Optional[str] = None
     bounce_rate: Optional[str] = None
+    cpc: Optional[str] = None
     
     # Métadonnées
     extraction_timestamp: Optional[str] = None
@@ -80,6 +85,7 @@ class ExtractedMetrics:
             'purchase_conversion': self.purchase_conversion,
             'avg_visit_duration': self.avg_visit_duration,
             'bounce_rate': self.bounce_rate,
+            'cpc': self.cpc,
             'extraction_timestamp': self.extraction_timestamp,
             'url': self.url,
             'success': self.success,
@@ -92,9 +98,10 @@ class MetricsExtractor:
     def __init__(self, config: Optional[MetricsConfig] = None, stealth_config: Optional[StealthConfig] = None):
         self.config = config or MetricsConfig()
         self.stealth_config = stealth_config or get_default_stealth_config()
+        self.server_manager = get_server_manager()
         
     async def extract_metrics(self, page: Page, playwright_manager: PlaywrightManager, 
-                            session_manager: SessionManager) -> ExtractedMetrics:
+                            session_manager: SessionManager, shop_url: str = None) -> ExtractedMetrics:
         """Extract metrics from the Noxtools analytics page.
         
         Args:
@@ -109,52 +116,358 @@ class MetricsExtractor:
         metrics.url = self.config.metrics_url
         
         try:
-            logger.info("📊 Starting metrics extraction from Noxtools...")
-            logger.info(f"📍 Metrics URL: {self.config.metrics_url}")
+            logger.info("📊 [DEBUG] Starting metrics extraction from Noxtools...")
+            logger.info(f"📍 [DEBUG] Metrics URL: {self.config.metrics_url}")
+            logger.info(f"📍 [DEBUG] Input shop_url: {shop_url}")
+            logger.info(f"📍 [DEBUG] Current page URL: {page.url}")
+            logger.info(f"📍 [DEBUG] Current page title: {await page.title()}")
             
             # Navigate to metrics page (via dashboard referer, capture network)
+            logger.info("🌐 [DEBUG] Starting navigation to metrics page...")
             navigation_success = await self._navigate_to_metrics_page(
                 page, playwright_manager, session_manager
             )
+            logger.info(f"🌐 [DEBUG] Navigation success: {navigation_success}")
             
             if not navigation_success:
                 metrics.error_message = "Failed to navigate to metrics page"
-                logger.error("❌ Failed to navigate to metrics page")
+                logger.error("❌ [DEBUG] Failed to navigate to metrics page")
                 return metrics
                 
             # Wait for SAP React to load
+            logger.info(f"⏳ [DEBUG] Waiting for SAP React to load... (delay: {self.config.react_load_delay_ms}ms)")
             await asyncio.sleep(self.config.react_load_delay_ms / 1000.0)
-            logger.info("⏳ Waiting for SAP React to load...")
+            logger.info("⏳ [DEBUG] SAP React wait completed")
             
             # Wait for page to stabilize
+            logger.info(f"⏳ [DEBUG] Waiting for page to stabilize... (delay: {self.config.stabilization_delay_ms}ms)")
             await asyncio.sleep(self.config.stabilization_delay_ms / 1000.0)
+            logger.info("⏳ [DEBUG] Page stabilization completed")
+            
+            # DEBUG: Display page content for analysis
+            logger.info("🔍 [DEBUG] ===== PAGE CONTENT ANALYSIS =====")
+            try:
+                page_title = await page.title()
+                logger.info(f"🔍 [DEBUG] Page title: {page_title}")
+                
+                page_url = page.url
+                logger.info(f"🔍 [DEBUG] Page URL: {page_url}")
+                
+                # Get page content
+                page_content = await page.content()
+                logger.info(f"🔍 [DEBUG] Page content length: {len(page_content)} characters")
+                
+                # Get visible text content
+                visible_text = await page.evaluate('document.body.innerText')
+                logger.info(f"🔍 [DEBUG] Visible text length: {len(visible_text)} characters")
+                logger.info(f"🔍 [DEBUG] Visible text preview (first 500 chars): {visible_text[:500]}")
+                
+                # Check for specific elements
+                logger.info("🔍 [DEBUG] Checking for specific elements...")
+                
+                # Check for data tables
+                tables = await page.query_selector_all('table')
+                logger.info(f"🔍 [DEBUG] Found {len(tables)} tables on page")
+                
+                # Check for grid elements
+                grid_elements = await page.query_selector_all('[role="grid"]')
+                logger.info(f"🔍 [DEBUG] Found {len(grid_elements)} grid elements")
+                
+                # Check for specific selectors we're looking for
+                target_selectors = [
+                    '[data-ui-name="Flex"][role="gridcell"]',
+                    '[name="entrances"]',
+                    '[name="entrancesSearchOrganic"]',
+                    '[name="entrancesSearchPaid"]',
+                    '[name="purchasesPerVisit"]',
+                    '[name="avgVisitDuration"]',
+                    '[name="bouncesPerVisit"]'
+                ]
+                
+                for selector in target_selectors:
+                    elements = await page.query_selector_all(selector)
+                    logger.info(f"🔍 [DEBUG] Selector '{selector}': {len(elements)} elements found")
+                    if elements:
+                        for i, element in enumerate(elements[:3]):  # Show first 3 elements
+                            try:
+                                text = await element.inner_text()
+                                logger.info(f"🔍 [DEBUG] Element {i+1} text: '{text[:100]}...'")
+                            except:
+                                logger.info(f"🔍 [DEBUG] Element {i+1}: Could not get text")
+                
+                # Check for error messages
+                error_indicators = ['error', 'not found', 'no data', 'loading', 'session expired']
+                for indicator in error_indicators:
+                    if indicator.lower() in visible_text.lower():
+                        logger.warning(f"🔍 [DEBUG] Found error indicator: '{indicator}'")
+                
+                logger.info("🔍 [DEBUG] ===== END PAGE CONTENT ANALYSIS =====")
+                
+            except Exception as e:
+                logger.error(f"🔍 [DEBUG] Error analyzing page content: {e}")
             
             # Try network capture assisted extraction first
+            logger.info("🔍 [DEBUG] Starting network capture assisted extraction...")
             network_data = await self._capture_network_metrics(page)
+            logger.info(f"🔍 [DEBUG] Network data result: {network_data}")
 
             if network_data:
+                logger.info("✅ [DEBUG] Network data found, populating metrics...")
                 self._populate_metrics_from_network(metrics, network_data)
                 metrics.success = True
-                logger.info("✅ Metrics extracted from network responses")
+                logger.info("✅ [DEBUG] Metrics extracted from network responses")
                 self._log_extracted_metrics(metrics)
                 return metrics
 
             # Fallback: Extract from DOM
+            logger.info("🔍 [DEBUG] Network capture failed, trying DOM extraction...")
             extraction_success = await self._extract_metrics_from_page(page, metrics)
+            logger.info(f"🔍 [DEBUG] DOM extraction success: {extraction_success}")
+            
+            # Extract CPC data from overview page with retry
+            logger.info("💰 [DEBUG] Starting CPC extraction from overview page...")
+            logger.info(f"💰 [DEBUG] Shop URL for CPC: {shop_url}")
+            cpc_data = await self._extract_cpc_with_retry(page, playwright_manager, session_manager, shop_url)
+            logger.info(f"💰 [DEBUG] CPC data result: {cpc_data}")
+            
+            if cpc_data and cpc_data.get('cpc') is not None:
+                metrics.cpc = str(cpc_data['cpc'])
+                logger.info(f"✅ [DEBUG] CPC extracted: {cpc_data['cpc']} (keyword: {cpc_data.get('keyword', 'N/A')})")
+            else:
+                logger.warning("⚠️ [DEBUG] No CPC data found after all retries")
+                metrics.cpc = None
             
             if extraction_success:
                 metrics.success = True
-                logger.info("✅ Metrics extraction successful")
+                logger.info("✅ [DEBUG] Metrics extraction successful")
                 self._log_extracted_metrics(metrics)
             else:
                 metrics.error_message = "Failed to extract metrics from page"
-                logger.error("❌ Failed to extract metrics from page")
+                logger.error("❌ [DEBUG] Failed to extract metrics from page")
                 
         except Exception as e:
             metrics.error_message = str(e)
-            logger.error(f"❌ Metrics extraction error: {e}")
+            logger.error(f"❌ [DEBUG] Metrics extraction error: {e}")
+            logger.error(f"❌ [DEBUG] Exception type: {type(e).__name__}")
+            logger.error(f"❌ [DEBUG] Exception args: {e.args}")
             
+        logger.info(f"✅ [DEBUG] Metrics extraction process completed")
         return metrics
+
+    async def _extract_cpc_with_retry(self, page: Page, playwright_manager: PlaywrightManager,
+                                    session_manager: SessionManager, shop_url: str = None) -> Optional[Dict[str, Any]]:
+        """Extract CPC with retry mechanism and dynamic URL construction.
+        
+        Args:
+            page: Playwright page instance
+            playwright_manager: PlaywrightManager instance
+            session_manager: SessionManager instance
+            shop_url: Shop URL to extract domain for CPC extraction
+            
+        Returns:
+            CPC data dict or None if failed
+        """
+        if not shop_url:
+            logger.warning("⚠️ No shop_url provided for CPC extraction")
+            return None
+            
+        # Extract domain from shop_url
+        from urllib.parse import urlparse
+        parsed_url = urlparse(shop_url)
+        domain = parsed_url.netloc or parsed_url.path
+        if domain.startswith('www.'):
+            domain = domain[4:]
+        
+        logger.info(f"🔍 Extracting CPC for domain: {domain}")
+        
+        # Build dynamic overview URL using current server
+        date_range = build_date_range()
+        
+        # Use current server instead of config overview_url to avoid server switching
+        current_server = self.server_manager.get_current_server_name()
+        overview_base_url = f"https://{current_server}.semrush.pw/analytics/overview/"
+        
+        logger.info(f"🔗 [DEBUG] Using current server for overview: {current_server}")
+        logger.info(f"🔗 [DEBUG] Overview base URL: {overview_base_url}")
+        
+        dynamic_overview_url = build_overview_url(
+            base_url=overview_base_url,
+            shop_url=domain,
+            date_range=date_range,
+            country="us",
+            search_type="domain"
+        )
+        
+        logger.info(f"📍 Dynamic overview URL: {dynamic_overview_url}")
+        
+        # Retry mechanism
+        for attempt in range(self.config.max_retries):
+            try:
+                logger.info(f"🔄 CPC extraction attempt {attempt + 1}/{self.config.max_retries}")
+                
+                # Use the dynamic URL for CPC extraction
+                cpc_data = await self._extract_cpc_from_overview(
+                    page, playwright_manager, session_manager, dynamic_overview_url
+                )
+                
+                if cpc_data and cpc_data.get('cpc') is not None:
+                    logger.info(f"✅ CPC extraction successful on attempt {attempt + 1}")
+                    return cpc_data
+                else:
+                    logger.warning(f"⚠️ CPC extraction failed on attempt {attempt + 1}")
+                    
+            except Exception as e:
+                logger.warning(f"⚠️ CPC extraction error on attempt {attempt + 1}: {e}")
+            
+            # Wait before retry (except on last attempt)
+            if attempt < self.config.max_retries - 1:
+                await asyncio.sleep(2.0)
+        
+        logger.error("❌ CPC extraction failed after all retries")
+        return None
+
+    async def _extract_cpc_from_overview(self, page: Page, playwright_manager: PlaywrightManager,
+                                       session_manager: SessionManager, overview_url: str) -> Optional[Dict[str, Any]]:
+        """Extract CPC from overview page with session maintenance.
+        
+        Args:
+            page: Playwright page instance
+            playwright_manager: PlaywrightManager instance
+            session_manager: SessionManager instance
+            overview_url: Dynamic overview URL
+            
+        Returns:
+            CPC data dict or None if failed
+        """
+        try:
+            # Navigate to overview page with session maintenance
+            navigation_success = await session_manager.navigate_cross_domain(
+                page, playwright_manager, overview_url
+            )
+            
+            if not navigation_success:
+                logger.warning("⚠️ Failed to navigate to overview page, trying direct navigation")
+                try:
+                    await page.goto(overview_url, timeout=self.config.timeout_ms)
+                    await page.wait_for_load_state('domcontentloaded', timeout=10000)
+                    navigation_success = True
+                except Exception as e:
+                    logger.error(f"❌ Direct navigation to overview failed: {e}")
+                    return None
+            
+            if not navigation_success:
+                logger.error("❌ Failed to navigate to overview page")
+                return None
+            
+            # Check for session expired
+            try:
+                page_content = await page.content()
+                if "Session expired" in page_content or "access again from Dashboard" in page_content:
+                    logger.error("❌ Session expired on overview page")
+                    return None
+            except Exception as e:
+                logger.warning(f"⚠️ Could not check page content: {e}")
+            
+            # Wait for page to load
+            await page.wait_for_load_state('networkidle', timeout=10000)
+            await asyncio.sleep(2.0)
+            
+            # Extract CPC using the existing logic
+            return await self._extract_cpc_from_page(page)
+            
+        except Exception as e:
+            logger.error(f"❌ CPC extraction from overview error: {e}")
+            return None
+
+    async def _extract_cpc_from_page(self, page: Page) -> Optional[Dict[str, Any]]:
+        """Extract CPC data from the current page using existing logic."""
+        try:
+            # Wait for grid presence
+            try:
+                await page.wait_for_selector('div[data-ui-name="Body.Row"]', timeout=10000)
+                logger.info("✅ Found Body.Row elements for CPC extraction")
+            except Exception as e:
+                logger.warning(f"⚠️ Body.Row not found, trying volume cells: {e}")
+                try:
+                    await page.wait_for_selector('div[name="volume"][role="gridcell"] [data-at="value-volume"]', timeout=8000)
+                    logger.info("✅ Found volume cells for CPC extraction")
+                except Exception as e2:
+                    logger.warning(f"⚠️ Volume cells not found either: {e2}")
+
+            # Scroll to force virtualization
+            async def _scroll_grid():
+                try:
+                    await page.evaluate("""
+                        () => {
+                          const cont = document.querySelector('[data-ui-name="Body"]') || document.scrollingElement || document.body;
+                          let y = 0; let steps = 0;
+                          const max = (cont.scrollHeight || 0) - (cont.clientHeight || 0);
+                          while (y < max && steps < 8) { y += Math.max(200, (cont.clientHeight||0)/2); cont.scrollTo(0, y); steps++; }
+                          return true;
+                        }
+                    """)
+                    logger.debug("✅ Grid scrolled using container method")
+                except Exception as e:
+                    logger.debug(f"⚠️ Container scroll failed, using window scroll: {e}")
+                    for _ in range(6):
+                        await page.evaluate('window.scrollBy(0, Math.max(300, window.innerHeight/2))')
+                        await asyncio.sleep(0.25)
+                    logger.debug("✅ Grid scrolled using window method")
+
+            # Extract CPC data
+            eval_script = r"""
+            () => {
+              const parseNum = (s) => {
+                if (!s) return NaN;
+                const t = s.trim().replace(/[,%]/g,'').replace(/[, ]/g,'');
+                const m = t.match(/^([\d.]+)([KkMm])?$/);
+                if (!m) {
+                  const v = parseFloat(t);
+                  return isFinite(v) ? v : NaN;
+                }
+                const n = parseFloat(m[1]);
+                const mul = m[2] ? (m[2].toLowerCase()==='k' ? 1e3 : 1e6) : 1;
+                return n * mul;
+              };
+              let best = null;
+              const rows = document.querySelectorAll('div[data-ui-name="Body.Row"]');
+              rows.forEach(row => {
+                const q = (sel) => row.querySelector(sel)?.textContent?.trim() ?? '';
+                const kw   = q('div[name="phrase"] a');
+                const vol  = parseNum(q('div[name="volume"][role="gridcell"] [data-at="value-volume"]'));
+                const traf = parseNum(q('div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]'));
+                const cpcT = q('div[name="cpc"][role="gridcell"] [data-at="value-cpc"]');
+                const cpc  = parseNum(cpcT);
+                if (!isFinite(vol) || !isFinite(traf) || traf <= 0) return;
+                const ratio = vol / traf;
+                if (!best || ratio > best.ratio) best = { keyword: kw, ratio, cpc, cpcRaw: cpcT };
+              });
+              return best;
+            }
+            """
+            
+            best = None
+            for attempt in range(3):
+                try:
+                    best = await page.evaluate(eval_script)
+                    logger.debug(f"CPC evaluation attempt {attempt + 1}: {best}")
+                except Exception as e:
+                    logger.warning(f"⚠️ CPC evaluation attempt {attempt + 1} failed: {e}")
+                    best = None
+                if best and best.get('cpc') is not None:
+                    logger.info(f"✅ CPC found on attempt {attempt + 1}: {best}")
+                    break
+                if attempt < 2:  # Don't scroll on last attempt
+                    await _scroll_grid()
+                    await asyncio.sleep(0.5)
+            
+            if not best or best.get('cpc') is None:
+                logger.warning("⚠️ No CPC data found after all attempts")
+            return best
+            
+        except Exception as e:
+            logger.error(f"❌ CPC extraction from page error: {e}")
+            return None
 
     async def extract_cpc_best_ratio(self, page: Page, playwright_manager: PlaywrightManager,
                                      session_manager: SessionManager) -> Optional[Dict[str, Any]]:
@@ -170,10 +483,12 @@ class MetricsExtractor:
             except Exception as e:
                 logger.warning(f"⚠️ Unable to visit dashboard before CPC extraction: {e}")
 
-            # Step 2: Hit the Noxtools → Semrush bridge (server3 only)
+            # Step 2: Hit the Noxtools → Semrush bridge (ServerManager)
             try:
-                logger.info(f"🌉 Visiting bridge URL for CPC: {self.config.bridge_url}")
-                await page.goto(self.config.bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                server_manager = get_server_manager()
+                bridge_url = server_manager.get_current_bridge_url()
+                logger.info(f"🌉 Visiting bridge URL for CPC: {bridge_url}")
+                await page.goto(bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
                 await page.wait_for_load_state('domcontentloaded', timeout=10000)
                 await asyncio.sleep(1.0)
                 logger.info("✅ Bridge URL visited successfully for CPC")
@@ -324,8 +639,10 @@ class MetricsExtractor:
 
             # Step 2: Hit the Noxtools → Semrush bridge to refresh/carry session/token
             try:
-                logger.info(f"🌉 Visiting bridge URL: {self.config.bridge_url}")
-                await page.goto(self.config.bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                server_manager = get_server_manager()
+                bridge_url = server_manager.get_current_bridge_url()
+                logger.info(f"🌉 Visiting bridge URL: {bridge_url}")
+                await page.goto(bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
                 await page.wait_for_load_state('domcontentloaded', timeout=10000)
                 await asyncio.sleep(1.0)
                 logger.info("✅ Bridge URL visited successfully")
@@ -587,39 +904,62 @@ class MetricsExtractor:
                 base = re.sub(r"\[aria-colindex=\"?\d+\"?\]", "", base)
                 relaxed_variants.append(base)
 
-            # 1) Direct selector
+            # 1) Direct selector - prendre le 2ème élément (valeur au lieu du label)
             try:
-                element = await page.wait_for_selector(selector, timeout=5000, state='attached')
-                if element:
+                elements = await page.query_selector_all(selector)
+                if len(elements) >= 2:
+                    # Prendre le 2ème élément (valeur) au lieu du 1er (label)
+                    element = elements[1]
                     text = await read_element_text(element)
                     if text:
-                        logger.debug(f"✅ Extracted {metric_name} (direct): {text}")
+                        logger.debug(f"✅ Extracted {metric_name} (direct, 2nd element): {text}")
+                        return text
+                elif len(elements) == 1:
+                    # Fallback: prendre le 1er élément si pas de 2ème
+                    element = elements[0]
+                    text = await read_element_text(element)
+                    if text:
+                        logger.debug(f"✅ Extracted {metric_name} (direct, 1st element fallback): {text}")
                         return text
             except Exception as e:
                 logger.debug(f"Direct selector failed for {metric_name}: {e}")
 
-            # 1b) Relaxed variants
+            # 1b) Relaxed variants - prendre le 2ème élément
             for sel in relaxed_variants:
                 try:
-                    element = await page.wait_for_selector(sel, timeout=4000, state='attached')
-                    if element:
+                    elements = await page.query_selector_all(sel)
+                    if len(elements) >= 2:
+                        element = elements[1]  # 2ème élément (valeur)
                         text = await read_element_text(element)
                         if text:
-                            logger.debug(f"✅ Extracted {metric_name} (relaxed): {text}")
+                            logger.debug(f"✅ Extracted {metric_name} (relaxed, 2nd element): {text}")
+                            return text
+                    elif len(elements) == 1:
+                        element = elements[0]  # Fallback
+                        text = await read_element_text(element)
+                        if text:
+                            logger.debug(f"✅ Extracted {metric_name} (relaxed, 1st element fallback): {text}")
                             return text
                 except Exception as e:
                     logger.debug(f"Relaxed selector failed for {metric_name}: {e}")
 
-            # 2) Attribute selector [name="..."]
+            # 2) Attribute selector [name="..."] - prendre le 2ème élément
             try:
                 if 'name=' in selector:
                     attr_name = selector.split('name="')[1].split('"')[0]
                     attr_selector = f'[name="{attr_name}"]'
-                    element = await page.wait_for_selector(attr_selector, timeout=3000, state='attached')
-                    if element:
+                    elements = await page.query_selector_all(attr_selector)
+                    if len(elements) >= 2:
+                        element = elements[1]  # 2ème élément (valeur)
                         text = await read_element_text(element)
                         if text:
-                            logger.debug(f"✅ Extracted {metric_name} (attr): {text}")
+                            logger.debug(f"✅ Extracted {metric_name} (attr, 2nd element): {text}")
+                            return text
+                    elif len(elements) == 1:
+                        element = elements[0]  # Fallback
+                        text = await read_element_text(element)
+                        if text:
+                            logger.debug(f"✅ Extracted {metric_name} (attr, 1st element fallback): {text}")
                             return text
             except Exception as e:
                 logger.debug(f"Attribute selector failed for {metric_name}: {e}")

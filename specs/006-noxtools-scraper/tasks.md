@@ -82,6 +82,23 @@ Ce document répertorie toutes les tâches liées au développement, maintenance
   - [ ] Fallback Overview avec même mécanique que Market-Overview
   - [ ] Tests de validation CPC complets
 
+#### P0: Gérer le fallback spécifique au sélecteur dashboard-container--IPQsK--shell sur Overview
+- **Type**: Bug Fix
+- **Statut**: En attente
+- **Description**: Si le sélecteur `dashboard-container--IPQsK--shell` est détecté sur la page Overview lors de l'extraction CPC, cela indique un problème de serveur et nécessite un fallback vers le bridge pour changer de serveur
+- **Contexte**: Cette condition spécifique doit être ajoutée aux conditions de détection d'échec pour la page Overview
+- **Actions**:
+  - Ajouter la détection du sélecteur `dashboard-container--IPQsK--shell` dans la méthode d'extraction CPC
+  - Implémenter le fallback automatique vers le bridge (server suivant) si ce sélecteur est détecté
+  - Intégrer cette condition dans le workflow de fallback Overview
+  - Tester le fallback avec ce sélecteur spécifique
+- **Critères d'acceptation**:
+  - [ ] Détection du sélecteur `dashboard-container--IPQsK--shell` sur Overview
+  - [ ] Fallback automatique vers bridge si sélecteur détecté
+  - [ ] Changement de serveur (server1 → server2, etc.)
+  - [ ] Retry de l'extraction CPC sur le nouveau serveur
+  - [ ] Tests de validation du fallback avec ce sélecteur
+
 #### P0: Documenter les sélecteurs de détection d'échec pour le fallback
 - **Type**: Documentation
 - **Statut**: En attente
@@ -91,6 +108,7 @@ Ce document répertorie toutes les tâches liées au développement, maintenance
   - "403" et "forbidden" dans le titre de page
   - len(page_content) <= 1000 caractères
   - Exceptions de navigation
+  - **NOUVEAU**: `dashboard-container--IPQsK--shell` sur page Overview
 - **Actions**: Ajouter section détaillée dans spec.md avec conditions de fallback
 
 ---
@@ -108,22 +126,12 @@ Ce document répertorie toutes les tâches liées au développement, maintenance
 
 ## 📝 Notes de Développement
 
-### Problèmes Identifiés
-- **Duplication d'extraction** : Le code fait 2 fois la même chose (Overview + extract_cpc_best_ratio)
-- **Mélange des extractions** : Tentative d'extraire toutes les métriques depuis Overview
-- **Workflow incorrect** : Pas de séparation claire entre CPC et autres métriques
-
-### Solutions Proposées
-- **Séparer les extractions** : Overview pour CPC, Market-Overview pour autres métriques
-- **Workflow en 2 étapes** : Navigation séparée pour chaque type de métriques
-- **Réutilisation du code** : Utiliser les méthodes existantes sans duplication
 
 ---
 
 ## 🔄 Changements Récents
 
 ### 2025-09-25
-- **Identification du problème** : Workflow incorrect identifié
 - **Création des tâches P0** : 6 tâches critiques créées
 - **Documentation** : Tâches sauvegardées dans tasks.md
 - **Règles mises à jour** : .cursorrules modifié pour tasks.md dans spec
