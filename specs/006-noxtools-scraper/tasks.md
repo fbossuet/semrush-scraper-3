@@ -14,45 +14,11 @@ Ce document répertorie toutes les tâches liées au développement, maintenance
 
 ### Workflow et Architecture
 
-#### P0: Séparer clairement les 2 extractions - Overview (CPC uniquement) vs Market-Overview (autres métriques)
-- **Type**: Bug Fix
-- **Statut**: En attente
-- **Description**: Le code actuel essaie d'extraire TOUTES les métriques depuis la page Overview (analytics/overview/), alors que selon la spec :
-  - Overview → SEULEMENT CPC
-  - Market-Overview → TOUTES les autres métriques
-- **Problème identifié**: Le code mélange les 2 extractions au lieu de les séparer clairement
-
 #### P0: Modifier extract_metrics() pour extraire SEULEMENT le CPC depuis Overview (analytics/overview/)
 - **Type**: Feature
 - **Statut**: En attente
 - **Description**: Utiliser la page analytics/overview/ uniquement pour l'extraction du CPC
 - **Actions**: Supprimer l'extraction des autres métriques depuis Overview
-
-#### P0: Ajouter navigation vers Market-Overview (analytics/traffic/market-overview/) pour extraire toutes les autres métriques
-- **Type**: Feature
-- **Statut**: En attente
-- **Description**: Naviguer vers analytics/traffic/market-overview/ pour extraire visits, organic, paid, conversion, etc.
-- **Actions**: Implémenter la navigation vers Market-Overview après extraction CPC
-
-#### P0: Implémenter extraction FID depuis Market-Overview après recherche domaine
-- **Type**: Feature
-- **Statut**: En attente
-- **Description**: Recherche du domaine sur Market-Overview et extraction du FID depuis l'URL mise à jour
-- **Actions**: Créer méthode _extract_fid_from_market_overview()
-
-#### P0: Construire URL finale Market-Overview avec FID + paramètres pour extraction métriques
-- **Type**: Feature
-- **Statut**: En attente
-- **Description**: URL finale : ?date=202507&q=cakesbody.com&searchType=domain&fid=1361959
-- **Actions**: Créer méthode _build_market_overview_url_with_fid()
-
-#### P0: Workflow complet en 2 étapes distinctes
-- **Type**: Refactoring
-- **Statut**: En attente
-- **Description**: Implémenter le workflow complet :
-  - Étape 1: Overview → CPC uniquement
-  - Étape 2: Market-Overview → FID + autres métriques
-- **Actions**: Modifier extract_metrics() pour séparer clairement les 2 étapes
 
 #### P0: Ajouter la fonctionnalité scraper CPC (nouvelle métrique)
 - **Type**: Feature
@@ -122,6 +88,12 @@ Ce document répertorie toutes les tâches liées au développement, maintenance
 - ✅ **Système de fallback serveurs** : semrush1→semrush5 avec ServerManager
 - ✅ **Extraction CPC** : Méthode extract_cpc_best_ratio() fonctionnelle
 
+### Workflow et Navigation
+- ✅ **Navigation vers Market-Overview** : Implémentation de la navigation vers analytics/traffic/market-overview/ pour extraire visits, organic, paid, conversion, etc.
+- ✅ **Extraction FID depuis Market-Overview** : Recherche du domaine sur Market-Overview et extraction du FID depuis l'URL mise à jour
+- ✅ **Construction URL finale Market-Overview** : URL finale avec FID + paramètres (?date=202507&q=cakesbody.com&searchType=domain&fid=1361959)
+- ✅ **Workflow complet en 2 étapes distinctes** : Implémentation du workflow complet (Overview → CPC uniquement, Market-Overview → FID + autres métriques)
+
 ---
 
 ## 📝 Notes de Développement
@@ -130,6 +102,11 @@ Ce document répertorie toutes les tâches liées au développement, maintenance
 ---
 
 ## 🔄 Changements Récents
+
+### 2025-01-18
+- **Mise à jour des tâches terminées** : 4 tâches P0 marquées comme terminées
+- **Suppression tâche séparation** : Tâche de séparation des extractions supprimée
+- **Documentation** : Section "Workflow et Navigation" ajoutée aux tâches terminées
 
 ### 2025-09-25
 - **Création des tâches P0** : 6 tâches critiques créées

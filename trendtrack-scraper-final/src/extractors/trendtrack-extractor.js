@@ -1317,15 +1317,32 @@ export class TrendTrackExtractor extends BaseExtractor {
       let t = String(token).trim();
       // Retirer symboles monétaires où qu'ils soient
       t = t.replace(/[$€£\s]/g, '');
+      
+      // 1. Essayer d'abord le pattern avec suffixe K/M/B
       const m = t.match(/^([0-9][0-9.,]*)([kKmMbB]?)$/);
-      if (!m) return null;
-      const base = parseFloat(m[1].replace(/,/g, ''));
-      if (isNaN(base)) return null;
-      const suf = (m[2] || '').toLowerCase();
-      if (suf === 'k') return base * 1_000;
-      if (suf === 'm') return base * 1_000_000;
-      if (suf === 'b') return base * 1_000_000_000;
-      return base;
+      if (m) {
+        const base = parseFloat(m[1].replace(/,/g, ''));
+        if (isNaN(base)) return null;
+        const suf = (m[2] || '').toLowerCase();
+        if (suf === 'k') return base * 1_000;
+        if (suf === 'm') return base * 1_000_000;
+        if (suf === 'b') return base * 1_000_000_000;
+        return base;
+      }
+      
+      // 2. FALLBACK: Si pas de pattern trouvé, vérifier si c'est une valeur numérique pure
+      const numericMatch = t.match(/^([0-9][0-9.,]*)$/);
+      if (numericMatch) {
+        const base = parseFloat(numericMatch[1].replace(/,/g, ''));
+        if (!isNaN(base) && base > 0) {
+          console.log(`✅ Fallback: Valeur numérique pure extraite: "${token}" → ${base}`);
+          return base;
+        }
+      }
+      
+      // 3. Si pas de pattern et pas de valeur numérique: retourner null
+      console.log(`⚠️ Valeur non reconnue (pas de pattern, pas numérique): "${token}"`);
+      return null;
     } catch {
       return null;
     }
