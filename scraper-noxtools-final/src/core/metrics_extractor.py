@@ -223,6 +223,231 @@ class MetricsExtractor:
             
         return metrics
 
+    async def extract_all_metrics(self, page: Page, playwright_manager: PlaywrightManager,
+                                 session_manager: SessionManager, shop_url: str) -> ExtractedMetrics:
+        """Extract all metrics (traffic + CPC) in one unified flow.
+        
+        This method replaces the separate extract_metrics() + extract_cpc_best_ratio() calls
+        to eliminate redundant navigation and improve performance.
+        
+        Args:
+            page: Playwright page instance
+            playwright_manager: PlaywrightManager instance
+            session_manager: SessionManager instance
+            shop_url: Shop URL to extract domain for CPC extraction
+            
+        Returns:
+            ExtractedMetrics: Complete metrics including CPC
+        """
+        logger.info("🚀 Starting unified metrics extraction (traffic + CPC)...")
+        logger.info(f"📍 Shop URL: {shop_url}")
+        
+        metrics = ExtractedMetrics()
+        
+        try:
+            # Step 1: Unified navigation to metrics page (preserves all advanced features)
+            navigation_success = await self._navigate_to_metrics_page_unified(
+                page, playwright_manager, session_manager
+            )
+            
+            if not navigation_success:
+                metrics.error_message = "Failed to navigate to metrics page"
+                logger.error("❌ Failed to navigate to metrics page")
+                return metrics
+            
+            # Step 2: Extract traffic metrics
+            logger.info("📊 Extracting traffic metrics...")
+            extraction_success = await self._extract_metrics_from_page(page, metrics)
+            
+            if extraction_success:
+                metrics.success = True
+                logger.info("✅ Traffic metrics extraction successful")
+                
+                # Step 3: Navigate to CPC page (without redundant navigation)
+                domain = self._extract_domain_from_url(shop_url)
+                logger.info(f"🔗 Navigating to CPC page for domain: {domain}")
+                
+                cpc_navigation_success = await self._navigate_to_cpc_from_metrics(
+                    page, playwright_manager, session_manager, domain
+                )
+                
+                if cpc_navigation_success:
+                    # Step 4: Extract CPC with all advanced features
+                    logger.info("💰 Extracting CPC with advanced features...")
+                    cpc_data = await self._extract_cpc_advanced(page)
+                    
+                    if cpc_data and cpc_data.get('cpc'):
+                        metrics.cpc = str(cpc_data['cpc'])
+                        logger.info(f"✅ CPC extracted successfully: {metrics.cpc}")
+                        logger.info(f"📊 CPC details: {cpc_data}")
+                    else:
+                        logger.warning("⚠️ CPC extraction failed or no data found")
+                        metrics.cpc = None
+                else:
+                    logger.error("❌ Failed to navigate to CPC page")
+                    metrics.cpc = None
+                
+                self._log_extracted_metrics(metrics)
+            else:
+                metrics.error_message = "Failed to extract traffic metrics from page"
+                logger.error("❌ Failed to extract traffic metrics from page")
+                
+        except Exception as e:
+            metrics.error_message = str(e)
+            logger.error(f"❌ Unified metrics extraction error: {e}")
+            
+        return metrics
+
+    async def _navigate_to_metrics_page_unified(self, page: Page, playwright_manager: PlaywrightManager,
+                                               session_manager: SessionManager) -> bool:
+        """Unified navigation to metrics page with all advanced features.
+        
+        Combines the best features from both _navigate_to_metrics_page() and 
+        extract_cpc_best_ratio() to eliminate redundant navigation.
+        
+        Args:
+            page: Playwright page instance
+            playwright_manager: PlaywrightManager instance
+            session_manager: SessionManager instance
+            
+        Returns:
+            bool: True if navigation successful
+        """
+        try:
+            logger.info("🌐 Starting unified navigation to metrics page...")
+            
+            # Step 1: Dashboard refresh (from extract_cpc_best_ratio - preserves session refresh flow)
+            try:
+                await playwright_manager.navigate_with_retry(page, self.config.dashboard_url)
+                await asyncio.sleep(1.0)
+                logger.info("✅ Dashboard visited successfully for session refresh")
+            except Exception as e:
+                logger.warning(f"⚠️ Unable to visit dashboard before metrics: {e}")
+            
+            # Step 2: Server testing and bridge logic (from _navigate_to_metrics_page - preserves server testing)
+            try:
+                # Get current server bridge URL from ServerManager
+                current_bridge_url = self.server_manager.get_current_bridge_url()
+                logger.info(f"🌉 Current server bridge: {current_bridge_url}")
+                
+                # Test direct access first (from _navigate_to_metrics_page - preserves server testing)
+                target_url = self.config.base_metrics_url
+                logger.info(f"🧪 Testing direct access to: {target_url}")
+                
+                direct_success = await self._test_direct_server_access(page, target_url)
+                
+                if direct_success:
+                    logger.info("✅ Direct server access successful, no bridge needed")
+                    return True
+                else:
+                    logger.info("⚠️ Direct access failed, will use bridge")
+                
+                # Use bridge (from extract_cpc_best_ratio - preserves bridge logic)
+                logger.info(f"🌉 Using bridge URL: {current_bridge_url}")
+                await page.goto(current_bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                await page.wait_for_load_state('domcontentloaded', timeout=10000)
+                await asyncio.sleep(1.0)
+                logger.info("✅ Bridge URL visited successfully")
+                
+                return True
+                
+            except Exception as e:
+                logger.warning(f"⚠️ Bridge URL visit failed: {e}")
+                # Mark server as failed and try next server (from _navigate_to_metrics_page)
+                try:
+                    self.server_manager.mark_server_failed()
+                    logger.info("🔄 Marked current server as failed, will try next server")
+                except Exception as mark_error:
+                    logger.warning(f"⚠️ Failed to mark server as failed: {mark_error}")
+                
+                return False
+                
+        except Exception as e:
+            logger.error(f"❌ Unified navigation error: {e}")
+            return False
+
+    async def _test_direct_server_access(self, page: Page, target_url: str) -> bool:
+        """Test direct server access without bridge.
+        
+        Args:
+            page: Playwright page instance
+            target_url: Target URL to test
+            
+        Returns:
+            bool: True if direct access successful
+        """
+        try:
+            await page.goto(target_url, referer=self.config.dashboard_url, timeout=5000)
+            await page.wait_for_load_state('domcontentloaded', timeout=5000)
+            
+            # Check if we got a valid response (not session expired immediately)
+            page_content = await page.content()
+            if "session expired" not in page_content.lower() and len(page_content) > 1000:
+                logger.info("✅ Direct server access successful, no bridge needed")
+                return True
+            else:
+                logger.info("⚠️ Direct access failed, will use bridge")
+                return False
+        except Exception as e:
+            logger.info(f"⚠️ Direct access failed: {e}, will use bridge")
+            return False
+
+    async def _navigate_to_cpc_from_metrics(self, page: Page, playwright_manager: PlaywrightManager,
+                                           session_manager: SessionManager, domain: str) -> bool:
+        """Navigate to CPC page from metrics page without redundant navigation.
+        
+        This method avoids the redundant dashboard + bridge navigation since
+        the session is already established from the unified navigation.
+        
+        Args:
+            page: Playwright page instance
+            playwright_manager: PlaywrightManager instance
+            session_manager: SessionManager instance
+            domain: Domain to build CPC URL for
+            
+        Returns:
+            bool: True if navigation successful
+        """
+        try:
+            logger.info(f"🔗 Navigating to CPC page for domain: {domain}")
+            
+            # Build CPC overview URL with domain
+            overview_url = self._build_overview_url(domain)
+            logger.info(f"📍 CPC overview URL: {overview_url}")
+            
+            # Use session manager for cross-domain navigation (session already established)
+            navigation_success = False
+            try:
+                navigation_success = await session_manager.navigate_cross_domain(
+                    page, playwright_manager, overview_url
+                )
+                logger.info("✅ Cross-domain navigation to CPC page successful")
+            except Exception as e:
+                logger.warning(f"⚠️ Cross-domain navigation error for CPC: {e}")
+            
+            # Fallback to direct navigation with referer if session manager failed
+            if not navigation_success:
+                try:
+                    await page.goto(overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                    navigation_success = True
+                    logger.info("✅ Direct navigation to CPC page with referer succeeded")
+                except Exception as e:
+                    logger.warning(f"⚠️ Direct navigation with referer failed for CPC: {e}")
+            
+            if not navigation_success:
+                logger.error("❌ Failed to navigate to CPC page")
+                return False
+            
+            # Log current URL for debugging
+            current_url = page.url
+            logger.info(f"📍 Current URL after CPC navigation: {current_url}")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ CPC navigation error: {e}")
+            return False
+
     async def extract_cpc_best_ratio(self, page: Page, playwright_manager: PlaywrightManager,
                                      session_manager: SessionManager, domain: str) -> Optional[Dict[str, Any]]:
         """Extract CPC based on max(volume/traffic) from overview grid.
