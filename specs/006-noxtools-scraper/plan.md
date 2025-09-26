@@ -53,15 +53,7 @@ Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui 
   - Page login: https://noxtools.com/secure/login
   - Sélecteurs: `#amember-login`, `#amember-pass`, `[type="submit"]`
   - Redirection: https://noxtools.com/secure/member
-  - **ÉTAPE 1 - Overview (CPC)** : https://semrush1.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507
-    - Sélecteurs Overview (SAP React grid) :
-      - Lignes: `div[data-ui-name="Body.Row"]`
-      - Keywords: `div[name="phrase"] a`
-      - Volume: `div[name="volume"][role="gridcell"] [data-at="value-volume"]`
-      - Traffic: `div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]`
-      - CPC: `div[name="cpc"][role="gridcell"] [data-at="value-cpc"]`
-    - Logique CPC : ratio = volume / trafficPercent → sélection max(ratio)
-  - **ÉTAPE 2 - Market-Overview (Autres métriques)** : https://semrush1.semrush.pw/analytics/traffic/market-overview/?date=202507&q=cakesbody.com&searchType=domain&fid=1361959
+  - **ÉTAPE 1 - Market-Overview (Autres métriques)** : https://semrush1.semrush.pw/analytics/traffic/market-overview/?date=202507&q=cakesbody.com&searchType=domain&fid=1361959
     - Sélecteurs métriques (SAP React gridcell):
       - visits: `[data-ui-name="Flex"][role="gridcell"][name="entrances"][tabindex="-1"][aria-colindex="3"]`
       - organic: `[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchOrganic"][tabindex="-1"][aria-colindex="9"]`
@@ -69,12 +61,26 @@ Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui 
       - purchase conversion: `[data-ui-name="Flex"][role="gridcell"][name="purchasesPerVisit"][tabindex="-1"][aria-colindex="21"]`
       - avg visit duration: `[data-ui-name="Flex"][role="gridcell"][name="avgVisitDuration"][tabindex="-1"][aria-colindex="27"]`
       - bounce rate: `[data-ui-name="Flex"][role="gridcell"][name="bouncesPerVisit"][tabindex="-1"][aria-colindex="29"]`
+  - **ÉTAPE 2 - Overview (CPC)** : https://semrush1.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507
+    - Sélecteurs Overview (SAP React grid) :
+      - Lignes: `div[data-ui-name="Body.Row"]`
+      - Keywords: `div[name="phrase"] a`
+      - Volume: `div[name="volume"][role="gridcell"] [data-at="value-volume"]`
+      - Traffic: `div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]`
+      - CPC: `div[name="cpc"][role="gridcell"] [data-at="value-cpc"]`
+    - Logique CPC : ratio = volume / trafficPercent → sélection max(ratio)
   - Technologie: SAP React (extraction adaptée)
 
 ### Workflow en 2 Étapes Distinctes (Alpha)
 
-#### **ÉTAPE 1 - Overview (CPC Extraction)**
-- **Navigation** : Dashboard → Bridge `https://semrush.noxtools.com/server3.php` → Overview
+#### **ÉTAPE 1 - Market-Overview (Autres Métriques)**
+- **Navigation** : Dashboard → Bridge `https://semrush.noxtools.com/server1.php` → Market-Overview
+- **URL** : `https://semrush1.semrush.pw/analytics/traffic/market-overview/?date=202507&q=cakesbody.com&searchType=domain&fid=1361959`
+- **Extraction** : Toutes les autres métriques (visits, organic, paid, etc.)
+- **Rate limiting** : limites/minute et burst
+
+#### **ÉTAPE 2 - Overview (CPC Extraction)**
+- **Navigation** : Depuis Market-Overview → Overview (même serveur, maintien session)
 - **URL** : `https://semrush1.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507`
 - **Attentes** : `networkidle` + délai 2s
 - **Extraction CPC** :
@@ -84,13 +90,6 @@ Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui 
   - Traffic: `div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]`
   - CPC: `div[name="cpc"][role="gridcell"] [data-at="value-cpc"]`
   - **Logique** : ratio = volume / trafficPercent → sélection max(ratio)
-- **Rate limiting** : limites/minute et burst
-
-#### **ÉTAPE 2 - Market-Overview (Autres Métriques)**
-- **Navigation** : Depuis Overview → Market-Overview avec FID
-- **URL** : `https://semrush1.semrush.pw/analytics/traffic/market-overview/?date=202507&q=cakesbody.com&searchType=domain&fid=1361959`
-- **Extraction** : Toutes les autres métriques (visits, organic, paid, etc.)
-- **Remarque** : en Version Finale, ajouter un fallback automatique (domaines/passerelles alternatifs) si indisponible (cf. `NOX-FINAL-005`).
 
 ### Beta (à fournir/valider)
 - Chemin de la BDD
@@ -122,6 +121,10 @@ Créer un nouveau scraper Noxtools dans le dossier `scraper-noxtools-final` qui 
 ### Schéma Analytics (specs/001-name-trendtrack-scraper/plan/data-model.md)
 - Table `analytics` avec indexes `shop_id`, `scraping_status`, unique `shop_id`
 - Champs numériques typés (INTEGER/NUMERIC) pour performance/qualité
+
+### Références (cohérence documentaire)
+- Métriques attendues (liste unique) : voir `specs/006-noxtools-scraper/spec.md` → section "Métriques attendues pour ce scraper"
+- Règles globales `scraping_status` : voir `specs/006-noxtools-scraper/spec.md` → section "Règles d'attribution du scraping_status (générales)"
 
 ## Propositions (Logs, Erreurs, Métadonnées)
 

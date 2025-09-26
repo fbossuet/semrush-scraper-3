@@ -85,11 +85,173 @@ Le script `main.py` doit être le reflet du test temporaire le plus abouti et in
 5. **Gestion d'erreurs** : Gérer les erreurs et le fallback automatique
 6. **Nettoyage** : Nettoyer les ressources et fermer les connexions
 
-#### Workflow de Scraping Unifié (Refactoring 2025-01-18)
-1. **Navigation** : Dashboard → Test Market-Overview → Bridge (si échec) → Overview
-2. **Extraction Unifiée** : Métriques + CPC en une seule opération sur Overview
-3. **Fonctionnalités Avancées** : Scroll pour virtualisation, retry avec scroll, parsing numérique avancé
-4. **Optimisation** : Une seule navigation, pas de duplication du workflow
+#### Workflow de Scraping Détaillé
+
+##### Workflow Principal
+```
+1. ACCÈS À LA PAGE DE LOGIN
+   ↓
+   https://noxtools.com/secure/login
+   ↓
+2. AUTHENTIFICATION
+   ↓
+   Remplir formulaire (username/password)
+   ↓
+3. REDIRECTION VERS DASHBOARD
+   ↓
+   https://noxtools.com/secure/member
+   ↓
+4. TEST D'ACCÈS DIRECT À SEMRUSH
+   ↓
+   Tentative navigation vers Market-Overview
+   ↓
+5. VÉRIFICATION DE LA SESSION
+   ↓
+   Test Market-Overview → Vérification contenu page
+   ↓
+   ┌─────────────────────────────────────┐
+   │ SI ÉCHEC DÉTECTÉ                   │
+   │ ↓                                  │
+   │ 6A. RETOUR À LA PAGE DE LOGIN      │
+   │ ↓                                  │
+   │ 7A. RÉAUTHENTIFICATION             │
+   │ ↓                                  │
+   │ 8A. RETOUR AU DASHBOARD            │
+   │ ↓                                  │
+   │ 9A. UTILISATION DU BRIDGE          │
+   │ ↓                                  │
+   │ https://semrush.noxtools.com/server1.php │
+   │ ↓                                  │
+   │ SI ÉCHEC → https://semrush.noxtools.com/server2.php │
+   │ ↓                                  │
+   │ SI ÉCHEC → https://semrush.noxtools.com/server3.php │
+   │ ↓                                  │
+   │ SI ÉCHEC → https://semrush.noxtools.com/server4.php │
+   │ ↓                                  │
+   │ SI ÉCHEC → https://semrush.noxtools.com/server5.php │
+   │ ↓                                  │
+   │ SI TOUS ÉCHEC → ERREUR CRITIQUE    │
+   └─────────────────────────────────────┘
+   ↓
+   ┌─────────────────────────────────────┐
+   │ SI SUCCÈS                           │
+   │ ↓                                  │
+   │ 6B. CONTINUER SANS BRIDGE          │
+   │ ↓                                  │
+   │ 7B. NAVIGATION VERS MARKET-OVERVIEW │
+   │ ↓                                  │
+   │ 8B. EXTRACTION DES MÉTRIQUES       │
+   └─────────────────────────────────────┘
+```
+
+##### Conditions de Détection d'Échec
+
+**Session Expirée**
+```
+SI page_content contient :
+- "Session expired"
+- "access again from Dashboard"
+- "session expired"
+- "please login again"
+- "authentication required"
+→ ÉCHEC DÉTECTÉ
+```
+
+**Erreur d'Accès**
+```
+SI page_title contient :
+- "403"
+- "forbidden"
+→ ÉCHEC DÉTECTÉ
+```
+
+**Page Vide/Erreur**
+```
+SI len(page_content) <= 1000 caractères
+→ ÉCHEC DÉTECTÉ
+```
+
+**Exception de Navigation**
+```
+SI timeout ou erreur de chargement
+→ ÉCHEC DÉTECTÉ
+```
+
+##### Correspondance Bridge → Serveur Final avec URLs
+
+```
+Bridge server1.php → Navigation automatique vers https://semrush1.semrush.pw/analytics/traffic/market-overview/
+Bridge server2.php → Navigation automatique vers https://semrush2.semrush.pw/analytics/traffic/market-overview/
+Bridge server3.php → Navigation automatique vers https://semrush3.semrush.pw/analytics/traffic/market-overview/
+Bridge server4.php → Navigation automatique vers https://semrush4.semrush.pw/analytics/traffic/market-overview/
+Bridge server5.php → Navigation automatique vers https://semrush5.semrush.pw/analytics/traffic/market-overview/
+```
+
+##### Workflow de Fallback Bridge
+
+```
+ÉCHEC DÉTECTÉ
+↓
+RETOUR AU LOGIN
+↓
+RÉAUTHENTIFICATION
+↓
+DASHBOARD
+↓
+BRIDGE https://semrush.noxtools.com/server1.php
+↓
+SI ÉCHEC → BRIDGE https://semrush.noxtools.com/server2.php
+↓
+SI ÉCHEC → BRIDGE https://semrush.noxtools.com/server3.php
+↓
+SI ÉCHEC → BRIDGE https://semrush.noxtools.com/server4.php
+↓
+SI ÉCHEC → BRIDGE https://semrush.noxtools.com/server5.php
+↓
+SI TOUS ÉCHEC → ERREUR CRITIQUE
+```
+
+##### Exemple Concret de Fallback
+
+```
+1. Test direct : https://semrush2.semrush.pw/analytics/traffic/market-overview/
+   ↓
+   ÉCHEC DÉTECTÉ : "Session expired, access again from Dashboard"
+   ↓
+2. Retour au login → Réauthentification → Dashboard
+   ↓
+3. Bridge : https://semrush.noxtools.com/server3.php
+   ↓
+4. Navigation automatique vers : https://semrush3.semrush.pw/analytics/traffic/market-overview/
+   ↓
+5. Maintien de la session entre bridge et serveur final
+   ↓
+6. Extraction des métriques
+```
+
+##### Workflow Final
+
+```
+1. Login → Dashboard
+2. Test Market-Overview (accès direct)
+3. SI ÉCHEC → Retour Login → Bridge server1.php → semrush1.semrush.pw
+4. SI ÉCHEC → Bridge server2.php → semrush2.semrush.pw
+5. SI ÉCHEC → Bridge server3.php → semrush3.semrush.pw
+6. SI ÉCHEC → Bridge server4.php → semrush4.semrush.pw
+7. SI ÉCHEC → Bridge server5.php → semrush5.semrush.pw
+8. SI TOUS ÉCHEC → ERREUR
+9. SI SUCCÈS → Extraction métriques
+```
+
+##### Clarification Importante
+
+- **Le bridge** : Utilisé pour **maintenir la session** entre Noxtools et Semrush
+- **Le serveur final** : Détermine vers quel serveur Semrush naviguer après le bridge
+- **Navigation entre serveurs** : Le bridge navigue vers un autre serveur si l'actuel est inaccessible
+- **Maintien de session** : Le bridge maintient la session et les cookies entre le bridge et le serveur Semrush final
+- **Navigation automatique** : Une fois redirigé vers une URL, il faut absolument maintenir cette URL (pas de semrush1 puis semrush2 par exemple)
+
+**Le bridge est un intermédiaire de session ET un redirecteur de serveur en cas d'échec, avec maintien strict de l'URL choisie !**
 
 ### Exigences de Sécurité et Validation
 - **Backup obligatoire** : Avant toute modification
@@ -108,6 +270,29 @@ Le script `main.py` doit être le reflet du test temporaire le plus abouti et in
 - **Règle de commit** : Commiter après validation utilisateur d'un test réussi
 - **Timing des commits** : Quand l'utilisateur confirme qu'une modification fonctionne
 - **Nettoyage obligatoire** : Supprimer les fichiers temporaires après usage (voir règles de sécurité)
+
+### Règles d'attribution du `scraping_status` (générales)
+- **failed (par défaut)** : si aucun statut n'est explicitement fourni par le scraper au moment de l'insert/update dans `analytics`
+- **failed** : s'il manque au moins UNE des métriques attendues par ce scraper pour la table `analytics`, ou si une de ces métriques est invalide (format/type incorrect)
+- **completed** : uniquement si TOUTES les métriques attendues par ce scraper sont présentes et enregistrées au bon format en base de données
+
+Notes d'implémentation:
+1. Construire l'objet complet des métriques attendues avant écriture
+2. Valider présence et format/type de chaque champ attendu
+3. Déterminer `scraping_status` selon les règles ci-dessus (valeur par défaut = `failed`)
+4. Écrire dans `analytics` avec le statut calculé, puis consigner `updated_at`
+
+### Métriques attendues pour ce scraper (référence unique)
+- `visits`
+- `traffic`
+- `organic_traffic`
+- `paid_search_traffic`
+- `avg_visit_duration`
+- `bounce_rate`
+- `percent_branded_traffic`
+- `conversion_rate`
+- `branded_traffic`
+- `cpc`
 - **Documentation** : TOUS les fichiers .md doivent être committés
 - **Code source** : Seulement les modifications validées et testées
 
@@ -125,12 +310,6 @@ Le script `main.py` doit être le reflet du test temporaire le plus abouti et in
 - **Règles de sécurité** : Renforcées avec validation obligatoire
 
 ### État Actuel
-- ✅ **Scraper TrendTrack** : Opérationnel (screen actif)
-- ✅ **Chemins relatifs** : Implémentés dans tous les fichiers
-- ✅ **Base de données** : 614 boutiques dans trendtrack.db
-- ⚠️ **API** : Problème de démarrage (non critique)
-- ✅ **Menu workers** : Fonctionne avec chemins corrigés
-- ✅ **Méthodes API géo** : Supprimées (voir API_REMOVAL.md)
 
 ### Règles de Test et Debug
 - **Surveillance des logs en temps réel** : TOUJOURS lancer les scripts en arrière-plan avec redirection vers un fichier de log
@@ -144,23 +323,13 @@ Le script `main.py` doit être le reflet du test temporaire le plus abouti et in
 - **Nettoyage des logs** : Supprimer les fichiers de log après analyse
 - **Pas de tests longs** : Éviter les tests sur 150+ boutiques, privilégier les tests courts et ciblés
 
-### État Actuel du Projet
-- ✅ **Scraper TrendTrack** : Opérationnel (screen actif)
-- ✅ **Chemins relatifs** : Implémentés dans tous les fichiers
-- ✅ **Base de données** : 614 boutiques dans trendtrack.db
-- ⚠️ **API** : Problème de démarrage (non critique)
-- ✅ **Menu workers** : Fonctionne avec chemins corrigés
-- ✅ **Méthodes API géo** : Supprimées (voir API_REMOVAL.md)
-
 ### État Actuel du Scraper Noxtools
 - ✅ **ServerManager** : Implémenté et testé (gestion serveurs semrush1→semrush5)
 - ✅ **Modules** : Tous les modules créés et intégrés
 - ✅ **Tests** : Tests complets du ServerManager passent
 - ✅ **Documentation** : Mise à jour et cohérente
-- ⚠️ **Refactoring Requis** : Duplication entre `extract_metrics()` et `extract_cpc_best_ratio()`
-- 📋 **Plan de Refactoring** : Spécification technique créée (plan/refactoring_spec.md)
 - 🔄 **Script final** : En cours de création (main.py)
-- ⚠️ **Base de données** : Chemin à corriger pour l'accès
+- ✅ **Base de données** : Chemin à corriger pour l'accès
 - 📋 **Prochaines étapes** : Créer le script final et tester en production
 
 ### Problèmes Identifiés et Résolus
@@ -203,7 +372,7 @@ Le script `main.py` doit être le reflet du test temporaire le plus abouti et in
 En tant qu'analyste de données, je veux que le système de scraping Noxtools récupère automatiquement les métriques de performance des boutiques depuis Noxtools, afin de pouvoir analyser les tendances du marché e-commerce et identifier les opportunités commerciales avec des données complémentaires à celles de SEM Rush.
 
 ### Scénarios d'Acceptation
-1. **Étant donné** un système de scraping Noxtools configuré, **Quand** le système s'initialise, **Alors** il devrait configurer Playwright en mode stealth headless avec les paramètres anti-détection appropriés
+1. **Étant donné** un système de scraping Noxtools configuré, **Quand** le système s'initialise, **Alors** il devrait configurer Playwright en mode stealth headless avec les paramètres anti-détection appropriés (xvfb également)
 2. **Étant donné** un système de scraping avec des credentials valides, **Quand** le système s'authentifie, **Alors** il devrait remplir le formulaire de connexion avec les nouveaux sélecteurs et maintenir la session
 3. **Étant donné** une session authentifiée, **Quand** le système navigue vers Noxtools, **Alors** il devrait maintenir les cookies et la session entre les domaines
 4. **Étant donné** une liste de boutiques éligibles, **Quand** le système scrape les métriques, **Alors** il devrait appliquer une logique anti-détection pour chaque boutique
@@ -302,14 +471,14 @@ En tant qu'analyste de données, je veux que le système de scraping Noxtools r�
 
 ### Standards de Format de Données
 - **Dates pour logs/métadonnées** : Format ISO 8601 UTC (ex: "2025-01-18T10:30:45.123Z")
-- **Dates pour base de données** : Format SQLite DATE (ex: "2025-01-18")
+- **Dates pour base de données** : Format SQLite TEXT avec format ISO 8601 (métadonnées)
 - **Python** : 
   - Logs : `datetime.utcnow().isoformat() + 'Z'`
   - BDD : `datetime.utcnow().date().isoformat()`
 - **JavaScript** : Utiliser `new Date().toISOString()`
 - **SQLite** : 
   - Champ `scraped_at` : TEXT avec format ISO 8601 (métadonnées)
-  - Champ `updated_at` : DATE avec format YYYY-MM-DD
+  - Champ `updated_at` : TEXT avec format ISO 8601 (métadonnées)
 
 ### Inputs Nécessaires par Version
 
@@ -329,63 +498,8 @@ En tant qu'analyste de données, je veux que le système de scraping Noxtools r�
   - Mot de passe : `id="amember-pass"`
   - Bouton validation : `type="submit"`
 - ✅ **Redirection après login** : https://noxtools.com/secure/member
-- ✅ **ÉTAPE 1 - Overview (CPC)** : https://semrush1.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507
-- ✅ **ÉTAPE 2 - Market-Overview (Autres métriques)** : https://semrush1.semrush.pw/analytics/traffic/market-overview/?date=202507&q=cakesbody.com&searchType=domain&fid=1361959
+- ✅ **ÉTAPE 1 - Market-Overview (Autres métriques)** : https://semrush1.semrush.pw/analytics/traffic/market-overview/?date=202507&q=cakesbody.com&searchType=domain&fid=1361959
 - ✅ **Gestion session/cookies** : Maintenir entre domaines (noxtools.com → semrush1.semrush.pw)
-- ✅ **Sélecteurs Overview (CPC)** :
-  - Lignes: `div[data-ui-name="Body.Row"]`
-  - Keywords: `div[name="phrase"] a`
-  - Volume: `div[name="volume"][role="gridcell"] [data-at="value-volume"]`
-  - Traffic: `div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]`
-  - CPC: `div[name="cpc"][role="gridcell"] [data-at="value-cpc"]`
-  - **Logique CPC** : ratio = volume / trafficPercent → sélection max(ratio)
-
-### Spécification Technique - Extraction CPC sur Overview
-
-## 🔧 **Méthodes de Récupération CPC**
-
-### 1. Scroll pour Virtualisation
-```javascript
-// Méthode 1 : Scroll du conteneur SAP React
-const cont = document.querySelector('[data-ui-name="Body"]') || document.scrollingElement || document.body;
-let y = 0; let steps = 0;
-const max = (cont.scrollHeight || 0) - (cont.clientHeight || 0);
-while (y < max && steps < 8) { 
-    y += Math.max(200, (cont.clientHeight||0)/2); 
-    cont.scrollTo(0, y); 
-    steps++; 
-}
-
-// Méthode 2 : Scroll de la fenêtre (fallback)
-for _ in range(6):
-    await page.evaluate('window.scrollBy(0, Math.max(300, window.innerHeight/2))')
-    await asyncio.sleep(0.25)
-```
-
-### 2. Sélecteurs CPC Spécifiques
-```javascript
-const rows = document.querySelectorAll('div[data-ui-name="Body.Row"]');
-const kw   = q('div[name="phrase"] a');
-const vol  = parseNum(q('div[name="volume"][role="gridcell"] [data-at="value-volume"]'));
-const traf = parseNum(q('div[name="trafficPercent"][role="gridcell"] [data-at="value-traffic-percent"]'));
-const cpcT = q('div[name="cpc"][role="gridcell"] [data-at="value-cpc"]');
-```
-
-### 3. Parsing Numérique Avancé
-```javascript
-const parseNum = (s) => {
-    if (!s) return NaN;
-    const t = s.trim().replace(/[,%]/g,'').replace(/[, ]/g,'');
-    const m = t.match(/^([\d.]+)([KkMm])?$/);
-    if (!m) {
-        const v = parseFloat(t);
-        return isFinite(v) ? v : NaN;
-    }
-    const n = parseFloat(m[1]);
-    const mul = m[2] ? (m[2].toLowerCase()==='k' ? 1e3 : 1e6) : 1;
-    return n * mul;
-};
-```
 
 ### 4. Retry avec Scroll
 ```python
@@ -418,14 +532,9 @@ if (!best || ratio > best.ratio) best = { keyword: kw, ratio, cpc, cpcRaw: cpcT 
 ### Workflow Simplifié
 ```
 extract_metrics():
-Dashboard → Test Market-Overview → Bridge (si échec) → Overview → 
-Extraction métriques + CPC (en une seule fois)
+Dashboard → Test Market-Overview → Bridge (si échec)
+Extraction métriques 
 ```
-
-### Fonctionnalités à Intégrer
-1. **Scroll pour virtualisation** : Fonction `_scroll_grid()`
-2. **Parsing numérique avancé** : Fonction `_parse_numeric()`
-3. **Extraction CPC avec retry** : Logique intégrée dans la méthode
 
 - ✅ **Sélecteurs Market-Overview (Autres métriques)** :
   - visits : `[data-ui-name="Flex"][role="gridcell"][name="entrances"][tabindex="-1"][aria-colindex="3"]`
@@ -437,17 +546,15 @@ Extraction métriques + CPC (en une seule fois)
 - ✅ **Technologie** : Page chargée en SAP React (à prendre en compte pour l'extraction)
 
 **Extraction Unifiée (Refactoring 2025-01-18)**
-- **Navigation unique** : Dashboard → Test Market-Overview → Bridge (si échec) → Overview
-- **Extraction unifiée** : Métriques + CPC en une seule opération sur Overview
+- **Navigation unique** : Dashboard → Test Market-Overview → Bridge (si échec)
 - **Fonctionnalités avancées** :
   - Scroll pour virtualisation SAP React
   - Retry avec scroll progressif
   - Parsing numérique avancé (K/M support)
   - Sélecteurs CPC spécifiques et précis
-- **Optimisation** : Une seule navigation, pas de duplication du workflow
 - **Rate limiting** : Limites/minute et burst maintenues
 
-**Inputs à Fournir :**
+**Inputs à décider par l'agenrt :**
 - **Rate limiting** : Limites de requêtes par minute/heure
 
 **Note Version Beta :**

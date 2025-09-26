@@ -54,6 +54,45 @@ Ce document répertorie toutes les tâches liées au développement, maintenance
   - Étape 2: Market-Overview → FID + autres métriques
 - **Actions**: Modifier extract_metrics() pour séparer clairement les 2 étapes
 
+#### P0: Ajouter la fonctionnalité scraper CPC (nouvelle métrique)
+- **Type**: Feature
+- **Statut**: En attente
+- **Contexte**: Voir `spec.md` (section "Métriques attendues pour ce scraper")
+- **Spécification détaillée**: Voir `integration-cpc.md` pour les détails techniques complets
+- **Description**: Implémenter l'extraction de la métrique CPC depuis la page Overview avec :
+  - Navigation vers `analytics/overview/` après Market-Overview
+  - Maintien de session entre les deux pages (même serveur)
+  - Scroll pour virtualisation SAP React
+  - Parsing numérique avancé (K/M support)
+  - Calcul du meilleur ratio CPC (volume/trafficPercent)
+  - Retry avec scroll progressif
+  - Enregistrement en base de données (champ `cpc` de type REAL)
+- **Actions**:
+  - Créer `_navigate_to_overview()` avec maintien de session
+  - Créer `_extract_cpc_from_overview()` avec scroll et retry
+  - Modifier `extract_metrics()` pour workflow complet (Market-Overview → Overview)
+  - Implémenter le fallback avec détection d'échec pour Overview
+  - Intégrer l'enregistrement CPC en base de données
+- **Critères d'acceptation**:
+  - [ ] Navigation Overview avec maintien de session
+  - [ ] Extraction CPC avec scroll et retry fonctionnelle
+  - [ ] Parsing numérique avancé (K/M) opérationnel
+  - [ ] Calcul du meilleur ratio CPC correct
+  - [ ] Enregistrement en BDD (champ `cpc` REAL)
+  - [ ] Fallback Overview avec même mécanique que Market-Overview
+  - [ ] Tests de validation CPC complets
+
+#### P0: Documenter les sélecteurs de détection d'échec pour le fallback
+- **Type**: Documentation
+- **Statut**: En attente
+- **Description**: Les sélecteurs de détection d'échec sont présents dans le code mais non documentés dans la spec :
+  - "Session expired" dans le contenu de page
+  - "access again from Dashboard" dans le contenu de page
+  - "403" et "forbidden" dans le titre de page
+  - len(page_content) <= 1000 caractères
+  - Exceptions de navigation
+- **Actions**: Ajouter section détaillée dans spec.md avec conditions de fallback
+
 ---
 
 ## ✅ Tâches Terminées
