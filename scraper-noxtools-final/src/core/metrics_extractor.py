@@ -921,10 +921,69 @@ class MetricsExtractor:
                     return row
             
             logger.warning("⚠️ Aucune correspondance ≥ 70% trouvée")
-            return None
+            
+            # Fallback: Récupérer la valeur CPC existante en BDD
+            logger.info("🔄 Fallback: Recherche de la valeur CPC existante en BDD...")
+            existing_cpc = await self._get_existing_cpc_from_db(shop_url)
+            if existing_cpc:
+                logger.info(f"✅ Fallback réussi: CPC existant = {existing_cpc}")
+                return {'keyword': 'fallback_bdd', 'cpc': existing_cpc, 'cpcRaw': str(existing_cpc)}
+            else:
+                logger.warning("⚠️ Aucune valeur CPC existante trouvée en BDD")
+                return None
             
         except Exception as e:
             logger.error(f"❌ CPC similarity extraction error: {e}")
+            return None
+
+    async def _get_existing_cpc_from_db(self, shop_url: str) -> Optional[float]:
+        """Récupère la valeur CPC existante en base de données pour fallback.
+        
+        Args:
+            shop_url: URL de la boutique
+            
+        Returns:
+            Valeur CPC existante ou None si non trouvée
+        """
+        try:
+            import sqlite3
+            from pathlib import Path
+            
+            # Chemin vers la base de données
+            db_path = Path(__file__).parent.parent.parent.parent / "trendtrack-scraper-final" / "data" / "trendtrack.db"
+            
+            # Extraire le domaine du shop_url
+            from urllib.parse import urlparse
+            domain = urlparse(shop_url).netloc or urlparse(shop_url).path
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            
+            with sqlite3.connect(str(db_path)) as conn:
+                cursor = conn.cursor()
+                
+                # Rechercher la valeur CPC existante
+                query = """
+                SELECT a.cpc 
+                FROM analytics a
+                JOIN shops s ON a.shop_id = s.id
+                WHERE s.shop_url LIKE ? AND a.cpc IS NOT NULL
+                ORDER BY a.updated_at DESC
+                LIMIT 1
+                """
+                
+                cursor.execute(query, (f'%{domain}%',))
+                result = cursor.fetchone()
+                
+                if result and result[0]:
+                    cpc_value = float(result[0])
+                    logger.info(f"📊 CPC existant trouvé en BDD: {cpc_value}")
+                    return cpc_value
+                else:
+                    logger.warning(f"⚠️ Aucune valeur CPC trouvée en BDD pour {domain}")
+                    return None
+                    
+        except Exception as e:
+            logger.error(f"❌ Erreur lors de la récupération du CPC existant: {e}")
             return None
     
     async def _navigate_to_metrics_page(self, page: Page, playwright_manager: PlaywrightManager,

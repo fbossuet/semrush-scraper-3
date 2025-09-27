@@ -7,11 +7,46 @@
 
 - **Maintenir la robustesse** : scroll pour virtualisation, retry avec scroll
 - **Conserver la précision** : sélecteurs CPC spécifiques, parsing numérique avancé
-- **Garder la logique de calcul** : ratio = volume / trafficPercent → max(ratio)
+- **Nouvelle logique de calcul** : Algorithme de similarité phrase ↔ domaine avec seuil 70%
+- **Fallback** : Valeur CPC existante en BDD si aucune correspondance ≥ 70%
 
 ## 🔧 Spécificartion Techniques
 
-### 1. Intégration des Fonctionnalités Avancées
+### 1. Algorithme de Similarité CPC (NOUVEAU)
+
+#### 1.1 Principe de Fonctionnement
+**Objectif** : Trouver la correspondance la plus précise entre le domaine de la boutique et les phrases extraites du grid CPC.
+
+**Algorithme** :
+1. **Extraction du domaine** : Sous-domaine extrait du `shop_url`
+2. **Tokenisation intelligente** : Division des domaines composés (ex: "fashionnova" → ["fashion", "nova"])
+3. **Calcul multi-méthodes** :
+   - Correspondance exacte de tokens
+   - Correspondance partielle (sous-chaînes)
+   - Similarité Jaro-Winkler (chaînes complètes)
+4. **Sélection** : Meilleure similarité parmi les méthodes
+5. **Seuil** : 70% minimum requis
+6. **Fallback** : Valeur CPC existante en BDD si aucune correspondance
+
+#### 1.2 Fonctions Implémentées
+```python
+def tokenize_domain(domain: str) -> List[str]:
+    """Tokenise un domaine en mots individuels avec gestion des mots composés"""
+
+def calculate_domain_phrase_similarity(shop_url: str, phrase: str) -> float:
+    """Calcule la similarité entre le domaine et la phrase (0.0 à 1.0)"""
+
+async def extract_cpc_by_similarity(page, playwright_manager, session_manager, shop_url):
+    """Extraction CPC avec algorithme de similarité et fallback BDD"""
+```
+
+#### 1.3 Exemple de Résultat
+```
+✅ Correspondance trouvée: 'cakes body' → 94.7%
+✅ CPC extrait: 0.57 (keyword: cakes body)
+```
+
+### 2. Intégration des Fonctionnalités Avancées
 
 #### 1.1 Scroll pour Virtualisation
 **Source** : `extract_cpc_best_ratio()` lignes 405-423  
