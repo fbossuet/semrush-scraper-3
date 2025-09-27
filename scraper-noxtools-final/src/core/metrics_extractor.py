@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from urllib.parse import urlparse, urlencode, parse_qs
+from difflib import SequenceMatcher
 
 from playwright.async_api import Page
 
@@ -23,6 +25,115 @@ from .server_manager import get_server_manager
 from utils.url_params import build_overview_url, build_date_range
 
 logger = logging.getLogger(__name__)
+
+# ============================================================================
+# CPC Similarity Functions
+# ============================================================================
+
+def tokenize_domain(domain: str) -> List[str]:
+    """
+    Tokenise un domaine en mots individuels.
+    Gère les mots composés comme 'fashionnova' -> ['fashion', 'nova']
+    
+    Args:
+        domain: Sous-domaine à tokeniser
+        
+    Returns:
+        Liste des tokens
+    """
+    # Remplacer les séparateurs par des espaces
+    normalized = re.sub(r'[-_]', ' ', domain.lower())
+    
+    # Diviser en mots
+    words = normalized.split()
+    
+    # Détecter les mots composés (sans séparateur)
+    tokens = []
+    for word in words:
+        if len(word) > 6:  # Mots longs probablement composés
+            # Essayer de diviser les mots composés
+            # Ex: 'fashionnova' -> 'fashion nova'
+            if re.search(r'[a-z][A-Z]', word):  # camelCase
+                tokens.extend(re.findall(r'[a-z]+|[A-Z][a-z]*', word))
+            else:
+                # Essayer de diviser par des patterns communs
+                # Ex: 'fashionnova' -> 'fashion' + 'nova'
+                tokens.append(word)
+        else:
+            tokens.append(word)
+    
+    return tokens
+
+def calculate_domain_phrase_similarity(shop_url: str, phrase: str) -> float:
+    """
+    Calcule la similarité améliorée entre le sous-domaine du shop_url et la phrase.
+    Utilise la tokenisation et la correspondance partielle.
+    
+    Args:
+        shop_url: URL complète (ex: "https://cakesbody.com")
+        phrase: Phrase extraite (ex: "cakes body")
+        
+    Returns:
+        Pourcentage de similarité (0.0 à 1.0)
+    """
+    # 1. Extraire le sous-domaine du shop_url
+    parsed_url = urlparse(shop_url)
+    domain = parsed_url.netloc or parsed_url.path
+    
+    # Nettoyer le domaine
+    if domain.startswith('www.'):
+        domain = domain[4:]
+    
+    # Extraire uniquement le sous-domaine (avant le premier point)
+    subdomain = domain.split('.')[0]
+    
+    # 2. Nettoyer la phrase
+    phrase_clean = phrase.lower().strip()
+    
+    # 3. Tokeniser le sous-domaine et la phrase
+    domain_tokens = tokenize_domain(subdomain)
+    phrase_tokens = phrase_clean.replace('-', ' ').replace('_', ' ').split()
+    
+    # 4. Calculer la similarité avec plusieurs méthodes
+    similarities = []
+    
+    # Méthode 1: Correspondance exacte de tokens
+    exact_matches = 0
+    for domain_token in domain_tokens:
+        for phrase_token in phrase_tokens:
+            if domain_token == phrase_token:
+                exact_matches += 1
+                break
+    
+    if domain_tokens and phrase_tokens:
+        exact_similarity = exact_matches / max(len(domain_tokens), len(phrase_tokens))
+        similarities.append(exact_similarity)
+    
+    # Méthode 2: Correspondance partielle (sous-chaînes)
+    partial_matches = 0
+    for domain_token in domain_tokens:
+        for phrase_token in phrase_tokens:
+            if len(domain_token) >= 3 and len(phrase_token) >= 3:
+                # Vérifier si un token contient l'autre
+                if domain_token in phrase_token or phrase_token in domain_token:
+                    partial_matches += 1
+                    break
+    
+    if domain_tokens and phrase_tokens:
+        partial_similarity = partial_matches / max(len(domain_tokens), len(phrase_tokens))
+        similarities.append(partial_similarity * 0.8)  # Pondération pour correspondance partielle
+    
+    # Méthode 3: Similarité de chaînes complètes (original)
+    subdomain_normalized = ' '.join(domain_tokens)
+    phrase_normalized = ' '.join(phrase_tokens)
+    string_similarity = SequenceMatcher(None, subdomain_normalized, phrase_normalized).ratio()
+    similarities.append(string_similarity)
+    
+    # 5. Retourner la meilleure similarité
+    if similarities:
+        return max(similarities)
+    else:
+        return 0.0
 
 @dataclass
 class MetricsConfig:
@@ -224,10 +335,10 @@ class MetricsExtractor:
             extraction_success = await self._extract_metrics_from_page(page, metrics)
             logger.info(f"🔍 [DEBUG] DOM extraction success: {extraction_success}")
             
-            # Extract CPC data from overview page with retry
-            logger.info("💰 [DEBUG] Starting CPC extraction from overview page...")
+            # Extract CPC data from overview page with similarity matching
+            logger.info("💰 [DEBUG] Starting CPC extraction from overview page with similarity...")
             logger.info(f"💰 [DEBUG] Shop URL for CPC: {shop_url}")
-            cpc_data = await self._extract_cpc_with_retry(page, playwright_manager, session_manager, shop_url)
+            cpc_data = await self.extract_cpc_by_similarity(page, playwright_manager, session_manager, shop_url)
             logger.info(f"💰 [DEBUG] CPC data result: {cpc_data}")
             
             if cpc_data and cpc_data.get('cpc') is not None:
@@ -622,6 +733,198 @@ class MetricsExtractor:
             return best
         except Exception as e:
             logger.error(f"❌ CPC extraction error: {e}")
+            return None
+
+    async def extract_cpc_by_similarity(self, page: Page, playwright_manager: PlaywrightManager,
+                                      session_manager: SessionManager, shop_url: str = None) -> Optional[Dict[str, Any]]:
+        """Extract CPC based on phrase similarity (≥70%) with shop domain.
+        
+        Args:
+            page: Playwright page instance
+            playwright_manager: PlaywrightManager instance
+            session_manager: SessionManager instance
+            shop_url: Shop URL to extract domain for similarity calculation
+            
+        Returns:
+            CPC data dict or None if no match ≥ 70%
+        """
+        if not shop_url:
+            logger.warning("⚠️ No shop_url provided for CPC similarity extraction")
+            return None
+            
+        try:
+            # Step 1: Use the same session refresh flow as metrics extraction
+            # Navigate to dashboard first to refresh session
+            try:
+                await playwright_manager.navigate_with_retry(page, self.config.dashboard_url)
+                await asyncio.sleep(1.0)
+            except Exception as e:
+                logger.warning(f"⚠️ Unable to visit dashboard before CPC similarity extraction: {e}")
+
+            # Step 2: Hit the Noxtools → Semrush bridge (ServerManager)
+            try:
+                server_manager = get_server_manager()
+                bridge_url = server_manager.get_current_bridge_url()
+                logger.info(f"🌉 Visiting bridge URL for CPC similarity: {bridge_url}")
+                await page.goto(bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                await page.wait_for_load_state('domcontentloaded', timeout=10000)
+                await asyncio.sleep(1.0)
+                logger.info("✅ Bridge URL visited successfully for CPC similarity")
+            except Exception as e:
+                logger.warning(f"⚠️ Bridge URL visit failed for CPC similarity: {e}")
+
+            # Step 3: Build dynamic overview URL using current server and domain
+            from urllib.parse import urlparse
+            domain = urlparse(shop_url).netloc or urlparse(shop_url).path
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            
+            # Use current server instead of hardcoded semrush3
+            current_server = self.server_manager.get_current_server_name()
+            overview_base_url = f"https://{current_server}.semrush.pw/analytics/overview/"
+            
+            # Build dynamic overview URL
+            date_range = build_date_range()
+            dynamic_overview_url = build_overview_url(
+                base_url=overview_base_url,
+                shop_url=domain,
+                date_range=date_range,
+                country="us",
+                search_type="domain"
+            )
+            
+            logger.info(f"🔗 [DEBUG] Dynamic overview URL: {dynamic_overview_url}")
+            
+            # Navigate to dynamic overview URL for CPC extraction
+            navigation_success = False
+            try:
+                # First try session manager for cross-domain navigation
+                navigation_success = await session_manager.navigate_cross_domain(
+                    page, playwright_manager, dynamic_overview_url
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ Cross-domain navigation error for CPC similarity: {e}")
+
+            # If session manager failed, try direct navigation with referer
+            if not navigation_success:
+                try:
+                    await page.goto(dynamic_overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                    navigation_success = True
+                    logger.info("✅ Direct navigation to CPC similarity page with referer succeeded")
+                except Exception as e:
+                    logger.warning(f"⚠️ Direct navigation with referer failed for CPC similarity: {e}")
+            
+            if not navigation_success:
+                logger.error("❌ Failed to navigate to CPC similarity page")
+                return None
+
+            # Step 4: Wait for page to load and stabilize
+            try:
+                await page.wait_for_load_state('networkidle', timeout=15000)
+                logger.info("✅ CPC similarity page loaded and network idle")
+            except Exception as e:
+                logger.warning(f"⚠️ Network idle wait failed for CPC similarity page: {e}")
+            await asyncio.sleep(2.0)
+
+            # Step 5: Wait for grid presence
+            try:
+                await page.wait_for_selector('div[data-ui-name="Body.Row"]', timeout=10000)
+                logger.info("✅ Found Body.Row elements for CPC similarity extraction")
+            except Exception as e:
+                logger.warning(f"⚠️ Body.Row not found, trying volume cells: {e}")
+                try:
+                    await page.wait_for_selector('div[name="volume"][role="gridcell"] [data-at="value-volume"]', timeout=8000)
+                    logger.info("✅ Found volume cells for CPC similarity extraction")
+                except Exception as e2:
+                    logger.warning(f"⚠️ Volume cells not found either: {e2}")
+
+            # Helper: scroll to force virtualization to render rows
+            async def _scroll_grid():
+                try:
+                    await page.evaluate("""
+                        () => {
+                          const cont = document.querySelector('[data-ui-name="Body"]') || document.scrollingElement || document.body;
+                          let y = 0; let steps = 0;
+                          const max = (cont.scrollHeight || 0) - (cont.clientHeight || 0);
+                          while (y < max && steps < 8) { y += Math.max(200, (cont.clientHeight||0)/2); cont.scrollTo(0, y); steps++; }
+                          return true;
+                        }
+                    """)
+                    logger.debug("✅ Grid scrolled using container method")
+                except Exception as e:
+                    logger.debug(f"⚠️ Container scroll failed, using window scroll: {e}")
+                    for _ in range(6):
+                        await page.evaluate('window.scrollBy(0, Math.max(300, window.innerHeight/2))')
+                        await asyncio.sleep(0.25)
+                    logger.debug("✅ Grid scrolled using window method")
+
+            # Step 6: Evaluate table-like grid to get ALL rows (not just best)
+            eval_script = r"""
+            () => {
+              const parseNum = (s) => {
+                if (!s) return NaN;
+                const t = s.trim().replace(/[,%]/g,'').replace(/[, ]/g,'');
+                const m = t.match(/^([\d.]+)([KkMm])?$/);
+                if (!m) {
+                  const v = parseFloat(t);
+                  return isFinite(v) ? v : NaN;
+                }
+                const n = parseFloat(m[1]);
+                const mul = m[2] ? (m[2].toLowerCase()==='k' ? 1e3 : 1e6) : 1;
+                return n * mul;
+              };
+              const allRows = [];
+              const rows = document.querySelectorAll('div[data-ui-name="Body.Row"]');
+              rows.forEach(row => {
+                const q = (sel) => row.querySelector(sel)?.textContent?.trim() ?? '';
+                const kw   = q('div[name="phrase"] a');
+                const cpcT = q('div[name="cpc"][role="gridcell"] [data-at="value-cpc"]');
+                const cpc  = parseNum(cpcT);
+                if (isFinite(cpc)) {
+                  allRows.push({ keyword: kw, cpc, cpcRaw: cpcT });
+                }
+              });
+              return allRows;
+            }
+            """
+            
+            all_cpc_rows = None
+            for attempt in range(3):
+                try:
+                    all_cpc_rows = await page.evaluate(eval_script)
+                    logger.debug(f"CPC similarity evaluation attempt {attempt + 1}: {len(all_cpc_rows) if all_cpc_rows else 0} rows found")
+                except Exception as e:
+                    logger.warning(f"⚠️ CPC similarity evaluation attempt {attempt + 1} failed: {e}")
+                    all_cpc_rows = None
+                if all_cpc_rows and len(all_cpc_rows) > 0:
+                    logger.info(f"✅ CPC rows found on attempt {attempt + 1}: {len(all_cpc_rows)} rows")
+                    break
+                if attempt < 2:  # Don't scroll on last attempt
+                    await _scroll_grid()
+                    await asyncio.sleep(0.5)
+            
+            if not all_cpc_rows or len(all_cpc_rows) == 0:
+                logger.warning("⚠️ No CPC data found after all attempts")
+                return None
+
+            # Step 7: Calculate similarity for each row and find first match ≥ 70%
+            logger.info(f"🔍 Calculating similarity for {len(all_cpc_rows)} CPC rows...")
+            
+            for i, row in enumerate(all_cpc_rows):
+                phrase = row.get('keyword', '')
+                similarity = calculate_domain_phrase_similarity(shop_url, phrase)
+                
+                logger.debug(f"Row {i+1}: '{phrase}' → {similarity:.1%}")
+                
+                if similarity >= 0.70:  # 70% seuil
+                    logger.info(f"✅ Correspondance trouvée: '{phrase}' → {similarity:.1%}")
+                    return row
+            
+            logger.warning("⚠️ Aucune correspondance ≥ 70% trouvée")
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ CPC similarity extraction error: {e}")
             return None
     
     async def _navigate_to_metrics_page(self, page: Page, playwright_manager: PlaywrightManager,

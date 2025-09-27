@@ -26,12 +26,14 @@ class StatusManagerConfig:
     
     def __post_init__(self):
         if self.required_metrics is None:
+            # SUPPRIMÉ: 'visits' de la liste - Métrique monthly visits supprimée selon spec007
             self.required_metrics = [
-                'visits', 'organic_search_traffic', 'paid_search_traffic',
+                'organic_search_traffic', 'paid_search_traffic',
                 'bounce_rate', 'avg_visit_duration', 'conversion_rate'
             ]
         if self.critical_metrics is None:
-            self.critical_metrics = ['visits', 'organic_search_traffic']
+            # SUPPRIMÉ: 'visits' de la liste critique - Métrique monthly visits supprimée selon spec007
+            self.critical_metrics = ['organic_search_traffic']
 
 class StatusManager:
     """Manages scraping status classification and logic."""

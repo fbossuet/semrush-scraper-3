@@ -78,7 +78,7 @@ class DatabaseSaver:
             Dictionnaire des données formatées pour la BDD
         """
         data = {
-            'visits': None,
+            # SUPPRIMÉ: 'visits': None, - Métrique monthly visits supprimée selon spec007
             'organic_traffic': None,
             'paid_search_traffic': None,
             'bounce_rate': None,
@@ -87,13 +87,7 @@ class DatabaseSaver:
             'cpc': None
         }
         
-        # Visites
-        if 'visits' in metrics:
-            visits = metrics['visits']
-            if isinstance(visits, int):
-                data['visits'] = visits
-            elif isinstance(visits, str) and visits.isdigit():
-                data['visits'] = int(visits)
+        # SUPPRIMÉ: Logique de traitement des visites - Métrique monthly visits supprimée selon spec007
         
         # Trafic organique
         if 'organic_search_traffic' in metrics:

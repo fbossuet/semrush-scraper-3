@@ -222,7 +222,7 @@ def to_sqlite_date(value: Union[str, date, datetime]) -> Optional[str]:
 
 # Mapping from Noxtools metrics to analytics table fields
 NOXTOOLS_TO_ANALYTICS_MAP = {
-    'visits': 'visits',
+    # SUPPRIMÉ: 'visits': 'visits', - Métrique monthly visits supprimée selon spec007
     'entrancesSearchOrganic': 'organic_traffic', 
     'entrancesSearchPaid': 'paid_search_traffic',
     'purchasesPerVisit': 'conversion_rate',
@@ -253,7 +253,8 @@ def format_metrics(raw_metrics: Dict[str, Any]) -> Dict[str, Any]:
         analytics_key = NOXTOOLS_TO_ANALYTICS_MAP.get(noxtools_key, noxtools_key)
         
         # Apply appropriate formatting based on metric type
-        if noxtools_key in ['visits', 'entrancesSearchOrganic', 'entrancesSearchPaid', 'branded_traffic']:
+        # SUPPRIMÉ: 'visits' de la liste - Métrique monthly visits supprimée selon spec007
+        if noxtools_key in ['entrancesSearchOrganic', 'entrancesSearchPaid', 'branded_traffic']:
             # Traffic metrics: normalize compact numbers
             formatted[analytics_key] = normalize_compact_number(str(value))
             
