@@ -375,10 +375,7 @@ export class MVPScraper {
         const liveAds30d = await this.extractor.extractLiveAds30d();
         console.log(`📊 Live ads 30d extrait (Phase 3): ${liveAds30d}`);
         
-        // Extraction AOV
-        console.log('🔍 Extraction AOV (Phase 3)...');
-        const aov = await this.extractor.extractAOV();
-        console.log(`📊 AOV extrait (Phase 3): ${aov}`);
+        // SUPPRIMÉ: Extraction AOV - Maintenant scrapé par Noxtools
 
         // Extraction Visits (Phase 3)
         console.log('🔍 Extraction visits (Phase 3)...');
@@ -388,9 +385,9 @@ export class MVPScraper {
         // Déterminer le statut analytics en fonction des métriques manquantes
         const liveAds7dValid = typeof liveAds7d === 'number' && !Number.isNaN(liveAds7d);
         const liveAds30dValid = typeof liveAds30d === 'number' && !Number.isNaN(liveAds30d);
-        const aovValid = typeof aov === 'number' && !Number.isNaN(aov);
+        // SUPPRIMÉ: aovValid - AOV maintenant scrapé par Noxtools
         const visitsValid = typeof monthlyVisits === 'string' && monthlyVisits.trim().length > 0;
-        const analyticsStatus = (liveAds7dValid && liveAds30dValid && visitsValid && aovValid)
+        const analyticsStatus = (liveAds7dValid && liveAds30dValid && visitsValid)
           ? 'details_extracted'
           : 'failed-trendtrack';
         
@@ -447,8 +444,7 @@ export class MVPScraper {
         live_ads_7d: details.liveAds7d || 0,
         live_ads_30d: details.liveAds30d || 0,
         
-        // AOV
-        aov: details.aov || null,
+        // SUPPRIMÉ: AOV - Maintenant scrapé par Noxtools
         
         // Statut
         scraping_status: 'details_extracted',

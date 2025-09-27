@@ -19,6 +19,8 @@
 - **ARRÊT IMMÉDIAT** : Si erreur détectée après modification, STOPPER et demander validation
 - **PAS DE BYPASS** : Même après un test réussi, demander validation avant toute action
 - **ZÉRO EXCEPTION** : Cette règle s'applique à TOUT : modifications, corrections, tests, commits
+- **COMMIT INTERDIT SANS VALIDATION** : Ne JAMAIS committer sans validation explicite de l'utilisateur
+- **TEST RÉEL OBLIGATOIRE** : Ne JAMAIS dire "testé" sans avoir exécuté le vrai script en conditions réelles
 - **LECTURE OBLIGATOIRE CURSORRULES** : TOUJOURS lire .cursorrules avant de faire quoi que ce soit
 - **LECTURE OBLIGATOIRE FIN DE SESSION** : TOUJOURS lire .cursorrules avant de rendre la main à l'utilisateur
 - **NE JAMAIS TUER UN PROCESSUS SANS MON ACCORD** : Ne jamais utiliser pkill, kill, ou arrêter des processus sans validation explicite

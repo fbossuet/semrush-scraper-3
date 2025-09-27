@@ -210,51 +210,7 @@ export class DataFormatter {
     }
   }
 
-  /**
-   * Formate l'AOV (Average Order Value) avec normalisation robuste
-   * @param {string} aovText - Texte brut (ex: "1.25", "25.50$", "AOV: $15.99")
-   * @returns {number|null} - Valeur numérique
-   */
-  static formatAOV(aovText) {
-    if (!aovText) return null;
-    
-    try {
-      console.log(`🔍 Formatage AOV: "${aovText}"`);
-      
-      // Nettoyer la valeur
-      let cleanValue = aovText.toString().trim();
-      
-      // Supprimer les préfixes de devise
-      cleanValue = cleanValue.replace(/^[\$€£¥]/, '');
-      
-      // Supprimer les suffixes
-      cleanValue = cleanValue.replace(/\s*(USD|EUR|GBP|CAD|AUD|per order|AOV).*$/i, '');
-      
-      // Supprimer les virgules et espaces
-      cleanValue = cleanValue.replace(/[, ]/g, '');
-      
-      // Convertir en nombre
-      const numericValue = parseFloat(cleanValue);
-      
-      if (isNaN(numericValue) || numericValue <= 0) {
-        console.log(`⚠️ Valeur AOV invalide: "${aovText}" -> "${cleanValue}" -> ${numericValue}`);
-        return null;
-      }
-      
-      // Validation: AOV raisonnable (entre 1$ et 10000$)
-      if (numericValue < 1 || numericValue > 10000) {
-        console.log(`⚠️ AOV hors plage raisonnable: ${numericValue}`);
-        return null;
-      }
-      
-      console.log(`✅ AOV formaté: "${aovText}" -> ${numericValue}`);
-      return numericValue;
-      
-    } catch (error) {
-      console.log(`❌ Erreur formatage AOV: ${error.message}`);
-      return null;
-    }
-  }
+  // SUPPRIMÉ: Méthode formatAOV() - Maintenant scrapé par Noxtools
 
   /**
    * Formate le nombre de produits

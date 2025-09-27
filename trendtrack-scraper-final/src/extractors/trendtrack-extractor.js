@@ -845,8 +845,7 @@ export class TrendTrackExtractor extends BaseExtractor {
         year_founded: null,
         creation_date: null,
         
-        // AOV (Average Order Value)
-        aov: await this.extractAOV(),
+        // SUPPRIMÉ: AOV (Average Order Value) - Maintenant scrapé par Noxtools
         
         // Trafic payant
         paid_search_traffic: await this.extractPaidSearchTraffic(),
@@ -1037,105 +1036,7 @@ export class TrendTrackExtractor extends BaseExtractor {
     }
   }
 
-  /**
-   * Extrait l'AOV (Average Order Value)
-   * @returns {Promise<number>} - AOV
-   */
-  async extractAOV() {
-    try {
-      console.log('🔍 Extraction AOV (V2 - calcul revenu/commandes puis fallback)...');
-
-      // 0) Calcul direct: AOV = revenue / orders
-      try {
-        const { revenue, orders } = await this.extractRevenueAndOrders();
-        if (typeof revenue === 'number' && revenue > 0 && typeof orders === 'number' && orders > 0) {
-          const computedAov = revenue / orders;
-          if (computedAov >= 1 && computedAov <= 10000) {
-            console.log(`✅ AOV calculé: ${computedAov.toFixed(2)} (revenue=${revenue}, orders=${orders})`);
-            return Number(computedAov.toFixed(2));
-          }
-        }
-      } catch (calcErr) {
-        console.log(`⚠️ Calcul AOV via revenu/commandes échoué: ${calcErr.message}`);
-      }
-      
-      // Sélecteurs multiples pour AOV (V3 - Optimisés pour TrendTrack)
-      const aovSelectors = [
-        // Sélecteur 1: Spécifiques à TrendTrack (structure réelle)
-        '[data-testid*="aov"]',
-        '[data-testid*="order-value"]',
-        // Sélecteur 2: Classes CSS spécifiques TrendTrack
-        '.metric-card [class*="aov"]',
-        '.metric-card [class*="order-value"]',
-        '.stats-grid [class*="aov"]',
-        // Sélecteur 3: Recherche dans les sections métriques
-        'section:has-text("Average Order Value") p',
-        'section:has-text("AOV") p',
-        'div:has-text("Order Value") p',
-        // Sélecteur 4: Recherche par texte "AOV" ou "Average Order Value"
-        'text=AOV',
-        'text=Average Order Value',
-        'text=Order Value',
-        // Sélecteur 5: Recherche par pattern de prix (plus spécifique)
-        'text=/\\$[0-9]+(?:\\.[0-9]{2})?/',
-        'text=/€[0-9]+(?:\\.[0-9]{2})?/',
-        'text=/£[0-9]+(?:\\.[0-9]{2})?/',
-        // Sélecteur 6: Fallback générique
-        '[class*="aov"]',
-        '[class*="order-value"]'
-      ];
-      
-      for (const selector of aovSelectors) {
-        try {
-          console.log(`🔍 Tentative AOV avec sélecteur: ${selector}`);
-      const element = await this.page.locator(selector).first();
-          
-      if (await element.count() > 0) {
-        const value = await element.textContent();
-            console.log(`📊 AOV trouvé: "${value}"`);
-            
-            // Parsing robuste de la valeur AOV
-            const parsedValue = DataFormatter.formatAOV(value);
-            if (parsedValue !== null) {
-              console.log(`✅ AOV extrait avec succès: ${parsedValue}`);
-              return parsedValue;
-            }
-          }
-        } catch (selectorError) {
-          console.log(`⚠️ Sélecteur AOV échoué: ${selector}`);
-          continue;
-        }
-      }
-      
-      // Fallback: Recherche dans tout le contenu de la page
-      console.log('🔍 Fallback: recherche AOV dans tout le contenu...');
-      const pageContent = await this.page.content();
-      const aovPatterns = [
-        /AOV[:\s]*\$?([0-9,]+\.?[0-9]*)/i,
-        /Average Order Value[:\s]*\$?([0-9,]+\.?[0-9]*)/i,
-        /Order Value[:\s]*\$?([0-9,]+\.?[0-9]*)/i,
-        /\$([0-9,]+\.?[0-9]*)\s*(?:AOV|per order)/i
-      ];
-      
-      for (const pattern of aovPatterns) {
-        const match = pageContent.match(pattern);
-        if (match && match[1]) {
-          const parsedValue = DataFormatter.formatAOV(match[1]);
-          if (parsedValue !== null) {
-            console.log(`✅ AOV extrait via fallback: ${parsedValue}`);
-            return parsedValue;
-          }
-        }
-      }
-      
-      console.log('⚠️ AOV non trouvé avec tous les sélecteurs');
-      return null;
-      
-    } catch (error) {
-      console.log(`❌ Erreur extraction AOV: ${error.message}`);
-      return null;
-    }
-  }
+  // SUPPRIMÉ: Méthode extractAOV() - Maintenant scrapé par Noxtools
 
   /**
    * Extrait les visites mensuelles depuis la page de détail (Phase 3)
@@ -1168,110 +1069,7 @@ export class TrendTrackExtractor extends BaseExtractor {
     }
   }
 
-  /**
-   * Extrait revenue et orders depuis la page détail (heuristiques, contenu)
-   */
-  async extractRevenueAndOrders() {
-    let revenue = null;
-    let orders = null;
-    try {
-      // 0) CIBLAGE PRÉCIS DU KPI "Revenu mensuel estimé" (ou EN: Estimated monthly revenue)
-      try {
-        const revenueCard = this.page.locator('div.rounded-xl', {
-          has: this.page.getByText(/Revenu mensuel estimé|Estimated monthly revenue/i)
-        }).first();
-        if (await revenueCard.count() > 0) {
-          const valueEl = revenueCard.locator('p.text-2xl.font-medium').first();
-          if (await valueEl.count() > 0) {
-            const raw = (await valueEl.textContent())?.trim() || '';
-            const range = this.parseRevenueRange(raw);
-            if (range && typeof range.avg === 'number' && range.avg > 0) {
-              revenue = range.avg;
-              console.log(`✅ Revenu KPI extrait: "${raw}" → avg=${revenue}`);
-            } else {
-              console.log(`⚠️ Plage de revenu non reconnue (KPI): "${raw}"`);
-            }
-          }
-        }
-      } catch (e) {
-        console.log(`⚠️ Erreur ciblage KPI Revenu: ${e.message}`);
-      }
-
-      // 0.b) Si pas trouvé via KPI, éviter le headline des visits (mauvais bloc)
-      // On ne lit PAS 'p.text-2xl.font-medium' globalement sans filtrer par label.
-
-      // 0) Sélecteur direct pour la plage de revenu (ex: "597.9K$ - 1.8M$")
-      try {
-        const revenueLocator = this.page.locator('p.text-2xl.font-medium').first();
-        if (await revenueLocator.count() > 0) {
-          const raw = (await revenueLocator.textContent()) || '';
-          const parsedRange = this.parseRevenueRange(raw);
-          if (parsedRange && typeof parsedRange.avg === 'number' && parsedRange.avg > 0) {
-            revenue = parsedRange.avg;
-            console.log(`✅ Revenu extrait via sélecteur p.text-2xl.font-medium: "${raw.trim()}" → avg=${revenue}`);
-          } else {
-            console.log(`⚠️ Plage de revenu non reconnue: "${raw.trim()}"`);
-          }
-        }
-      } catch (e) {
-        console.log(`⚠️ Erreur sélecteur revenu: ${e.message}`);
-      }
-
-      const html = await this.page.content();
-      // Revenue patterns (montants avec devise, suffixes K/M acceptés)
-      const revenuePatterns = [
-        /(Revenue|Sales|GMV)[^\n\r$£€]*([$€£]\s?[0-9,.]+[KM]?)/i,
-        /([$€£]\s?[0-9,.]+[KM]?).{0,20}(Revenue|Sales|GMV)/i
-      ];
-      for (const rp of revenuePatterns) {
-        const m = html.match(rp);
-        if (m) {
-          const raw = m[2] || m[1];
-          const parsed = this.parseCurrencyToNumber(raw);
-          if (parsed && parsed > 0) { revenue = parsed; break; }
-        }
-      }
-      // Orders patterns (entiers proches des libellés)
-      const ordersPatterns = [
-        /(Orders|Commandes|Purchases)[:\s]*([0-9,\.]+)/i,
-        /([0-9,\.]+)\s*(Orders|Commandes|Purchases)/i
-      ];
-      for (const op of ordersPatterns) {
-        const m = html.match(op);
-        if (m) {
-          const raw = m[2] || m[1];
-          const parsed = this.parseIntegerFromText(raw);
-          if (parsed && parsed > 0) { orders = parsed; break; }
-        }
-      }
-    } catch (e) {
-      console.log(`⚠️ Fallback contenu revenu/commandes échoué: ${e.message}`);
-    }
-
-    // Si manquant, courte tentative par sélecteurs texte
-    if (revenue === null) {
-      try {
-        const loc = this.page.locator('text=/Revenue|Sales|GMV/i').first();
-        if (await loc.count() > 0) {
-          const txt = await loc.textContent();
-          const parsed = this.parseCurrencyToNumber(txt || '');
-          if (parsed && parsed > 0) revenue = parsed;
-        }
-      } catch {}
-    }
-    if (orders === null) {
-      try {
-        const loc = this.page.locator('text=/Orders|Commandes|Purchases/i').first();
-        if (await loc.count() > 0) {
-          const txt = await loc.textContent();
-          const parsed = this.parseIntegerFromText(txt || '');
-          if (parsed && parsed > 0) orders = parsed;
-        }
-      } catch {}
-    }
-    console.log(`🔎 Revenue/Orders: revenue=${revenue}, orders=${orders}`);
-    return { revenue, orders };
-  }
+  // SUPPRIMÉ: Méthode extractRevenueAndOrders() - Maintenant scrapé par Noxtools
 
   /**
    * Parse une plage de revenu au format "597.9K$ - 1.8M$" ou un nombre simple et retourne {min, max, avg}
