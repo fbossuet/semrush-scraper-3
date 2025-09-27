@@ -1,0 +1,6 @@
+ANALYSE DES SHOPS SCRAPÉES AVEC SUCCÈS
+==================================================
+Timestamp: 2025-09-26 12:48:06
+
+RÉSULTATS GLOBAUX:
+  Total shops: 0

@@ -46,7 +46,7 @@ const MVP_CONFIG = {
   
   // Limites MVP
   maxShopsPerRun: 5000,            // Limite augmentée pour MVP
-  maxPagesPerRun: 200,             // 200 pages pour MVP
+  maxPagesPerRun: 2,               // 2 pages pour test
   batchSize: 10                    // 10 boutiques par lot
 };
 

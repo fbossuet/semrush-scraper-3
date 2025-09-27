@@ -88,10 +88,10 @@ class ShopRepository:
                 query = """
                 SELECT s.id, s.shop_url, s.shop_name, a.scraping_status
                 FROM shops s
-                JOIN analytics a ON s.id = a.shop_id
+                LEFT JOIN analytics a ON s.id = a.shop_id
                 WHERE s.scraping_status != 'failed'
                 AND s.details_scraping_status = 'details_extracted'
-                AND a.scraping_status IS NULL
+                AND (a.scraping_status IS NULL OR a.scraping_status = '')
                 ORDER BY s.id
                 LIMIT ? OFFSET ?
                 """

@@ -54,3 +54,5 @@ print(f"Paramètres: {list(signature.parameters.keys())}")
 
 
 
+
+

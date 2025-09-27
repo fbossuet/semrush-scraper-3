@@ -1,0 +1,705 @@
+--- metrics_extractor_working_version.py	2025-09-27 17:17:20.428429516 +0000
++++ scraper-noxtools-final/src/core/metrics_extractor.py	2025-09-27 17:01:12.822663339 +0000
+@@ -18,21 +18,23 @@
+ 
+ from .anti_detection import get_default_stealth_config, StealthConfig
+ from .playwright_manager import PlaywrightManager
++from core.server_manager import get_server_manager
+ from .session_manager import SessionManager
++from utils.url_params import build_date_range
+ 
+ logger = logging.getLogger(__name__)
+ 
+ @dataclass
+ class MetricsConfig:
+     """Configuration for metrics extraction from Noxtools."""
+-    # URL des métriques (hardcodée pour Alpha)
+-    metrics_url: str = "https://semrush1.semrush.pw/analytics/traffic/market-overview?searchType=domain&fid=1355702&dateRange=2025-07-01&country=us"
++    # URL de base des métriques (sans fid - sera construit dynamiquement)
++    base_metrics_url: str = "https://semrush1.semrush.pw/analytics/traffic/market-overview"
+     # URL dashboard (utilisée comme Referer pour réactiver la session)
+     dashboard_url: str = "https://noxtools.com/secure/member"
+-    # URL passerelle Noxtools → Semrush (réactive la session côté Semrush)
+-    bridge_url: str = "https://semrush.noxtools.com/server3.php"
+-    # URL overview pour CPC (Alpha hardcodée)
+-    overview_url: str = "https://semrush3.semrush.pw/analytics/overview/?searchType=domain&q=cakesbody.com&db=us&date=202507"
++    # URL passerelle Noxtools → Semrush (gérée dynamiquement par ServerManager)
++    bridge_url: str = ""  # Sera définie dynamiquement selon le serveur actuel
++    # URL overview pour CPC (sera construite dynamiquement avec le domaine)
++    overview_base_url: str = "https://semrush3.semrush.pw/analytics/overview/"
+     
+     # Sélecteurs des métriques (à enregistrer en BDD plus tard)
+     selectors: Dict[str, str] = None
+@@ -52,7 +54,9 @@
+                 'paid_search_traffic': '[data-ui-name="Flex"][role="gridcell"][name="entrancesSearchPaid"][tabindex="-1"][aria-colindex="11"]',
+                 'purchase_conversion': '[data-ui-name="Flex"][role="gridcell"][name="purchasesPerVisit"][tabindex="-1"][aria-colindex="21"]',
+                 'avg_visit_duration': '[data-ui-name="Flex"][role="gridcell"][name="avgVisitDuration"][tabindex="-1"][aria-colindex="27"]',
+-                'bounce_rate': '[data-ui-name="Flex"][role="gridcell"][name="bouncesPerVisit"][tabindex="-1"][aria-colindex="29"]'
++                'bounce_rate': '[data-ui-name="Flex"][role="gridcell"][name="bouncesPerVisit"][tabindex="-1"][aria-colindex="29"]',
++                # Sélecteur branded traffic (analytics domain overview page)
++                'branded_traffic': '[data-at="br-vs-nonbr-legend"] > [data-ui-name="Link.Text"]'
+             }
+ 
+ @dataclass
+@@ -64,6 +68,8 @@
+     purchase_conversion: Optional[str] = None
+     avg_visit_duration: Optional[str] = None
+     bounce_rate: Optional[str] = None
++    branded_traffic: Optional[str] = None
++    cpc: Optional[str] = None
+     
+     # Métadonnées
+     extraction_timestamp: Optional[str] = None
+@@ -80,6 +86,8 @@
+             'purchase_conversion': self.purchase_conversion,
+             'avg_visit_duration': self.avg_visit_duration,
+             'bounce_rate': self.bounce_rate,
++            'branded_traffic': self.branded_traffic,
++            'cpc': self.cpc,
+             'extraction_timestamp': self.extraction_timestamp,
+             'url': self.url,
+             'success': self.success,
+@@ -92,25 +100,58 @@
+     def __init__(self, config: Optional[MetricsConfig] = None, stealth_config: Optional[StealthConfig] = None):
+         self.config = config or MetricsConfig()
+         self.stealth_config = stealth_config or get_default_stealth_config()
++        self.server_manager = get_server_manager()
++    
++    def _extract_domain_from_url(self, shop_url: str) -> str:
++        """Extrait le domaine d'une URL de shop."""
++        try:
++            from urllib.parse import urlparse
++            parsed = urlparse(shop_url)
++            domain = parsed.netloc
++            # Enlever www. si présent
++            if domain.startswith('www.'):
++                domain = domain[4:]
++            return domain
++        except Exception as e:
++            logger.warning(f"⚠️ Error extracting domain from {shop_url}: {e}")
++            return shop_url  # Fallback: utiliser l'URL complète
++    
++    def _build_overview_url(self, domain: str) -> str:
++        """Construit l'URL overview avec le domaine et la date calculée."""
++        date_range = build_date_range()
++        # Format de date pour l'URL overview (YYYYMM)
++        date_param = date_range.replace('-', '')[:6]  # 2025-07-15 -> 202507
++        
++        params = {
++            'searchType': 'domain',
++            'q': domain,
++            'db': 'us',
++            'date': date_param
++        }
++        
++        query_string = urlencode(params)
++        # Normaliser l'URL avec le serveur actuel
++        base_url = self.server_manager.normalize_url_to_current_server(self.config.overview_base_url)
++        return f"{base_url}?{query_string}"
+         
+     async def extract_metrics(self, page: Page, playwright_manager: PlaywrightManager, 
+-                            session_manager: SessionManager) -> ExtractedMetrics:
++                            session_manager: SessionManager, shop_url: str = None) -> ExtractedMetrics:
+         """Extract metrics from the Noxtools analytics page.
+         
+         Args:
+             page: Playwright page instance
+             playwright_manager: PlaywrightManager instance
+             session_manager: SessionManager instance
++            shop_url: Shop URL to extract domain for CPC extraction
+             
+         Returns:
+             ExtractedMetrics: Extracted metrics data
+         """
+         metrics = ExtractedMetrics()
+-        metrics.url = self.config.metrics_url
+         
+         try:
+             logger.info("📊 Starting metrics extraction from Noxtools...")
+-            logger.info(f"📍 Metrics URL: {self.config.metrics_url}")
++            logger.info(f"📍 Base metrics URL: {self.config.base_metrics_url}")
+             
+             # Navigate to metrics page (via dashboard referer, capture network)
+             navigation_success = await self._navigate_to_metrics_page(
+@@ -122,12 +163,28 @@
+                 logger.error("❌ Failed to navigate to metrics page")
+                 return metrics
+                 
+-            # Wait for SAP React to load
+-            await asyncio.sleep(self.config.react_load_delay_ms / 1000.0)
++            # Check for session expired before waiting
++            page_content = await page.content()
++            if "session expired" in page_content.lower():
++                logger.warning("⚠️ Session expired detected on metrics page")
++                metrics.error_message = "Session expired detected on metrics page"
++                logger.error("❌ Failed to extract metrics from page")
++                return metrics
++            
++            # Wait for SAP React to load (reduced delay)
++            await asyncio.sleep(3.0)  # Reduced from 5s to 3s
+             logger.info("⏳ Waiting for SAP React to load...")
+             
+-            # Wait for page to stabilize
+-            await asyncio.sleep(self.config.stabilization_delay_ms / 1000.0)
++            # Check again for session expired after waiting
++            page_content = await page.content()
++            if "session expired" in page_content.lower():
++                logger.warning("⚠️ Session expired detected after waiting")
++                metrics.error_message = "Session expired detected after waiting"
++                logger.error("❌ Failed to extract metrics from page")
++                return metrics
++            
++            # Wait for page to stabilize (reduced delay)
++            await asyncio.sleep(2.0)  # Reduced from 3s to 2s
+             
+             # Try network capture assisted extraction first
+             network_data = await self._capture_network_metrics(page)
+@@ -145,6 +202,19 @@
+             if extraction_success:
+                 metrics.success = True
+                 logger.info("✅ Metrics extraction successful")
++                
++                # Extract CPC using the domain from shop_url (if provided)
++                cpc_data = None
++                if shop_url:
++                    domain = self._extract_domain_from_url(shop_url)
++                    cpc_data = await self.extract_cpc_best_ratio(page, playwright_manager, session_manager, domain)
++                
++                if cpc_data and cpc_data.get('cpc'):
++                    metrics.cpc = str(cpc_data['cpc'])
++                    logger.info(f"✅ CPC extracted: {metrics.cpc}")
++                else:
++                    logger.warning("⚠️ CPC extraction failed or no data found")
++                
+                 self._log_extracted_metrics(metrics)
+             else:
+                 metrics.error_message = "Failed to extract metrics from page"
+@@ -157,7 +227,7 @@
+         return metrics
+ 
+     async def extract_cpc_best_ratio(self, page: Page, playwright_manager: PlaywrightManager,
+-                                     session_manager: SessionManager) -> Optional[Dict[str, Any]]:
++                                     session_manager: SessionManager, domain: str) -> Optional[Dict[str, Any]]:
+         """Extract CPC based on max(volume/traffic) from overview grid.
+         Returns dict: { keyword, ratio, cpc, cpcRaw }
+         """
+@@ -170,23 +240,27 @@
+             except Exception as e:
+                 logger.warning(f"⚠️ Unable to visit dashboard before CPC extraction: {e}")
+ 
+-            # Step 2: Hit the Noxtools → Semrush bridge (server3 only)
++            # Step 2: Hit the Noxtools → Semrush bridge (get current bridge URL)
+             try:
+-                logger.info(f"🌉 Visiting bridge URL for CPC: {self.config.bridge_url}")
+-                await page.goto(self.config.bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
++                current_bridge_url = self.server_manager.get_current_bridge_url()
++                logger.info(f"🌉 Visiting bridge URL for CPC: {current_bridge_url}")
++                await page.goto(current_bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                 await page.wait_for_load_state('domcontentloaded', timeout=10000)
+                 await asyncio.sleep(1.0)
+                 logger.info("✅ Bridge URL visited successfully for CPC")
+             except Exception as e:
+                 logger.warning(f"⚠️ Bridge URL visit failed for CPC: {e}")
+ 
+-            # Step 3: Navigate to overview URL for CPC extraction
++            # Step 3: Build and navigate to overview URL with domain
++            overview_url = self._build_overview_url(domain)
++            logger.info(f"🔗 Navigating to overview URL: {overview_url}")
++            
+             # Use the same approach as _navigate_to_metrics_page for consistency
+             navigation_success = False
+             try:
+                 # First try session manager for cross-domain navigation
+                 navigation_success = await session_manager.navigate_cross_domain(
+-                    page, playwright_manager, self.config.overview_url
++                    page, playwright_manager, overview_url
+                 )
+             except Exception as e:
+                 logger.warning(f"⚠️ Cross-domain navigation error for CPC: {e}")
+@@ -194,7 +268,7 @@
+             # If session manager failed, try direct navigation with referer
+             if not navigation_success:
+                 try:
+-                    await page.goto(self.config.overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
++                    await page.goto(overview_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+                     navigation_success = True
+                     logger.info("✅ Direct navigation to CPC page with referer succeeded")
+                 except Exception as e:
+@@ -224,7 +298,7 @@
+                 logger.warning(f"⚠️ Network idle wait failed for CPC page: {e}")
+             await asyncio.sleep(2.0)
+ 
+-            # Step 2b: Wait grid presence
++            # Step 2b: Wait grid presence and debug page structure
+             try:
+                 await page.wait_for_selector('div[data-ui-name="Body.Row"]', timeout=10000)
+                 logger.info("✅ Found Body.Row elements for CPC extraction")
+@@ -235,6 +309,38 @@
+                     logger.info("✅ Found volume cells for CPC extraction")
+                 except Exception as e2:
+                     logger.warning(f"⚠️ Volume cells not found either: {e2}")
++                    
++                    # 🔍 DEBUG: Analyze page structure for CPC
++                    try:
++                        logger.info("🔍 [DEBUG] Analyzing CPC page structure...")
++                        page_content = await page.content()
++                        logger.info(f"🔍 [DEBUG] CPC page content length: {len(page_content)}")
++                        
++                        # Look for any elements with data-ui-name
++                        elements_with_data_ui = await page.query_selector_all('[data-ui-name]')
++                        logger.info(f"🔍 [DEBUG] Found {len(elements_with_data_ui)} elements with data-ui-name on CPC page")
++                        
++                        # Look for any elements with name attribute
++                        name_elements = await page.query_selector_all('[name]')
++                        logger.info(f"🔍 [DEBUG] Found {len(name_elements)} elements with name attribute on CPC page")
++                        
++                        # Look for specific CPC-related elements
++                        cpc_elements = await page.query_selector_all('[name*="cpc"], [name*="volume"], [name*="phrase"]')
++                        logger.info(f"🔍 [DEBUG] Found {len(cpc_elements)} CPC-related elements")
++                        
++                        # Show first few name attributes for debugging
++                        for i, element in enumerate(name_elements[:10]):
++                            name_attr = await element.get_attribute('name')
++                            if name_attr and any(keyword in name_attr.lower() for keyword in ['cpc', 'volume', 'phrase', 'traffic']):
++                                logger.info(f"🔍 [DEBUG] CPC Element {i+1} name: {name_attr}")
++                                try:
++                                    text_content = await element.text_content()
++                                    logger.info(f"🔍 [DEBUG] Text content: '{text_content}'")
++                                except:
++                                    pass
++                                    
++                    except Exception as debug_e:
++                        logger.warning(f"⚠️ CPC debug failed: {debug_e}")
+ 
+             # Helper: scroll to force virtualization to render rows
+             async def _scroll_grid():
+@@ -248,13 +354,13 @@
+                           return true;
+                         }
+                     """)
+-                    logger.debug("✅ Grid scrolled using container method")
++                    logger.info("✅ Grid scrolled using container method")
+                 except Exception as e:
+-                    logger.debug(f"⚠️ Container scroll failed, using window scroll: {e}")
++                    logger.warning(f"⚠️ Container scroll failed, using window scroll: {e}")
+                     for _ in range(6):
+                         await page.evaluate('window.scrollBy(0, Math.max(300, window.innerHeight/2))')
+                         await asyncio.sleep(0.25)
+-                    logger.debug("✅ Grid scrolled using window method")
++                    logger.info("✅ Grid scrolled using window method")
+ 
+             # Step 3: Evaluate table-like grid with retries
+             eval_script = r"""
+@@ -291,7 +397,7 @@
+             for attempt in range(3):
+                 try:
+                     best = await page.evaluate(eval_script)
+-                    logger.debug(f"CPC evaluation attempt {attempt + 1}: {best}")
++                    logger.info(f"CPC evaluation attempt {attempt + 1}: {best}")
+                 except Exception as e:
+                     logger.warning(f"⚠️ CPC evaluation attempt {attempt + 1} failed: {e}")
+                     best = None
+@@ -304,6 +410,17 @@
+             
+             if not best or best.get('cpc') is None:
+                 logger.warning("⚠️ No CPC data found after all attempts")
++            
++            # 🔄 IMPORTANT: Return to Market-Overview page after CPC extraction
++            # This ensures the next domain can be processed correctly
++            try:
++                logger.info("🔄 Returning to Market-Overview page after CPC extraction...")
++                market_overview_url = self.server_manager.normalize_url_to_current_server(self.config.base_metrics_url)
++                await page.goto(market_overview_url, timeout=self.config.timeout_ms)
++                logger.info(f"✅ Returned to Market-Overview: {market_overview_url}")
++            except Exception as e:
++                logger.warning(f"⚠️ Failed to return to Market-Overview: {e}")
++            
+             return best
+         except Exception as e:
+             logger.error(f"❌ CPC extraction error: {e}")
+@@ -311,77 +428,161 @@
+     
+     async def _navigate_to_metrics_page(self, page: Page, playwright_manager: PlaywrightManager,
+                                       session_manager: SessionManager) -> bool:
+-        """Navigate to the metrics page."""
+-        try:
+-            logger.info("🌐 Navigating to metrics page...")
++        """Navigate to the metrics page with automatic server fallback."""
++        max_server_attempts = len(self.server_manager.get_available_servers())
++        
++        for attempt in range(max_server_attempts):
++            current_server = self.server_manager.get_current_server_name()
++            logger.info(f"🔄 Tentative {attempt + 1}/{max_server_attempts} avec serveur: {current_server}")
+             
+-            # Step 1: Ensure dashboard is visited to refresh session (referer source)
+             try:
+-                await playwright_manager.navigate_with_retry(page, self.config.dashboard_url)
+-                await asyncio.sleep(1.0)
+-            except Exception as e:
+-                logger.warning(f"⚠️ Unable to visit dashboard before metrics: {e}")
++                logger.info("🌐 Navigating to metrics page...")
++                
++                # Step 1: Ensure dashboard is visited to refresh session (referer source)
++                try:
++                    await playwright_manager.navigate_with_retry(page, self.config.dashboard_url)
++                    await asyncio.sleep(1.0)
++                except Exception as e:
++                    logger.warning(f"⚠️ Unable to visit dashboard before metrics: {e}")
+ 
+-            # Step 2: Hit the Noxtools → Semrush bridge to refresh/carry session/token
+-            try:
+-                logger.info(f"🌉 Visiting bridge URL: {self.config.bridge_url}")
+-                await page.goto(self.config.bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+-                await page.wait_for_load_state('domcontentloaded', timeout=10000)
+-                await asyncio.sleep(1.0)
+-                logger.info("✅ Bridge URL visited successfully")
++                # Step 2: Test server availability and use bridge only if needed
++                try:
++                    # Get current server bridge URL from ServerManager
++                    current_bridge_url = self.server_manager.get_current_bridge_url()
++                    logger.info(f"🌉 Current server bridge: {current_bridge_url}")
++                    
++                    # Test if we can access the target server directly first
++                    target_url = self.config.base_metrics_url
++                    logger.info(f"🧪 Testing direct access to: {target_url}")
++                    
++                    # Try direct navigation first (without bridge)
++                    try:
++                        await page.goto(target_url, referer=self.config.dashboard_url, timeout=5000)
++                        await page.wait_for_load_state('domcontentloaded', timeout=5000)
++                        
++                        # Check if we got a valid response (not session expired immediately)
++                        page_content = await page.content()
++                        if "session expired" not in page_content.lower() and len(page_content) > 1000:
++                            logger.info("✅ Direct server access successful, no bridge needed")
++                            return True
++                        else:
++                            logger.info("⚠️ Direct access failed, will use bridge")
++                    except Exception as e:
++                        logger.info(f"⚠️ Direct access failed: {e}, will use bridge")
++                    
++                    # If direct access failed, use bridge
++                    logger.info(f"🌉 Using bridge URL: {current_bridge_url}")
++                    await page.goto(current_bridge_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
++                    await page.wait_for_load_state('domcontentloaded', timeout=10000)
++                    await asyncio.sleep(1.0)
++                    logger.info("✅ Bridge URL visited successfully")
++                    
++                    # 🔄 IMPORTANT: After bridge, navigate explicitly to Market-Overview
++                    # The bridge redirects to Overview, but we need Market-Overview
++                    try:
++                        logger.info("🔄 Navigating to Market-Overview after bridge...")
++                        await page.goto(target_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
++                        await page.wait_for_load_state('domcontentloaded', timeout=10000)
++                        logger.info(f"✅ Successfully navigated to Market-Overview: {target_url}")
++                    except Exception as e:
++                        logger.warning(f"⚠️ Failed to navigate to Market-Overview after bridge: {e}")
++                    
++                    # If we reach here, navigation was successful
++                    return True
++                    
++                except Exception as e:
++                    logger.warning(f"⚠️ Bridge URL visit failed on {current_server}: {e}")
++                    # Mark server as failed and switch to next server immediately
++                    self.server_manager.mark_server_failed(f"Bridge access failed: {e}", switch_immediately=True)
++                    
++                    # Check if we can try next server
++                    if attempt < max_server_attempts - 1:
++                        logger.info(f"🔄 Tentative avec le serveur suivant...")
++                        continue
++                    else:
++                        logger.error("❌ Tous les serveurs ont échoué")
++                        return False
++                        
+             except Exception as e:
+-                logger.warning(f"⚠️ Bridge URL visit failed: {e}")
++                logger.error(f"❌ Erreur lors de la tentative {attempt + 1}: {e}")
++                # Mark server as failed and switch to next server immediately
++                self.server_manager.mark_server_failed(f"Navigation error: {e}", switch_immediately=True)
++                
++                # Check if we can try next server
++                if attempt < max_server_attempts - 1:
++                    logger.info(f"🔄 Tentative avec le serveur suivant...")
++                    continue
++                else:
++                    logger.error("❌ Tous les serveurs ont échoué")
++                    return False
+ 
+-            # Step 3: Prefer clicking the actual dashboard link to Semrush (carries auth context)
+-            try:
+-                # Try to locate the semrush link on dashboard
+-                link_selector = 'a[href*="semrush1.semrush.pw/analytics/traffic/market-overview"], a[href*="/analytics/traffic/market-overview"]'
+-                link = await page.query_selector(link_selector)
+-                if link:
+-                    href = await link.get_attribute('href')
+-                    logger.info(f"🔗 Found metrics link on dashboard: {href}")
+-                    try:
+-                        await link.click()
++        # Step 3: Prefer clicking the actual dashboard link to Semrush (carries auth context)
++        try:
++            # Try to locate the semrush link on dashboard
++            link_selector = 'a[href*="semrush1.semrush.pw/analytics/traffic/market-overview"], a[href*="/analytics/traffic/market-overview"]'
++            link = await page.query_selector(link_selector)
++            if link:
++                href = await link.get_attribute('href')
++                logger.info(f"🔗 Found metrics link on dashboard: {href}")
++                try:
++                    await link.click()
++                    await page.wait_for_load_state('domcontentloaded', timeout=self.config.timeout_ms)
++                    logger.info("✅ Clicked dashboard link to metrics page")
++                    return True
++                except Exception as e:
++                    logger.warning(f"⚠️ Click navigation failed, trying location change: {e}")
++                    if href:
++                        await page.evaluate("url => window.location.href = url", href)
+                         await page.wait_for_load_state('domcontentloaded', timeout=self.config.timeout_ms)
+-                        logger.info("✅ Clicked dashboard link to metrics page")
++                        logger.info("✅ Navigated via window.location to metrics page")
+                         return True
+-                    except Exception as e:
+-                        logger.warning(f"⚠️ Click navigation failed, trying location change: {e}")
+-                        if href:
+-                            await page.evaluate("url => window.location.href = url", href)
+-                            await page.wait_for_load_state('domcontentloaded', timeout=self.config.timeout_ms)
+-                            logger.info("✅ Navigated via window.location to metrics page")
+-                            return True
+-            except Exception as e:
+-                logger.debug(f"Dashboard link navigation attempt failed: {e}")
++        except Exception as e:
++            logger.warning(f"Dashboard link navigation attempt failed: {e}")
+ 
+-            # Step 4: Use session manager for cross-domain navigation with referer
+-            navigation_success = False
++        # Step 4: Navigate to target URL with server fallback
++        navigation_success = False
++        max_retries = 3
++        
++        for attempt in range(max_retries):
+             try:
+-                # First jump to same domain context if needed
++                # Get current server URL (may have changed due to fallback)
++                current_target_url = self.server_manager.normalize_url_to_current_server(self.config.base_metrics_url)
++                logger.info(f"🎯 Attempt {attempt + 1}: Navigating to {current_target_url}")
++                
++                # Use session manager for cross-domain navigation
+                 navigation_success = await session_manager.navigate_cross_domain(
+-                    page, playwright_manager, self.config.metrics_url
++                    page, playwright_manager, current_target_url
+                 )
++                
++                if navigation_success:
++                    logger.info(f"✅ Navigation successful on attempt {attempt + 1}")
++                    break
++                else:
++                    logger.warning(f"⚠️ Navigation failed on attempt {attempt + 1}")
++                    # Mark current server as failed and try next
++                    self.server_manager.mark_server_failed("Navigation failed")
++                        
+             except Exception as e:
+-                logger.warning(f"⚠️ Cross-domain navigation error: {e}")
+-
+-            # If already on target domain, enforce referer on direct goto
+-            try:
+-                await page.goto(self.config.metrics_url, referer=self.config.dashboard_url, timeout=self.config.timeout_ms)
+-                navigation_success = True
+-            except Exception as e:
+-                logger.warning(f"⚠️ Direct navigation with referer failed: {e}")
+-            
+-            if navigation_success:
+-                logger.info("✅ Successfully navigated to metrics page")
+-                return True
++                logger.warning(f"⚠️ Navigation error on attempt {attempt + 1}: {e}")
++                self.server_manager.mark_server_failed(f"Navigation error: {e}")
++        
++        if not navigation_success:
++            logger.error("❌ All navigation attempts failed")
++            return False
++        
++        # Check for session expired after navigation
++        page_content = await page.content()
++        if "session expired" in page_content.lower():
++            logger.warning("⚠️ Session expired detected after navigation")
++            # Try session refresh
++            if await session_manager.refresh_session_if_expired(page, playwright_manager, self.config.base_metrics_url, self.server_manager):
++                logger.info("✅ Session refreshed successfully")
+             else:
+-                logger.error("❌ Failed to navigate to metrics page")
++                logger.error("❌ Session refresh failed")
+                 return False
+-                
+-        except Exception as e:
+-            logger.error(f"❌ Navigation to metrics page error: {e}")
+-            return False
++        
++        logger.info("✅ Successfully navigated to metrics page")
++        return True
+     
+     async def _extract_metrics_from_page(self, page: Page, metrics: ExtractedMetrics) -> bool:
+         """Extract metrics from the current page."""
+@@ -393,6 +594,52 @@
+             if 'analytics/traffic/market-overview' not in current_url:
+                 logger.warning(f"⚠️ Not on metrics page: {current_url}")
+                 return False
++            
++            # 🔍 DEBUG: Capture page content to understand structure
++            try:
++                page_content = await page.content()
++                logger.info(f"🔍 [DEBUG] Page title: {await page.title()}")
++                logger.info(f"🔍 [DEBUG] Page URL: {current_url}")
++                logger.info(f"🔍 [DEBUG] Page content length: {len(page_content)}")
++                
++                # Look for any elements with data-ui-name
++                elements_with_data_ui = await page.query_selector_all('[data-ui-name]')
++                logger.info(f"🔍 [DEBUG] Found {len(elements_with_data_ui)} elements with data-ui-name")
++                
++                # Look for any gridcell elements
++                gridcell_elements = await page.query_selector_all('[role="gridcell"]')
++                logger.info(f"🔍 [DEBUG] Found {len(gridcell_elements)} gridcell elements")
++                
++                # Look for any elements with name attribute
++                name_elements = await page.query_selector_all('[name]')
++                logger.info(f"🔍 [DEBUG] Found {len(name_elements)} elements with name attribute")
++                
++                if len(name_elements) > 0:
++                    # Show first few name attributes for debugging
++                    for i, element in enumerate(name_elements[:5]):
++                        name_attr = await element.get_attribute('name')
++                        logger.info(f"🔍 [DEBUG] Element {i+1} name: {name_attr}")
++                
++                # Look for specific data-ui-name values that might contain metrics
++                if len(elements_with_data_ui) > 0:
++                    logger.info(f"🔍 [DEBUG] Analyzing data-ui-name elements...")
++                    for i, element in enumerate(elements_with_data_ui[:10]):
++                        data_ui_name = await element.get_attribute('data-ui-name')
++                        role = await element.get_attribute('role')
++                        name_attr = await element.get_attribute('name')
++                        logger.info(f"🔍 [DEBUG] Element {i+1}: data-ui-name='{data_ui_name}', role='{role}', name='{name_attr}'")
++                        
++                        # Look for elements that might contain metrics data
++                        if name_attr and any(metric in name_attr.lower() for metric in ['entrances', 'visits', 'traffic', 'conversion', 'duration', 'bounce']):
++                            logger.info(f"🔍 [DEBUG] FOUND POTENTIAL METRIC ELEMENT: {name_attr}")
++                            try:
++                                text_content = await element.text_content()
++                                logger.info(f"🔍 [DEBUG] Text content: '{text_content}'")
++                            except:
++                                pass
++                        
++            except Exception as e:
++                logger.warning(f"⚠️ Debug capture failed: {e}")
+                 
+             # Check for session expired message
+             try:
+@@ -402,7 +649,7 @@
+                     metrics.error_message = "Session expired on metrics page"
+                     return False
+             except Exception as e:
+-                logger.debug(f"Content check error: {e}")
++                logger.warning(f"Content check error: {e}")
+                 
+             # Wait for React to fully load
+             try:
+@@ -593,10 +840,10 @@
+                 if element:
+                     text = await read_element_text(element)
+                     if text:
+-                        logger.debug(f"✅ Extracted {metric_name} (direct): {text}")
++                        logger.info(f"✅ Extracted {metric_name} (direct): {text}")
+                         return text
+             except Exception as e:
+-                logger.debug(f"Direct selector failed for {metric_name}: {e}")
++                logger.warning(f"Direct selector failed for {metric_name}: {e}")
+ 
+             # 1b) Relaxed variants
+             for sel in relaxed_variants:
+@@ -605,10 +852,10 @@
+                     if element:
+                         text = await read_element_text(element)
+                         if text:
+-                            logger.debug(f"✅ Extracted {metric_name} (relaxed): {text}")
++                            logger.info(f"✅ Extracted {metric_name} (relaxed): {text}")
+                             return text
+                 except Exception as e:
+-                    logger.debug(f"Relaxed selector failed for {metric_name}: {e}")
++                    logger.warning(f"Relaxed selector failed for {metric_name}: {e}")
+ 
+             # 2) Attribute selector [name="..."]
+             try:
+@@ -619,10 +866,10 @@
+                     if element:
+                         text = await read_element_text(element)
+                         if text:
+-                            logger.debug(f"✅ Extracted {metric_name} (attr): {text}")
++                            logger.info(f"✅ Extracted {metric_name} (attr): {text}")
+                             return text
+             except Exception as e:
+-                logger.debug(f"Attribute selector failed for {metric_name}: {e}")
++                logger.warning(f"Attribute selector failed for {metric_name}: {e}")
+ 
+             # 3) Input value
+             try:
+@@ -633,10 +880,10 @@
+                     if element:
+                         input_value = await element.input_value()
+                         if input_value and input_value.strip():
+-                            logger.debug(f"✅ Extracted {metric_name} (input): {input_value.strip()}")
++                            logger.info(f"✅ Extracted {metric_name} (input): {input_value.strip()}")
+                             return input_value.strip()
+             except Exception as e:
+-                logger.debug(f"Input selector failed for {metric_name}: {e}")
++                logger.warning(f"Input selector failed for {metric_name}: {e}")
+ 
+             # 4) Span inside named container
+             try:
+@@ -647,16 +894,16 @@
+                     if element:
+                         text_content = await element.text_content()
+                         if text_content and text_content.strip():
+-                            logger.debug(f"✅ Extracted {metric_name} (span): {text_content.strip()}")
++                            logger.info(f"✅ Extracted {metric_name} (span): {text_content.strip()}")
+                             return text_content.strip()
+             except Exception as e:
+-                logger.debug(f"Span selector failed for {metric_name}: {e}")
++                logger.warning(f"Span selector failed for {metric_name}: {e}")
+ 
+             logger.warning(f"⚠️ {metric_name} not found with any approach (selector: {selector})")
+             return None
+ 
+         except Exception as e:
+-            logger.debug(f"⚠️ Error extracting {metric_name}: {e}")
++            logger.error(f"⚠️ Error extracting {metric_name}: {e}")
+             return None
+     
+     def _log_extracted_metrics(self, metrics: ExtractedMetrics):
+@@ -677,7 +924,7 @@
+         logger.info("=" * 50)
+         logger.info(f"  Success: {metrics.success}")
+         if metrics.error_message:
+-            logger.info(f"  Error: {metrics.error_message}")
++            logger.error(f"  Error: {metrics.error_message}")
+             
+     async def get_metrics_info(self, page: Page) -> Dict[str, Any]:
+         """Get comprehensive metrics extraction information."""
+@@ -687,7 +934,7 @@
+             query_params = parse_qs(parsed_url.query)
+             
+             return {
+-                'metrics_url': self.config.metrics_url,
++                'metrics_url': self.config.base_metrics_url,
+                 'current_url': current_url,
+                 'url_valid': 'analytics/traffic/market-overview' in current_url,
+                 'query_parameters': {
+@@ -711,7 +958,7 @@
+     
+     def get_metrics_url(self) -> str:
+         """Get the metrics URL that will be navigated to."""
+-        return self.config.metrics_url
++        return self.config.base_metrics_url
+ 
+ # Convenience function for metrics extraction
+ async def extract_noxtools_metrics(page: Page, playwright_manager: PlaywrightManager,
+@@ -720,3 +967,5 @@
+     """Quick metrics extraction function."""
+     extractor = MetricsExtractor(config)
+     return await extractor.extract_metrics(page, playwright_manager, session_manager)
++
++

@@ -1891,46 +1891,16 @@ export class TrendTrackExtractor extends BaseExtractor {
     console.log('🌍 Extraction des données géographiques via scraping DOM...');
     
     try {
-      // ⚡ STRATÉGIE ASYNCHRONE REACT - Attendre le chargement complet
-      console.log('⚡ Attente du chargement asynchrone React...');
-      
-      // 1. Attendre que la page soit stable
-      await this.page.waitForTimeout(3000);
-      
-      // 2. Attendre les requêtes réseau
-      await this.page.waitForLoadState('networkidle');
-      
-      // 3. Attendre que React soit prêt
-      try {
-        await this.page.waitForFunction(() => {
-          return document.readyState === 'complete' && 
-                 (window.React || window.__REACT_DEVTOOLS_GLOBAL_HOOK__ || 
-                  document.querySelector('[data-reactroot], #root, #__next'));
-        }, { timeout: 10000 });
-        console.log('✅ React prêt');
-      } catch (error) {
-        console.log('⚠️ React non détecté, continuation...');
-      }
-      
-      // 🔄 STRATÉGIE DE RETRY avec différents sélecteurs
+      // 🔄 STRATÉGIE OPTIMISÉE - Extraction directe sans attente React
       let geoData = null;
       const selectors = [
-        '.flex.gap-2.w-full.items-center',
-        '[class*="flex"][class*="gap"][class*="items-center"]',
-        'img[alt*="US"], img[alt*="GB"], img[alt*="CA"]',
-        '[class*="geo"], [class*="country"], [class*="market"]',
-        'div[class*="traffic"], div[class*="visits"]'
+        '.flex.gap-2.w-full.items-center',  // Principal (75% succès)
+        'img[alt*="US"], img[alt*="GB"], img[alt*="CA"]'  // Fallback rapide
       ];
       
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        console.log(`🔄 Tentative ${attempt}/3 d'extraction géo...`);
-        
-        // Attendre un peu plus entre les tentatives
-        if (attempt > 1) {
-          await this.page.waitForTimeout(2000 * attempt);
-        }
-        
-        geoData = await this.page.evaluate((selectors) => {
+      console.log('🔄 Tentative 1/1 d\'extraction géo...');
+      
+      geoData = await this.page.evaluate((selectors) => {
         const results = {
           market_us: 0,
           market_uk: 0,
@@ -1941,85 +1911,76 @@ export class TrendTrackExtractor extends BaseExtractor {
           countries: []
         };
         
-          // Tester chaque sélecteur
-          for (const selector of selectors) {
-            const elements = document.querySelectorAll(selector);
-            console.log(`[PAGE] Sélecteur "${selector}": ${elements.length} éléments`);
-            
-            if (elements.length > 0) {
-              // Traiter les éléments trouvés
-              elements.forEach((el, index) => {
-                try {
-                  const img = el.querySelector('img[alt]');
-                  const country = img?.getAttribute('alt');
+        // Tester chaque sélecteur
+        for (const selector of selectors) {
+          const elements = document.querySelectorAll(selector);
+          console.log(`[PAGE] Sélecteur "${selector}": ${elements.length} éléments`);
+          
+          if (elements.length > 0) {
+            // Traiter les éléments trouvés
+            elements.forEach((el, index) => {
+              try {
+                const img = el.querySelector('img[alt]');
+                const country = img?.getAttribute('alt');
+                
+                if (country) {
+                  // Chercher le pourcentage avec différents sélecteurs
+                  const percentageSelectors = [
+                    '.flex.justify-between p:last-child',
+                    '.flex.items-center.gap-1 p:last-child',
+                    'p:last-child',
+                    'div:last-child p',
+                    'span:last-child'
+                  ];
                   
-                  if (country) {
-                    // Chercher le pourcentage avec différents sélecteurs
-                    const percentageSelectors = [
-                      '.flex.justify-between p:last-child',
-                      '.flex.items-center.gap-1 p:last-child',
-                      'p:last-child',
-                      'div:last-child p',
-                      'span:last-child'
-                    ];
-                    
-                    let percentage = null;
-                    for (const pctSelector of percentageSelectors) {
-                      const pctEl = el.querySelector(pctSelector);
-                      if (pctEl && pctEl.textContent.includes('%')) {
-                        percentage = pctEl.textContent;
-                        break;
-                      }
-                    }
-                    
-                    if (percentage) {
-                      const countryCode = country.toLowerCase().trim();
-                      const percentageText = percentage.replace('%', '').trim();
-                      const percentageValue = parseFloat(percentageText) / 100;
-                      
-                      console.log(`[PAGE] Pays trouvé: ${countryCode} → ${percentageText}%`);
-                      
-                      switch(countryCode) {
-                        case 'us': case 'united states': results.market_us = percentageValue; break;
-                        case 'gb': case 'uk': case 'united kingdom': results.market_uk = percentageValue; break;
-                        case 'de': case 'germany': case 'deutschland': results.market_de = percentageValue; break;
-                        case 'ca': case 'canada': results.market_ca = percentageValue; break;
-                        case 'au': case 'australia': results.market_au = percentageValue; break;
-                        case 'fr': case 'france': results.market_fr = percentageValue; break;
-                      }
-                      
-                      results.countries.push({
-                        countryCode: countryCode.toUpperCase(),
-                        countryName: country,
-                        visitsShare: percentageValue,
-                        visitsSharePercent: parseFloat(percentageText)
-                      });
+                  let percentage = null;
+                  for (const pctSelector of percentageSelectors) {
+                    const pctEl = el.querySelector(pctSelector);
+                    if (pctEl && pctEl.textContent.includes('%')) {
+                      percentage = pctEl.textContent;
+                      break;
                     }
                   }
-                } catch (e) {
-                  console.log(`[PAGE] Erreur parsing élément ${index}:`, e.message);
+                  
+                  if (percentage) {
+                    const countryCode = country.toLowerCase().trim();
+                    const percentageText = percentage.replace('%', '').trim();
+                    const percentageValue = parseFloat(percentageText) / 100;
+                    
+                    console.log(`[PAGE] Pays trouvé: ${countryCode} → ${percentageText}%`);
+                    
+                    switch(countryCode) {
+                      case 'us': case 'united states': results.market_us = percentageValue; break;
+                      case 'gb': case 'uk': case 'united kingdom': results.market_uk = percentageValue; break;
+                      case 'de': case 'germany': case 'deutschland': results.market_de = percentageValue; break;
+                      case 'ca': case 'canada': results.market_ca = percentageValue; break;
+                      case 'au': case 'australia': results.market_au = percentageValue; break;
+                      case 'fr': case 'france': results.market_fr = percentageValue; break;
+                    }
+                    
+                    results.countries.push({
+                      countryCode: countryCode.toUpperCase(),
+                      countryName: country,
+                      visitsShare: percentageValue,
+                      visitsSharePercent: parseFloat(percentageText)
+                    });
+                  }
                 }
-              });
-              
-              // Si on a trouvé des pays, on peut arrêter
-              if (results.countries.length > 0) {
-                console.log(`[PAGE] ${results.countries.length} pays extraits avec le sélecteur "${selector}"`);
-                return results;
+              } catch (e) {
+                console.log(`[PAGE] Erreur parsing élément ${index}:`, e.message);
               }
+            });
+            
+            // Si on a trouvé des pays, on peut arrêter
+            if (results.countries.length > 0) {
+              console.log(`[PAGE] ${results.countries.length} pays extraits avec le sélecteur "${selector}"`);
+              return results;
             }
           }
-          
-          return results;
-        }, selectors);
-        
-        // Si on a trouvé des données, arrêter les tentatives
-        if (geoData.countries.length > 0) {
-          console.log(`✅ Données géographiques extraites: ${geoData.countries.length} pays`);
-          break;
         }
         
-        console.log(`⚠️ Tentative ${attempt} échouée, retry...`);
-      }
+        return results;
+      }, selectors);
       
       // Afficher les résultats
       if (geoData.countries.length > 0) {

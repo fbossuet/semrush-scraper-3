@@ -1,0 +1,138 @@
+ANALYSE DES SHOPS SCRAPÉES AVEC SUCCÈS
+==================================================
+Timestamp: 2025-09-26 12:50:03
+
+RÉSULTATS GLOBAUX:
+  Total shops: 0
+  Succès total: 0 (0.0%)
+  Succès partiel: 0 (0.0%)
+  Échec total: 0 (0.0%)
+
+SHOPS EN ÉCHEC TOTAL:
+------------------------------
+  79: momcozy.com
+    Erreurs shops:
+      - table_scraping_status: pending (attendu: 'table_extracted')
+      - monthly_visits: None (doit être > 0)
+      - monthly_revenue:  (doit être présent)
+      - aov: None (doit être > 0)
+    Erreurs analytics:
+      - branded_traffic: Trafic de marque manquante
+      - bounce_rate: 60.04 (doit être entre 0 et 1)
+  80: Drsquatch
+    Erreurs shops:
+      - table_scraping_status: pending (attendu: 'table_extracted')
+      - monthly_visits: None (doit être > 0)
+      - monthly_revenue:  (doit être présent)
+      - aov: None (doit être > 0)
+    Erreurs analytics:
+      - branded_traffic: Trafic de marque manquante
+      - bounce_rate: 60.04 (doit être entre 0 et 1)
+  81: loopearplugs.com
+    Erreurs shops:
+      - table_scraping_status: pending (attendu: 'table_extracted')
+      - monthly_visits: None (doit être > 0)
+      - monthly_revenue:  (doit être présent)
+      - aov: None (doit être > 0)
+    Erreurs analytics:
+      - Aucun enregistrement analytics trouvé
+  82: Glov Beauty
+    Erreurs shops:
+      - table_scraping_status: pending (attendu: 'table_extracted')
+      - monthly_visits: None (doit être > 0)
+      - monthly_revenue:  (doit être présent)
+      - aov: None (doit être > 0)
+      - live_ads_30d: -20 (doit être >= 0)
+    Erreurs analytics:
+      - Aucun enregistrement analytics trouvé
+  83: ridge.com
+    Erreurs shops:
+      - table_scraping_status: pending (attendu: 'table_extracted')
+      - monthly_visits: None (doit être > 0)
+      - monthly_revenue:  (doit être présent)
+      - aov: None (doit être > 0)
+      - live_ads_30d: -36 (doit être >= 0)
+    Erreurs analytics:
+      - Aucun enregistrement analytics trouvé
+  84: blissy.com
+    Erreurs shops:
+      - table_scraping_status: pending (attendu: 'table_extracted')
+      - scraping_status: None (attendu: 'completed')
+      - monthly_visits: None (doit être > 0)
+      - monthly_revenue:  (doit être présent)
+      - aov: None (doit être > 0)
+    Erreurs analytics:
+      - Aucun enregistrement analytics trouvé
+  85: theoodie.com
+    Erreurs shops:
+      - table_scraping_status: pending (attendu: 'table_extracted')
+      - scraping_status: None (attendu: 'completed')
+      - monthly_visits: None (doit être > 0)
+      - monthly_revenue:  (doit être présent)
+      - aov: None (doit être > 0)
+    Erreurs analytics:
+      - Aucun enregistrement analytics trouvé
+  86: Ring
+    Erreurs shops:
+      - table_scraping_status: pending (attendu: 'table_extracted')
+      - scraping_status: None (attendu: 'completed')
+      - total_products: None (doit être > 0)
+      - monthly_visits: None (doit être > 0)
+      - monthly_revenue:  (doit être présent)
+      - aov: None (doit être > 0)
+      - year_founded: None (doit être présent)
+      - live_ads_30d: -11 (doit être >= 0)
+    Erreurs analytics:
+      - Aucun enregistrement analytics trouvé
+  87: Fashion Nova
+    Erreurs shops:
+      - table_scraping_status: pending (attendu: 'table_extracted')
+      - scraping_status: None (attendu: 'completed')
+      - monthly_visits: None (doit être > 0)
+      - monthly_revenue:  (doit être présent)
+      - aov: None (doit être > 0)
+      - year_founded: None (doit être présent)
+      - live_ads_30d: -32 (doit être >= 0)
+    Erreurs analytics:
+      - Aucun enregistrement analytics trouvé
+  88: JB Hi-Fi
+    Erreurs shops:
+      - table_scraping_status: pending (attendu: 'table_extracted')
+      - scraping_status: None (attendu: 'completed')
+      - monthly_visits: None (doit être > 0)
+      - monthly_revenue:  (doit être présent)
+      - aov: None (doit être > 0)
+    Erreurs analytics:
+      - Aucun enregistrement analytics trouvé
+  89: RejuvaCare
+    Erreurs shops:
+      - table_scraping_status: pending (attendu: 'table_extracted')
+      - scraping_status: None (attendu: 'completed')
+      - monthly_visits: None (doit être > 0)
+      - monthly_revenue:  (doit être présent)
+      - aov: None (doit être > 0)
+    Erreurs analytics:
+      - Aucun enregistrement analytics trouvé
+  90: Us Weekly
+    Erreurs shops:
+      - table_scraping_status: pending (attendu: 'table_extracted')
+      - scraping_status: None (attendu: 'completed')
+      - total_products: None (doit être > 0)
+      - monthly_visits: None (doit être > 0)
+      - monthly_revenue:  (doit être présent)
+      - aov: None (doit être > 0)
+      - year_founded: None (doit être présent)
+    Erreurs analytics:
+      - Aucun enregistrement analytics trouvé
+  91: Rejuvacare
+    Erreurs shops:
+      - table_scraping_status: pending (attendu: 'table_extracted')
+      - scraping_status: None (attendu: 'completed')
+      - total_products: None (doit être > 0)
+      - monthly_visits: None (doit être > 0)
+      - monthly_revenue:  (doit être présent)
+      - aov: None (doit être > 0)
+      - year_founded: None (doit être présent)
+    Erreurs analytics:
+      - Aucun enregistrement analytics trouvé
+

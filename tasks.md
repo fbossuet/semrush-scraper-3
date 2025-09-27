@@ -2,6 +2,224 @@
 
 ## Tâches Actives
 
+### T025: Retrait de l'attente React pour données géographiques [P0] - EN COURS
+**Type**: Bug Fix / Performance  
+**Dependencies**: Aucune  
+**Files**: `trendtrack-scraper-final/src/extractors/trendtrack-extractor.js`  
+**Description**: Supprimer l'attente inutile de React dans `extractGeoDataViaDOM()` car les données géographiques sont déjà présentes dans le DOM initial et n'ont pas besoin d'attendre le rendu React.  
+**Status**: ⚠️ **CRITIQUE** - Performance dégradée (85-90% de temps perdu)  
+**Acceptance Criteria**: 
+- [ ] Supprimer `waitForFunction()` pour React dans `extractGeoDataViaDOM()` (lignes 1905-1913)
+- [ ] Supprimer `waitForTimeout(3000)` inutile (ligne 1898)
+- [ ] Supprimer `waitForLoadState('networkidle')` si non nécessaire (ligne 1901)
+- [ ] Optimiser les sélecteurs CSS (garder principal + 1 fallback)
+- [ ] Réduire les retries de 3 à 1 tentative
+- [ ] Tester que l'extraction géographique fonctionne toujours
+- [ ] Vérifier la réduction du temps d'extraction (4-15s → 0.5-1s)
+- [ ] Valider que les sélecteurs CSS fonctionnent sans attente React
+**Technical Notes**: 
+- **Analyse des logs** : 13 boutiques traitées, 12/13 "React non détecté" (92%), 20 extractions réussies
+- **Performance actuelle** : 75% succès tentative 1, 25% retries, 0% échec total
+- **Temps perdu** : 4-15s par boutique (52-195s total sur 13 boutiques)
+- **Optimisation** : Supprimer attente React (4-15s → 0s), réduire retries (4-6s → 0s)
+- **Impact estimé** : 85-90% de temps en moins, fiabilité maintenue
+
+## 📋 Spécification Technique d'Intégration
+
+### 🎯 Objectif
+Optimiser `extractGeoDataViaDOM()` en supprimant les attentes React inutiles pour réduire le temps d'extraction de 85-90% sans perte de fiabilité.
+
+### 🔧 Modifications à Apporter
+
+#### **1. Suppression des Attentes React (lignes 1894-1913)**
+```javascript
+// SUPPRIMER - Attente React inutile
+console.log('⚡ Attente du chargement asynchrone React...');
+await this.page.waitForTimeout(3000);
+await this.page.waitForLoadState('networkidle');
+try {
+  await this.page.waitForFunction(() => {
+    return document.readyState === 'complete' && 
+           (window.React || window.__REACT_DEVTOOLS_GLOBAL_HOOK__ || 
+            document.querySelector('[data-reactroot], #root, #__next'));
+  }, { timeout: 10000 });
+  console.log('✅ React prêt');
+} catch (error) {
+  console.log('⚠️ React non détecté, continuation...');
+}
+```
+
+#### **2. Optimisation des Sélecteurs (lignes 1917-1923)**
+```javascript
+// AVANT - 5 sélecteurs
+const selectors = [
+  '.flex.gap-2.w-full.items-center',
+  '[class*="flex"][class*="gap"][class*="items-center"]',
+  'img[alt*="US"], img[alt*="GB"], img[alt*="CA"]',
+  '[class*="geo"], [class*="country"], [class*="market"]',
+  'div[class*="traffic"], div[class*="visits"]'
+];
+
+// APRÈS - 2 sélecteurs optimisés
+const selectors = [
+  '.flex.gap-2.w-full.items-center',  // Principal (75% succès)
+  'img[alt*="US"], img[alt*="GB"], img[alt*="CA"]'  // Fallback rapide
+];
+```
+
+#### **3. Réduction des Retries (lignes 1925-1931)**
+```javascript
+// AVANT - 3 tentatives avec attente progressive
+for (let attempt = 1; attempt <= 3; attempt++) {
+  if (attempt > 1) {
+    await this.page.waitForTimeout(2000 * attempt); // 4s, 6s
+  }
+}
+
+// APRÈS - 1 tentative + fallback immédiat
+// Supprimer la boucle, garder seulement la logique d'extraction
+```
+
+### 📊 Métriques d'Attendu
+
+#### **Performance**
+- **Temps par boutique** : 4-15s → 0.5-1s
+- **Temps total (13 boutiques)** : 52-195s → 6.5-13s
+- **Gain de performance** : 85-90%
+- **Taux de succès** : 100% (maintenu)
+
+#### **Logs Attendus**
+```
+🌍 Extraction des données géographiques via scraping DOM...
+🔄 Tentative 1/1 d'extraction géo...
+✅ Données géographiques extraites: X pays
+```
+
+### 🧪 Tests de Validation
+
+#### **1. Test de Fonctionnement**
+```bash
+# Lancer le scraper MVP sur 5 boutiques
+cd /home/ubuntu/projects/shopshopshops/test/trendtrack-scraper-final
+node update-database-mvp.js > test-geo-optimization.log 2>&1 &
+
+# Surveiller les logs
+tail -f test-geo-optimization.log
+```
+
+**Critères de Succès** :
+- [ ] 100% des boutiques extraites avec succès
+- [ ] Aucun message "React non détecté"
+- [ ] Temps d'extraction < 1s par boutique
+- [ ] Données géographiques cohérentes
+
+#### **2. Test de Performance**
+```bash
+# Mesurer le temps avant modification
+time node update-database-mvp.js > before.log 2>&1
+
+# Mesurer le temps après modification
+time node update-database-mvp.js > after.log 2>&1
+
+# Comparer les temps
+grep -E "Données géographiques extraites" before.log | wc -l
+grep -E "Données géographiques extraites" after.log | wc -l
+```
+
+**Critères de Succès** :
+- [ ] Réduction du temps total > 80%
+- [ ] Nombre d'extractions identique
+- [ ] Aucune régression fonctionnelle
+
+### 🔍 Vérification des Effets de Bord
+
+#### **1. Avant Modification**
+```bash
+# Sauvegarder l'état actuel
+cp trendtrack-scraper-final/data/trendtrack.db trendtrack-scraper-final/data/trendtrack_backup.db
+
+# Extraire les données géographiques actuelles
+sqlite3 trendtrack-scraper-final/data/trendtrack.db "
+SELECT external_id, market_us, market_uk, market_de, market_ca, market_au, market_fr 
+FROM shops 
+WHERE details_scraping_status = 'details_extracted' 
+ORDER BY external_id;
+" > geo_data_before.csv
+
+# Compter les boutiques avec données géo
+sqlite3 trendtrack-scraper-final/data/trendtrack.db "
+SELECT COUNT(*) as total_shops,
+       COUNT(CASE WHEN market_us > 0 OR market_uk > 0 OR market_de > 0 OR market_ca > 0 OR market_au > 0 OR market_fr > 0 THEN 1 END) as shops_with_geo
+FROM shops 
+WHERE details_scraping_status = 'details_extracted';
+"
+```
+
+#### **2. Après Modification**
+```bash
+# Extraire les nouvelles données géographiques
+sqlite3 trendtrack-scraper-final/data/trendtrack.db "
+SELECT external_id, market_us, market_uk, market_de, market_ca, market_au, market_fr 
+FROM shops 
+WHERE details_scraping_status = 'details_extracted' 
+ORDER BY external_id;
+" > geo_data_after.csv
+
+# Comparer les données
+diff geo_data_before.csv geo_data_after.csv
+
+# Vérifier la cohérence
+sqlite3 trendtrack-scraper-final/data/trendtrack.db "
+SELECT COUNT(*) as total_shops,
+       COUNT(CASE WHEN market_us > 0 OR market_uk > 0 OR market_de > 0 OR market_ca > 0 OR market_au > 0 OR market_fr > 0 THEN 1 END) as shops_with_geo
+FROM shops 
+WHERE details_scraping_status = 'details_extracted';
+"
+```
+
+#### **3. Tests de Régression**
+```bash
+# Test de l'API
+curl -s "http://localhost:8001/albert" | jq '.[0] | {market_us, market_uk, market_de, market_ca, market_au, market_fr}'
+
+# Test des autres extracteurs
+node update-database.js --test-mode
+
+# Test de cohérence des données
+python3 database_config.py
+```
+
+**Critères de Succès** :
+- [ ] Données géographiques identiques avant/après
+- [ ] API fonctionnelle
+- [ ] Autres extracteurs non impactés
+- [ ] Base de données cohérente
+
+### 🚨 Plan de Rollback
+```bash
+# En cas de problème, restaurer l'état précédent
+cp trendtrack-scraper-final/data/trendtrack_backup.db trendtrack-scraper-final/data/trendtrack.db
+
+# Restaurer le code
+git checkout HEAD~1 -- trendtrack-scraper-final/src/extractors/trendtrack-extractor.js
+
+# Redémarrer le scraper
+pkill -f "update-database-mvp.js"
+node update-database-mvp.js
+```
+
+### 📋 Checklist de Validation
+- [ ] Code modifié selon spécification
+- [ ] Tests de fonctionnement passés
+- [ ] Tests de performance validés
+- [ ] Vérification effets de bord OK
+- [ ] Tests de régression passés
+- [ ] Documentation mise à jour
+- [ ] Rollback testé
+
+**Estimated Effort**: 30 minutes  
+**Résultat Test**: Extraction géographique ✅, Performance ⚠️, Temps d'attente ❌
+
 ### T024: Résolution Session Expirée Scraper Noxtools Alpha [P0] - EN COURS
 **Type**: Bug Fix / Infrastructure  
 **Dependencies**: Aucune  
@@ -445,20 +663,20 @@
 
 ## Métriques
 
-- **Total des tâches**: 12
-- **Tâches P0**: 2 (T001, T002)
+- **Total des tâches**: 13
+- **Tâches P0**: 3 (T001, T002, T025)
 - **Tâches P1**: 2 (T003, T004, T005)
 - **Tâches P2**: 5 (T006, T007, T008, T009, T012)
 - **Tâches P3**: 1 (T010)
 - **Tâches P4**: 1 (T011)
 - **Tâches terminées**: 0
-- **Tâches en cours**: 12
+- **Tâches en cours**: 13
 - **Tâches en attente**: 0
 
 ---
 
-**Dernière mise à jour**: 2025-09-23 11:30:00 UTC  
-**Version**: 1.3.0
+**Dernière mise à jour**: 2025-09-27 10:45:00 UTC  
+**Version**: 1.4.0
 
 ### T009: Sauvegarde incrémentale par lots pour TrendTrack [P2]
 **Type**: Feature  

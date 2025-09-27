@@ -641,6 +641,153 @@ LIMIT ? OFFSET ?
 - **Rate Limiting** : 60 requêtes/minute, burst de 10
 - **Backoff** : 1s initial, x2 multiplicateur, max 10s
 
+## 🚀 Contraintes de Performance
+
+### Configuration des Workers
+- **Nombre de workers** : Entre 1 et 10 workers parallèles
+- **Boutiques par worker** : Entre 1 et 50 boutiques par worker
+- **Traitement par lots** : 5 boutiques maximum par lot
+- **Pauses entre lots** : 5 secondes entre les lots
+- **Pauses entre boutiques** : 2 secondes entre les boutiques
+
+### Rate Limiting et Anti-Détection
+- **Limite de requêtes** : 60 requêtes/minute maximum
+- **Burst autorisé** : 10 requêtes en rafale
+- **Délais adaptatifs** : 2-5 secondes entre requêtes
+- **Rotation User-Agent** : Toutes les heures
+- **Jitter aléatoire** : ±20% sur les délais
+
+### Timeouts et Retry
+- **Timeout navigateur** : 60 secondes
+- **Timeout page load** : 90 secondes
+- **Timeout navigation** : 120 secondes
+- **Max retries** : 3 tentatives par opération
+- **Backoff exponentiel** : 1s → 2s → 4s
+
+### Monitoring et Métriques
+- **Logs de performance** : Temps d'exécution par boutique
+- **Taux de succès** : Suivi en temps réel
+- **Métriques d'erreur** : Classification des échecs
+- **Alertes automatiques** : En cas de dépassement des seuils
+
+## ✅ Critères de Validation de Succès Total
+
+### Définition du Succès Complet
+Un shop est considéré comme **scrapé avec succès total** quand **TOUTES** les conditions suivantes sont remplies :
+
+#### 1. Critères TrendTrack MVP (Table `shops`)
+- **`table_scraping_status = 'table_extracted'`** : Phase 1 TrendTrack réussie
+- **`details_scraping_status = 'details_extracted'`** : Phase 3 TrendTrack réussie  
+- **`scraping_status = 'completed'`** : Scraping TrendTrack complet
+- **`shop_url LIKE 'http%://%'`** : URL valide
+- **`external_id`** : UUID valide (format UUID v4)
+
+#### 2. Critères Noxtools/SEM (Table `analytics`)
+- **`scraping_status = 'completed'`** : Scraping Noxtools/SEM réussi
+- **`visits IS NOT NULL`** : Métrique visits présente
+- **`organic_traffic IS NOT NULL`** : Métrique trafic organique présente
+- **`paid_search_traffic IS NOT NULL`** : Métrique trafic payant présente
+- **`cpc IS NOT NULL`** : Métrique CPC présente (Noxtools)
+- **`bounce_rate IS NOT NULL`** : Métrique taux de rebond présente
+- **`avg_visit_duration IS NOT NULL`** : Métrique durée moyenne présente
+- **`branded_traffic IS NOT NULL`** : Métrique trafic de marque présente
+- **`conversion_rate IS NOT NULL`** : Métrique taux de conversion présente
+
+#### 3. Critères de Cohérence des Données
+- **Clé étrangère valide** : `analytics.shop_id` existe dans `shops.id`
+- **Unicité** : Un seul enregistrement `analytics` par `shop_id`
+- **Formats valides** : Tous les champs respectent leurs formats spécifiés
+- **Valeurs numériques** : Toutes les métriques numériques sont valides
+
+### Requête de Validation Complète
+```sql
+-- VALIDATION COMPLÈTE DE SUCCÈS TOTAL
+SELECT 
+  s.id,
+  s.shop_name,
+  s.shop_url,
+  -- Validation des statuts shops
+  CASE WHEN s.table_scraping_status = 'table_extracted' THEN '✅' ELSE '❌' END as table_status,
+  CASE WHEN s.details_scraping_status = 'details_extracted' THEN '✅' ELSE '❌' END as details_status,
+  CASE WHEN s.scraping_status = 'completed' THEN '✅' ELSE '❌' END as scraping_status,
+  -- Validation des statuts analytics
+  CASE WHEN a.scraping_status = 'completed' THEN '✅' ELSE '❌' END as analytics_status,
+  -- Validation des métriques critiques
+  CASE WHEN a.visits IS NOT NULL THEN '✅' ELSE '❌' END as has_visits,
+  CASE WHEN a.organic_traffic IS NOT NULL THEN '✅' ELSE '❌' END as has_organic,
+  CASE WHEN a.paid_search_traffic IS NOT NULL THEN '✅' ELSE '❌' END as has_paid,
+  CASE WHEN a.cpc IS NOT NULL THEN '✅' ELSE '❌' END as has_cpc,
+  CASE WHEN a.bounce_rate IS NOT NULL THEN '✅' ELSE '❌' END as has_bounce,
+  CASE WHEN a.avg_visit_duration IS NOT NULL THEN '✅' ELSE '❌' END as has_duration,
+  CASE WHEN a.branded_traffic IS NOT NULL THEN '✅' ELSE '❌' END as has_branded,
+  CASE WHEN a.conversion_rate IS NOT NULL THEN '✅' ELSE '❌' END as has_conversion,
+  -- Résultat final
+  CASE WHEN s.table_scraping_status = 'table_extracted' 
+            AND s.details_scraping_status = 'details_extracted'
+            AND s.scraping_status = 'completed'
+            AND a.scraping_status = 'completed'
+            AND a.visits IS NOT NULL
+            AND a.organic_traffic IS NOT NULL
+            AND a.paid_search_traffic IS NOT NULL
+            AND a.cpc IS NOT NULL
+            AND a.bounce_rate IS NOT NULL
+            AND a.avg_visit_duration IS NOT NULL
+            AND a.branded_traffic IS NOT NULL
+            AND a.conversion_rate IS NOT NULL
+            AND s.shop_url LIKE 'http%://%'
+       THEN '✅ SCRAPING COMPLET' 
+       ELSE '❌ SCRAPING INCOMPLET' END as final_status
+FROM shops s
+LEFT JOIN analytics a ON s.id = a.shop_id
+ORDER BY s.id;
+```
+
+### Métriques de Succès Global
+```sql
+-- STATISTIQUES DE SUCCÈS GLOBAL
+SELECT 
+  COUNT(*) as total_shops,
+  COUNT(CASE WHEN s.table_scraping_status = 'table_extracted' THEN 1 END) as table_extracted,
+  COUNT(CASE WHEN s.details_scraping_status = 'details_extracted' THEN 1 END) as details_extracted,
+  COUNT(CASE WHEN s.scraping_status = 'completed' THEN 1 END) as scraping_completed,
+  COUNT(CASE WHEN a.scraping_status = 'completed' THEN 1 END) as analytics_completed,
+  COUNT(CASE WHEN s.table_scraping_status = 'table_extracted' 
+            AND s.details_scraping_status = 'details_extracted'
+            AND s.scraping_status = 'completed'
+            AND a.scraping_status = 'completed'
+            AND a.visits IS NOT NULL
+            AND a.organic_traffic IS NOT NULL
+            AND a.paid_search_traffic IS NOT NULL
+            AND a.cpc IS NOT NULL
+            AND a.bounce_rate IS NOT NULL
+            AND a.avg_visit_duration IS NOT NULL
+            AND a.branded_traffic IS NOT NULL
+            AND a.conversion_rate IS NOT NULL
+       THEN 1 END) as total_success,
+  ROUND(COUNT(CASE WHEN s.table_scraping_status = 'table_extracted' 
+            AND s.details_scraping_status = 'details_extracted'
+            AND s.scraping_status = 'completed'
+            AND a.scraping_status = 'completed'
+            AND a.visits IS NOT NULL
+            AND a.organic_traffic IS NOT NULL
+            AND a.paid_search_traffic IS NOT NULL
+            AND a.cpc IS NOT NULL
+            AND a.bounce_rate IS NOT NULL
+            AND a.avg_visit_duration IS NOT NULL
+            AND a.branded_traffic IS NOT NULL
+            AND a.conversion_rate IS NOT NULL
+       THEN 1 END) * 100.0 / COUNT(*), 2) as success_rate_percent
+FROM shops s
+LEFT JOIN analytics a ON s.id = a.shop_id;
+```
+
+### Indicateurs de Qualité
+- **Taux de succès global** : Pourcentage de shops avec scraping complet
+- **Taux de complétude par phase** : TrendTrack → Noxtools → SEM
+- **Taux d'échec par cause** : Classification des échecs
+- **Métriques de performance** : Temps moyen par boutique
+- **Alertes automatiques** : Notifications en cas de baisse de qualité
+
 ### Schéma Table Analytics (Extrait des Specs)
 **Basé sur specs/001-name-trendtrack-scraper/plan/data-model.md :**
 ```sql
