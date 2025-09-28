@@ -51,7 +51,7 @@ class ScraperConfig:
     timeout_ms: int = 60000
     
     # Base de données
-    db_path: str = "../trendtrack-scraper-final/data/trendtrack.db"
+    db_path: str = "/home/ubuntu/projects/shopshopshops/test/trendtrack-scraper-final/data/trendtrack.db"
     
     # Logs
     log_level: str = "INFO"
@@ -168,6 +168,249 @@ class NoxtoolsScraper:
                 shop_url=domain
             )
             logger.info(f"🔍 [DEBUG] Metrics extraction result: {metrics}")
+            
+            # ===== DEBUG FID DANS L'URL =====
+            logger.info("🔍 [DEBUG] ===== FID DEBUG ANALYSIS =====")
+            if hasattr(metrics, 'url') and metrics.url:
+                logger.info(f"📍 [DEBUG] Final metrics URL used: {metrics.url}")
+                if 'fid=' in metrics.url:
+                    import re
+                    fid_match = re.search(r'fid=([^&]+)', metrics.url)
+                    if fid_match:
+                        used_fid = fid_match.group(1)
+                        logger.info(f"🔢 [DEBUG] FID used in URL: {used_fid}")
+                        logger.warning(f"⚠️ [DEBUG] FID {used_fid} might be invalid for domain {domain}")
+                        logger.warning(f"⚠️ [DEBUG] This could explain why no metrics are found")
+                    else:
+                        logger.warning("⚠️ [DEBUG] No FID found in metrics URL")
+                else:
+                    logger.warning("⚠️ [DEBUG] No FID parameter in metrics URL")
+            else:
+                logger.warning("⚠️ [DEBUG] No metrics URL available for FID analysis")
+            logger.info("✅ [DEBUG] FID debug analysis completed")
+            # ===== FIN DEBUG FID =====
+            
+            # ===== DEBUG DÉTAILLÉ DE LA PAGE =====
+            logger.info("🔍 [DEBUG] ===== DETAILED PAGE ANALYSIS =====")
+            
+            # Analyse du contenu de la page après extraction
+            try:
+                page_title = await self.current_page.title()
+                page_url = self.current_page.url
+                logger.info(f"📄 [DEBUG] Page title after extraction: {page_title}")
+                logger.info(f"📍 [DEBUG] Page URL after extraction: {page_url}")
+                
+                # Contenu visible de la page
+                visible_text = await self.current_page.evaluate("document.body.innerText")
+                logger.info(f"📄 [DEBUG] Visible text length: {len(visible_text)} characters")
+                logger.info(f"📄 [DEBUG] Visible text preview (first 500 chars):")
+                logger.info("=" * 80)
+                logger.info(visible_text[:500])
+                logger.info("=" * 80)
+                
+                # Vérification de session expirée
+                session_expired_indicators = [
+                    "Session expired", "session expired", 
+                    "access again from Dashboard", "Dashboard",
+                    "Please log in", "Login required",
+                    "Authentication required"
+                ]
+                
+                session_expired = any(indicator.lower() in visible_text.lower() for indicator in session_expired_indicators)
+                
+                if session_expired:
+                    logger.warning("🚫 [DEBUG] SESSION EXPIRED DETECTED in visible text!")
+                    logger.warning("🚫 [DEBUG] This explains why metrics are not extracted")
+                    logger.warning(f"🚫 [DEBUG] Visible text contains session expired indicators")
+                elif len(visible_text) < 1000:  # Page très courte = probablement session expirée
+                    logger.warning("🚫 [DEBUG] SUSPECTED SESSION EXPIRED - Page content very short")
+                    logger.warning(f"🚫 [DEBUG] Page content length: {len(visible_text)} characters")
+                    session_expired = True
+                
+                # Recherche de mots-clés liés aux métriques
+                metric_keywords = ["visits", "traffic", "organic", "paid", "search", "conversion", "duration", "bounce", "rate", "entrances", "purchases"]
+                logger.info("🔍 [DEBUG] Searching for metric keywords in visible text:")
+                found_keywords = []
+                for keyword in metric_keywords:
+                    if keyword.lower() in visible_text.lower():
+                        found_keywords.append(keyword)
+                        logger.info(f"✅ [DEBUG] Found keyword: '{keyword}'")
+                    else:
+                        logger.info(f"❌ [DEBUG] Missing keyword: '{keyword}'")
+                
+                logger.info(f"📊 [DEBUG] Total metric keywords found: {len(found_keywords)}/{len(metric_keywords)}")
+                
+                # Analyse des éléments DOM
+                logger.info("🔍 [DEBUG] ===== DOM ELEMENT ANALYSIS =====")
+                
+                # Vérification des tables
+                tables = await self.current_page.query_selector_all("table")
+                logger.info(f"📊 [DEBUG] Found {len(tables)} tables on page")
+                
+                # Vérification des sélecteurs spécifiques
+                selectors_to_check = [
+                    '[data-ui-name="Flex"][role="gridcell"]',
+                    '[name="entrances"]',
+                    '[name="entrancesSearchOrganic"]',
+                    '[name="entrancesSearchPaid"]',
+                    '[name="purchasesPerVisit"]',
+                    '[name="avgVisitDuration"]',
+                    '[name="bouncesPerVisit"]',
+                    'input[name*="entrance"]',
+                    'input[name*="visit"]',
+                    'input[name*="bounce"]',
+                    '.metric-value',
+                    '.data-value'
+                ]
+                
+                logger.info("🔍 [DEBUG] Checking specific selectors:")
+                total_elements_found = 0
+                for selector in selectors_to_check:
+                    try:
+                        elements = await self.current_page.query_selector_all(selector)
+                        if len(elements) > 0:
+                            total_elements_found += len(elements)
+                            logger.info(f"✅ [DEBUG] Selector '{selector}': {len(elements)} elements found")
+                            # Afficher le contenu des premiers éléments
+                            for i, element in enumerate(elements[:2]):
+                                try:
+                                    text = await element.inner_text()
+                                    logger.info(f"   📝 [DEBUG] Element {i+1}: '{text[:100]}...'")
+                                except:
+                                    logger.info(f"   📝 [DEBUG] Element {i+1}: [Could not get text]")
+                        else:
+                            logger.info(f"❌ [DEBUG] Selector '{selector}': 0 elements found")
+                    except Exception as e:
+                        logger.warning(f"⚠️ [DEBUG] Error checking selector '{selector}': {e}")
+                
+                logger.info(f"📊 [DEBUG] Total metric elements found: {total_elements_found}")
+                
+                # Vérification des indicateurs de chargement
+                loading_indicators = ["loading", "Loading", "LOADING", "spinner", "Spinner", "wait", "Wait", "Just a moment", "please wait"]
+                logger.info("🔍 [DEBUG] Checking for loading indicators:")
+                loading_found = False
+                for indicator in loading_indicators:
+                    if indicator in visible_text:
+                        loading_found = True
+                        logger.warning(f"⏳ [DEBUG] Found loading indicator: '{indicator}'")
+                
+                if not loading_found:
+                    logger.info("✅ [DEBUG] No loading indicators found - page appears to be loaded")
+                
+                # Analyse finale
+                logger.info("🔍 [DEBUG] ===== FINAL ANALYSIS =====")
+                if len(tables) == 0:
+                    logger.warning("⚠️ [DEBUG] NO TABLES FOUND - This might be why metrics are not extracted")
+                if len(found_keywords) == 0:
+                    logger.warning("⚠️ [DEBUG] NO METRIC KEYWORDS FOUND - Page might not be loaded correctly")
+                if total_elements_found == 0:
+                    logger.warning("⚠️ [DEBUG] NO METRIC ELEMENTS FOUND - Selectors might be incorrect")
+                
+                logger.info("✅ [DEBUG] Detailed page analysis completed")
+                
+                # ===== CAPTURE HTML COMPLET POUR DEBUG =====
+                try:
+                    logger.info("🔍 [DEBUG] ===== CAPTURING FULL HTML FOR DEBUG =====")
+                    
+                    # Capturer le HTML complet de la page
+                    full_html = await self.current_page.content()
+                    logger.info(f"📄 [DEBUG] Full HTML length: {len(full_html)} characters")
+                    
+                    # Sauvegarder le HTML pour analyse
+                    import os
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    html_filename = f"debug_market_overview_{domain.replace('.', '_')}_{timestamp}.html"
+                    html_path = f"/home/ubuntu/projects/shopshopshops/test/{html_filename}"
+                    
+                    with open(html_path, 'w', encoding='utf-8') as f:
+                        f.write(full_html)
+                    
+                    logger.info(f"💾 [DEBUG] Full HTML saved to: {html_path}")
+                    
+                    # Analyser les éléments React potentiels
+                    react_elements = await self.current_page.query_selector_all("[data-reactroot], [id*='react'], [class*='react'], [data-*='react']")
+                    logger.info(f"⚛️ [DEBUG] Found {len(react_elements)} React-related elements")
+                    
+                    # Analyser les scripts chargés
+                    scripts = await self.current_page.query_selector_all("script")
+                    logger.info(f"📜 [DEBUG] Found {len(scripts)} script elements")
+                    
+                    # Vérifier les erreurs JavaScript
+                    js_errors = await self.current_page.evaluate("""
+                        () => {
+                            const errors = [];
+                            window.addEventListener('error', (e) => {
+                                errors.push({
+                                    message: e.message,
+                                    filename: e.filename,
+                                    lineno: e.lineno,
+                                    colno: e.colno
+                                });
+                            });
+                            return errors;
+                        }
+                    """)
+                    logger.info(f"🚨 [DEBUG] JavaScript errors detected: {len(js_errors)}")
+                    
+                    # Analyser les requêtes réseau
+                    network_requests = await self.current_page.evaluate("""
+                        () => {
+                            return performance.getEntriesByType('navigation').concat(
+                                performance.getEntriesByType('resource')
+                            ).map(entry => ({
+                                name: entry.name,
+                                type: entry.initiatorType,
+                                duration: entry.duration,
+                                transferSize: entry.transferSize
+                            }));
+                        }
+                    """)
+                    logger.info(f"🌐 [DEBUG] Network requests: {len(network_requests)}")
+                    
+                    # Vérifier si la page contient des données JSON
+                    json_data = await self.current_page.evaluate("""
+                        () => {
+                            const scripts = Array.from(document.querySelectorAll('script'));
+                            const jsonData = [];
+                            scripts.forEach(script => {
+                                try {
+                                    const content = script.textContent;
+                                    if (content && (content.includes('"data"') || content.includes('"metrics"') || content.includes('"traffic"'))) {
+                                        jsonData.push(content.substring(0, 200) + '...');
+                                    }
+                                } catch (e) {
+                                    // Ignore parsing errors
+                                }
+                            });
+                            return jsonData;
+                        }
+                    """)
+                    logger.info(f"📊 [DEBUG] Found {len(json_data)} scripts with potential data")
+                    
+                    logger.info("✅ [DEBUG] Full HTML capture and analysis completed")
+                    
+                except Exception as e:
+                    logger.error(f"❌ [DEBUG] Error during HTML capture: {e}")
+                
+                # ===== FIN CAPTURE HTML COMPLET =====
+                
+                # ===== GESTION SESSION EXPIRÉE =====
+                if 'session_expired' in locals() and session_expired:
+                    logger.warning("🚫 [SESSION EXPIRED] Détection d'une session expirée - déclenchement du fallback")
+                    logger.warning("🚫 [SESSION EXPIRED] Les métriques ne peuvent pas être extraites avec une session expirée")
+                    
+                    # Marquer la session comme expirée pour le prochain cycle
+                    self.is_authenticated = False
+                    logger.info("🔄 [SESSION EXPIRED] Authentication status reset to False for next attempt")
+                    
+                    # Retourner None pour forcer un retry avec authentification
+                    return None
+                
+            except Exception as e:
+                logger.error(f"❌ [DEBUG] Error during detailed page analysis: {e}")
+            
+            # ===== FIN DEBUG DÉTAILLÉ =====
             
             if metrics and metrics.success:
                 logger.info(f"✅ [DEBUG] Metrics extracted successfully for {domain}")
