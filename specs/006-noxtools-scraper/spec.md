@@ -43,7 +43,7 @@
 - **Interdiction** : Ne jamais aller dans `/home/ubuntu/trendtrack-scraper-final/` ou autres répertoires
 
 ### Bases de Données
-- **Base de production** : `trendtrack-scraper-final/data/trendtrack.db` (chemin relatif)
+- **Base de production** : `/home/ubuntu/projects/shopshopshops/test/trendtrack-scraper-final/data/trendtrack.db` (chemin absolu)
 - **Endpoint principal** : Utilise `trendtrack.db` (production) pour les données réelles
 - **Scraper TrendTrack** : Utilise la base de production (`trendtrack.db`)
 - **Scraper SEM** : Utilise la base de production (`trendtrack.db`)
