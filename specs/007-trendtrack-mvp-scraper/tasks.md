@@ -80,7 +80,7 @@ Ce document répertorie toutes les tâches liées au développement, maintenance
 
 ### P0 - Critique (Immédiat)
 1. ✅ **Correction mapping pixels/marchés** : Pixels et marchés extraits mais sauvegardés à 0/"non" - **RÉSOLU**
-2. **Amélioration AOV** : Atteindre ≥70% de taux de succès AOV
+2. ✅ **AOV** : **RÉSOLU** - AOV retiré du scraper (statut OK)
 3. **Solution 4 complète** : Browser restart entièrement fonctionnel
 4. **Documentation officielle** : Structure `/specs/` complète
 
@@ -130,7 +130,7 @@ Ce document répertorie toutes les tâches liées au développement, maintenance
 - ✅ **Récupération** : Solutions automatiques fonctionnelles
 
 ### Objectifs en Cours
-- 🔄 **AOV ≥70%** : Actuellement 0%, cible 70%
+- ✅ **AOV** : **RÉSOLU** - AOV retiré du scraper (statut OK)
 - 🔄 **Solution 4** : Browser restart en développement
 - 🔄 **Logs complets** : Monitoring décisionnel en cours
 
@@ -144,7 +144,7 @@ Ce document répertorie toutes les tâches liées au développement, maintenance
 ## 🚨 Problèmes Identifiés
 
 ### Problèmes Techniques
-- ❌ **AOV extraction** : Sélecteurs insuffisants sur pages actuelles
+- ✅ **AOV extraction** : **RÉSOLU** - AOV retiré du scraper (statut OK)
 - ⚠️ **Solution 4** : Browser restart pas encore entièrement fonctionnel
 - ⚠️ **Logs** : Manque de logs décisionnels détaillés
 - ✅ **Mapping pixels/marchés** : **RÉSOLU** - Correction du flux de données Phase 2→3

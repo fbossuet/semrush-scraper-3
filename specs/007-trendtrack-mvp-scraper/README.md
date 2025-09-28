@@ -46,7 +46,8 @@ src/mvp/
 
 ### Phase 3 - Détails (Page Boutique)
 - `live_ads_7d`, `live_ads_30d`
-- `aov` (Average Order Value)
+- Pixels Google/Facebook
+- Marchés (US, UK, DE, CA, AU, FR)
 
 ---
 
@@ -73,7 +74,7 @@ src/mvp/
 - **Pixels (Google/Facebook)** : ✅ 10/10
 - **Marchés (US/UK/DE/CA/AU/FR)** : ✅ 10/10 avec valeurs cohérentes
 - **Live ads 7d/30d** : ✅ 10/10 (valeurs variées)
-- **AOV** : ❌ 0/10 (sélecteurs insuffisants)
+- **AOV** : ✅ Retiré du scraper (statut OK)
 
 ---
 

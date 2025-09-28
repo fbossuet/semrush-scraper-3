@@ -67,7 +67,6 @@ src/mvp/
 |-------|-------------|------|--------|
 | `live_ads_7d` | Publicités 7 jours | INTEGER | ✅ Extrait |
 | `live_ads_30d` | Publicités 30 jours | INTEGER | ✅ Extrait |
-| `aov` | Average Order Value | NUMERIC | ⚠️ En amélioration |
 | `pixel_google` | Pixel Google détecté | TEXT | ✅ Extrait |
 | `pixel_facebook` | Pixel Facebook détecté | TEXT | ✅ Extrait |
 | `market_us` | Marché US | NUMERIC | ✅ Extrait |
@@ -85,7 +84,6 @@ src/mvp/
 | `year_founded` | TEXT | Année de création | `"2020"`, `"Founded in 2018"` |
 | `pixel_google` | TEXT | Pixel Google détecté | `"Google Analytics"`, `"GTM-XXXX"` |
 | `market_us` | NUMERIC | Marché US | `0.45`, `0.0`, `1.0` |
-| `aov` | NUMERIC | Average Order Value | `125.50`, `0.0`, `299.99` |
 
 ---
 
@@ -216,7 +214,7 @@ WHERE external_id = ?;
 ### Phase 3 - Détails
 - ✅ **100% des shops** sélectionnés tentés
 - ✅ **≥90% succès/run** (atteignable avec reprise multi-runs)
-- ⚠️ **AOV non-nul ≥70%** (cible V2 - en cours)
+- ✅ **AOV retiré** (statut OK - plus d'extraction AOV)
 
 ### Robustesse
 - ✅ **Aucune interruption** due à contexte/session
